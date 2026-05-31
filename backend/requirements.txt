@@ -1,0 +1,8 @@
+fastapi[standard]
+pydantic-settings
+python-dotenv
+httpx
+sse-starlette
+qdrant-client
+youtube-transcript-api
+yt-dlp
