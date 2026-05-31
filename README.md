@@ -1,10 +1,10 @@
 # CreatorLens AI
 
-CreatorLens AI is a full-stack RAG chatbot planned for comparing one YouTube Short and one Instagram Reel. It will extract transcript and metadata signals, normalize them, retrieve relevant evidence, and answer comparison questions through a streaming chat interface.
+CreatorLens AI is a full-stack RAG chatbot planned for comparing YouTube Short and Instagram Reel. It will extract transcript and metadata signals, normalize them, retrieve relevant evidence, and answer comparison questions through a streaming chat interface.
 
 ## Planned Features
 
-- Submit one YouTube Short URL and one Instagram Reel URL
+- Submit YouTube Short URL and Instagram Reel URL
 - Extract transcripts, captions, metadata, and engagement signals
 - Normalize platform-specific metadata into a shared schema
 - Chunk transcript and metadata evidence
@@ -31,3 +31,22 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Backend URLs:
+
+- http://localhost:8000/health
+- http://localhost:8000/docs
+- http://localhost:8000/health/qdrant
+
+## Local Frontend Setup
+
+From `frontend`:
+
+```powershell
+npm install
+npm run dev
+```
+
+Frontend URL:
+
+- http://localhost:3000
