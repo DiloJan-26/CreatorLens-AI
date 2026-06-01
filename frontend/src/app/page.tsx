@@ -4,9 +4,13 @@ import { useState } from "react";
 
 import { ProjectStatusCard } from "@/components/ProjectStatusCard";
 import { SystemStatusCard } from "@/components/SystemStatusCard";
+import { VideoInsightCard } from "@/components/VideoInsightCard";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
-import { checkBackend, createProject } from "@/lib/api";
-import type { ProjectCreateResponse } from "@/types/project";
+import { checkBackend, createProject, extractProject } from "@/lib/api";
+import type {
+  ProjectCreateResponse,
+  ProjectDetailResponse,
+} from "@/types/project";
 
 export default function Home() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -16,7 +20,11 @@ export default function Home() {
   );
   const [isChecking, setIsChecking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [project, setProject] = useState<ProjectCreateResponse | null>(null);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [createdProject, setCreatedProject] =
+    useState<ProjectCreateResponse | null>(null);
+  const [projectDetail, setProjectDetail] =
+    useState<ProjectDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleBackendCheck() {
@@ -39,20 +47,31 @@ export default function Home() {
     }
   }
 
-  async function handleCreateProject() {
+  async function handleAnalyzeVideos() {
     setIsSubmitting(true);
-    setProject(null);
+    setProgressMessage("Creating project...");
+    setCreatedProject(null);
+    setProjectDetail(null);
     setError(null);
 
     try {
-      const createdProject = await createProject({
+      const created = await createProject({
         youtube_url: youtubeUrl,
         instagram_url: instagramUrl,
       });
 
-      setProject(createdProject);
+      setCreatedProject(created);
+      setProgressMessage("Extracting YouTube metadata and transcript...");
+
+      const detail = await extractProject(created.project_id);
+
+      setProjectDetail(detail);
+      setProgressMessage(
+        "YouTube extraction completed. Instagram extraction is planned next.",
+      );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
+      setProgressMessage(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -65,14 +84,14 @@ export default function Home() {
           <p className="text-lg font-semibold">CreatorLens AI</p>
         </header>
 
-        <div className="grid flex-1 items-center gap-10 lg:grid-cols-[1fr_440px]">
+        <div className="grid flex-1 gap-10 lg:grid-cols-[1fr_440px]">
           <section className="max-w-3xl">
             <h1 className="text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
               Compare Shorts and Reels with cited creator intelligence.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              project creation flow, URL validation, SQLite
-              project storage, and frontend-backend integration.
+              Day 02: dynamic YouTube extraction pipeline, normalized metadata,
+              transcript availability, and SQLite-backed project detail.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -81,7 +100,12 @@ export default function Home() {
                 isChecking={isChecking}
                 onCheck={handleBackendCheck}
               />
-              <ProjectStatusCard project={project} error={error} />
+              <ProjectStatusCard
+                createdProject={createdProject}
+                projectDetail={projectDetail}
+                progressMessage={progressMessage}
+                error={error}
+              />
             </div>
           </section>
 
@@ -90,10 +114,23 @@ export default function Home() {
             instagramUrl={instagramUrl}
             setYoutubeUrl={setYoutubeUrl}
             setInstagramUrl={setInstagramUrl}
-            onSubmit={handleCreateProject}
+            onSubmit={handleAnalyzeVideos}
             isSubmitting={isSubmitting}
           />
         </div>
+
+        <section className="mt-10 grid gap-4 lg:grid-cols-2">
+          <VideoInsightCard
+            platform="youtube"
+            metadata={projectDetail?.youtube ?? null}
+            isPending={isSubmitting}
+          />
+          <VideoInsightCard
+            platform="instagram"
+            metadata={projectDetail?.instagram ?? null}
+            isPending
+          />
+        </section>
       </section>
     </main>
   );

@@ -1,39 +1,41 @@
 # CreatorLens AI
 
-CreatorLens AI is a full-stack application for comparing a YouTube Short and an Instagram Reel. The goal is to extract metadata and transcript evidence, calculate engagement signals, store searchable context, and support a cited chat experience for creator analysis.
+CreatorLens AI is a full-stack application for comparing a YouTube Short and an Instagram Reel. It extracts public creator/video signals, normalizes them into a shared schema, stores local project state, and is being built toward cited RAG chat.
 
 ## Current Status
 
-Implemented so far:
+Implemented:
 
 - FastAPI backend
 - Next.js frontend
-- Backend health check
+- Project creation flow
+- SQLite project storage
+- SQLite video metadata storage
+- SQLite transcript segment storage
+- YouTube extraction pipeline
+- YouTube metadata extraction with yt-dlp
+- YouTube transcript extraction with youtube-transcript-api
+- Normalized video metadata
+- Frontend dynamic YouTube card
+- Instagram-ready schema with pending UI
 - Qdrant Cloud-ready health check
-- Project creation API
-- URL validation for YouTube and Instagram
-- SQLite local project storage
-- Frontend project creation flow
 
-## Planned Next Features
+Not implemented yet:
 
-- YouTube metadata and transcript extraction
-- Instagram metadata and transcript extraction
-- Engagement-rate calculation
-- Transcript chunking
+- Instagram extraction
 - Embeddings
-- Qdrant storage
+- Qdrant chunk storage
 - LangChain RAG
-- Streaming cited chat
+- Streaming chat
 - Memory
 
 ## Tech Stack
 
 - Frontend: Next.js, TypeScript, Tailwind
 - Backend: FastAPI, Pydantic, SQLite
-- Vector database: Qdrant Cloud
+- YouTube extraction: yt-dlp, youtube-transcript-api
+- Planned vector database: Qdrant Cloud
 - Planned RAG orchestration: LangChain
-- Planned model providers: Gemini and/or Groq
 
 ## Local Setup
 
@@ -62,3 +64,4 @@ npm run dev
 ## Environment Variables
 
 Use `.env.example` and `backend/.env.example` as references.
+

@@ -3,10 +3,15 @@ from fastapi import APIRouter, Query, status
 from app.models.project import (
     ProjectCreateRequest,
     ProjectCreateResponse,
+    ProjectDetailResponse,
     ProjectListResponse,
-    ProjectRecord,
 )
-from app.services.project_service import create_project, get_project, list_projects
+from app.services.project_service import (
+    create_project,
+    extract_project_youtube,
+    get_project_detail,
+    list_projects,
+)
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -30,6 +35,11 @@ def list_projects_endpoint(
     return list_projects(limit=limit)
 
 
-@router.get("/{project_id}", response_model=ProjectRecord)
-def get_project_endpoint(project_id: str) -> ProjectRecord:
-    return get_project(project_id)
+@router.get("/{project_id}", response_model=ProjectDetailResponse)
+def get_project_endpoint(project_id: str) -> ProjectDetailResponse:
+    return get_project_detail(project_id)
+
+
+@router.post("/{project_id}/extract", response_model=ProjectDetailResponse)
+def extract_project_endpoint(project_id: str) -> ProjectDetailResponse:
+    return extract_project_youtube(project_id)

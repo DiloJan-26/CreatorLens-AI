@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.video import VideoMetadata
+
 
 ProjectStatus = Literal["created", "extracting", "ready", "failed"]
 
@@ -28,3 +30,14 @@ class ProjectRecord(BaseModel):
 
 class ProjectListResponse(BaseModel):
     projects: list[ProjectRecord]
+
+
+class ProjectDetailResponse(BaseModel):
+    project_id: str
+    youtube_url: str
+    instagram_url: str
+    status: ProjectStatus
+    created_at: str
+    updated_at: str
+    youtube: VideoMetadata | None = None
+    instagram: VideoMetadata | None = None

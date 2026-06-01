@@ -2,7 +2,7 @@ import type {
   HealthResponse,
   ProjectCreateRequest,
   ProjectCreateResponse,
-  ProjectRecord,
+  ProjectDetailResponse,
 } from "@/types/project";
 
 const API_BASE_URL =
@@ -24,8 +24,18 @@ export async function createProject(
   });
 }
 
-export async function getProject(projectId: string): Promise<ProjectRecord> {
-  return request<ProjectRecord>(`/api/projects/${projectId}`);
+export async function extractProject(
+  projectId: string,
+): Promise<ProjectDetailResponse> {
+  return request<ProjectDetailResponse>(`/api/projects/${projectId}/extract`, {
+    method: "POST",
+  });
+}
+
+export async function getProject(
+  projectId: string,
+): Promise<ProjectDetailResponse> {
+  return request<ProjectDetailResponse>(`/api/projects/${projectId}`);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

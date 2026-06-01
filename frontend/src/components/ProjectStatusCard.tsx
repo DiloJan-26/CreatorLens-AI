@@ -1,21 +1,34 @@
-import type { ProjectCreateResponse } from "@/types/project";
+import type {
+  ProjectCreateResponse,
+  ProjectDetailResponse,
+} from "@/types/project";
 
 type ProjectStatusCardProps = {
-  project: ProjectCreateResponse | null;
+  createdProject: ProjectCreateResponse | null;
+  projectDetail: ProjectDetailResponse | null;
+  progressMessage: string | null;
   error: string | null;
 };
 
 export function ProjectStatusCard({
-  project,
+  createdProject,
+  projectDetail,
+  progressMessage,
   error,
 }: ProjectStatusCardProps) {
-  if (!project && !error) {
+  if (!createdProject && !projectDetail && !progressMessage && !error) {
     return null;
   }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      {project ? (
+      {progressMessage ? (
+        <p className="rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          {progressMessage}
+        </p>
+      ) : null}
+
+      {createdProject ? (
         <div>
           <p className="text-sm font-semibold text-emerald-700">
             Project created successfully
@@ -24,21 +37,22 @@ export function ProjectStatusCard({
             <div>
               <dt className="font-medium text-slate-500">Project ID</dt>
               <dd className="mt-1 break-all text-slate-950">
-                {project.project_id}
+                {createdProject.project_id}
               </dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Status</dt>
-              <dd className="mt-1 text-slate-950">{project.status}</dd>
+              <dd className="mt-1 text-slate-950">
+                {projectDetail?.status ?? createdProject.status}
+              </dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Message</dt>
-              <dd className="mt-1 text-slate-950">{project.message}</dd>
+              <dd className="mt-1 text-slate-950">{createdProject.message}</dd>
             </div>
           </dl>
           <p className="mt-4 text-sm leading-6 text-slate-600">
-            Next step: Day 02 extraction will pull transcripts, metadata,
-            engagement signals, and prepare chunks for Qdrant.
+            YouTube extraction runs first. Instagram extraction is planned next.
           </p>
         </div>
       ) : null}

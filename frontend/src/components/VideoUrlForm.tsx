@@ -61,7 +61,7 @@ export function VideoUrlForm({
 
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || !youtubeUrl.trim() || !instagramUrl.trim()}
         className="inline-flex h-11 items-center justify-center rounded-md bg-teal-700 px-5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
       >
         {isSubmitting ? "Creating project..." : "Analyze Videos"}
