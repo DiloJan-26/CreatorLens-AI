@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 backend/.env
 backend/storage/
+*.db
 node_modules/
 .next/
 out/
@@ -14,5 +15,5 @@ frontend/.env.local
 .DS_Store
 .vscode/
 
-# documentation
+# docs
 docs/

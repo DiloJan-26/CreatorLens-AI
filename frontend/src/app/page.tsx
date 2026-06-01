@@ -2,78 +2,59 @@
 
 import { useState } from "react";
 
-type BackendStatus =
-  | {
-      status: "idle";
-      message: string;
-    }
-  | {
-      status: "ok";
-      message: string;
-    }
-  | {
-      status: "error";
-      message: string;
-    };
-
-type HealthResponse = {
-  status?: string;
-  service?: string;
-  environment?: string;
-};
-
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { ProjectStatusCard } from "@/components/ProjectStatusCard";
+import { SystemStatusCard } from "@/components/SystemStatusCard";
+import { VideoUrlForm } from "@/components/VideoUrlForm";
+import { checkBackend, createProject } from "@/lib/api";
+import type { ProjectCreateResponse } from "@/types/project";
 
 export default function Home() {
-  const [backendStatus, setBackendStatus] = useState<BackendStatus>({
-    status: "idle",
-    message: "Backend status has not been checked yet.",
-  });
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [backendStatus, setBackendStatus] = useState(
+    "Backend status has not been checked yet.",
+  );
   const [isChecking, setIsChecking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [project, setProject] = useState<ProjectCreateResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function checkBackend() {
+  async function handleBackendCheck() {
     setIsChecking(true);
-    setBackendStatus({
-      status: "idle",
-      message: "Checking backend...",
-    });
+    setBackendStatus("Checking backend...");
 
     try {
-      const response = await fetch(`${apiBaseUrl}/health`, {
-        cache: "no-store",
-      });
+      const health = await checkBackend();
 
-      if (!response.ok) {
-        throw new Error(`Backend returned HTTP ${response.status}`);
-      }
-
-      const data = (await response.json()) as HealthResponse;
-
-      if (data.status === "ok" && data.service) {
-        setBackendStatus({
-          status: "ok",
-          message: `${data.status} - ${data.service}`,
-        });
+      if (health.status === "ok" && health.service) {
+        setBackendStatus(`${health.status} - ${health.service}`);
         return;
       }
 
-      setBackendStatus({
-        status: "error",
-        message: "Backend responded, but the health payload was unexpected.",
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not reach the backend.";
-
-      setBackendStatus({
-        status: "error",
-        message,
-      });
+      setBackendStatus(health.message ?? "Backend responded unexpectedly.");
+    } catch (caughtError) {
+      setBackendStatus(getErrorMessage(caughtError));
     } finally {
       setIsChecking(false);
+    }
+  }
+
+  async function handleCreateProject() {
+    setIsSubmitting(true);
+    setProject(null);
+    setError(null);
+
+    try {
+      const createdProject = await createProject({
+        youtube_url: youtubeUrl,
+        instagram_url: instagramUrl,
+      });
+
+      setProject(createdProject);
+    } catch (caughtError) {
+      setError(getErrorMessage(caughtError));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -84,84 +65,44 @@ export default function Home() {
           <p className="text-lg font-semibold">CreatorLens AI</p>
         </header>
 
-        <div className="grid flex-1 items-center gap-10 lg:grid-cols-[1fr_420px]">
-          <div className="max-w-3xl">
+        <div className="grid flex-1 items-center gap-10 lg:grid-cols-[1fr_440px]">
+          <section className="max-w-3xl">
             <h1 className="text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
               Compare Shorts and Reels with cited creator intelligence.
             </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+              project creation flow, URL validation, SQLite
+              project storage, and frontend-backend integration.
+            </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={checkBackend}
-                disabled={isChecking}
-                className="inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-              >
-                {isChecking ? "Checking..." : "Check Backend"}
-              </button>
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-300 px-5 text-sm font-medium text-slate-400"
-              >
-                Analyze Videos - Coming Soon
-              </button>
+            <div className="mt-8 grid gap-4">
+              <SystemStatusCard
+                statusText={backendStatus}
+                isChecking={isChecking}
+                onCheck={handleBackendCheck}
+              />
+              <ProjectStatusCard project={project} error={error} />
             </div>
+          </section>
 
-            <div
-              className={`mt-5 rounded-md border px-4 py-3 text-sm ${
-                backendStatus.status === "ok"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : backendStatus.status === "error"
-                    ? "border-rose-200 bg-rose-50 text-rose-800"
-                    : "border-slate-200 bg-white text-slate-600"
-              }`}
-            >
-              Backend status: {backendStatus.message}
-            </div>
-          </div>
-
-          <div className="grid gap-4">
-            <VideoInputCard
-              label="YouTube"
-              title="Input YouTube Short URL"
-              placeholder="https://youtube.com/shorts/..."
-            />
-            <VideoInputCard
-              label="Instagram"
-              title="Input Instagram Reel URL"
-              placeholder="https://www.instagram.com/reel/..."
-            />
-            
-          </div>
+          <VideoUrlForm
+            youtubeUrl={youtubeUrl}
+            instagramUrl={instagramUrl}
+            setYoutubeUrl={setYoutubeUrl}
+            setInstagramUrl={setInstagramUrl}
+            onSubmit={handleCreateProject}
+            isSubmitting={isSubmitting}
+          />
         </div>
       </section>
     </main>
   );
 }
 
-function VideoInputCard({
-  label,
-  title,
-  placeholder,
-}: {
-  label: string;
-  title: string;
-  placeholder: string;
-}) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-        {label}
-      </p>
-      <label className="mt-3 block text-sm font-medium text-slate-900">
-        {title}
-        <input
-          type="url"
-          placeholder={placeholder}
-          className="mt-3 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-        />
-      </label>
-    </section>
-  );
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Something went wrong. Please try again.";
 }

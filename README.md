@@ -1,52 +1,64 @@
 # CreatorLens AI
 
-CreatorLens AI is a full-stack RAG chatbot planned for comparing YouTube Short and Instagram Reel. It will extract transcript and metadata signals, normalize them, retrieve relevant evidence, and answer comparison questions through a streaming chat interface.
+CreatorLens AI is a full-stack application for comparing a YouTube Short and an Instagram Reel. The goal is to extract metadata and transcript evidence, calculate engagement signals, store searchable context, and support a cited chat experience for creator analysis.
 
-## Planned Features
+## Current Status
 
-- Submit YouTube Short URL and Instagram Reel URL
-- Extract transcripts, captions, metadata, and engagement signals
-- Normalize platform-specific metadata into a shared schema
-- Chunk transcript and metadata evidence
-- Store embeddings in Qdrant
-- Use RAG for grounded comparison answers
-- Stream chatbot responses to the frontend
-- Avoid LLM calls for simple structured metadata questions where possible
+Implemented so far:
 
-## Tech Stack Plan
+- FastAPI backend
+- Next.js frontend
+- Backend health check
+- Qdrant Cloud-ready health check
+- Project creation API
+- URL validation for YouTube and Instagram
+- SQLite local project storage
+- Frontend project creation flow
 
-- Frontend: Next.js
-- Backend: FastAPI
+## Planned Next Features
+
+- YouTube metadata and transcript extraction
+- Instagram metadata and transcript extraction
+- Engagement-rate calculation
+- Transcript chunking
+- Embeddings
+- Qdrant storage
+- LangChain RAG
+- Streaming cited chat
+- Memory
+
+## Tech Stack
+
+- Frontend: Next.js, TypeScript, Tailwind
+- Backend: FastAPI, Pydantic, SQLite
 - Vector database: Qdrant Cloud
-- RAG orchestration: LangChain later, after the lightweight foundation
-- LLM providers: Gemini and/or Groq
-- Extraction services: YouTube transcript tooling, yt-dlp, Apify, Deepgram as needed
+- Planned RAG orchestration: LangChain
+- Planned model providers: Gemini and/or Groq
 
-## Local Backend Setup
+## Local Setup
 
-From `backend`:
+Backend:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+.\.venv\Scripts\activate
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend URLs:
-
-- http://localhost:8000/health
-- http://localhost:8000/docs
-- http://localhost:8000/health/qdrant
-
-## Local Frontend Setup
-
-From `frontend`:
+Frontend:
 
 ```powershell
-npm install
+cd frontend
 npm run dev
 ```
 
-Frontend URL:
+## Local URLs
 
+- http://localhost:8000/health
+- http://localhost:8000/docs
+- http://localhost:8000/api/projects
 - http://localhost:3000
+
+## Environment Variables
+
+Use `.env.example` and `backend/.env.example` as references.
