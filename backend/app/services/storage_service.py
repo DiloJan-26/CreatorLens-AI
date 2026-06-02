@@ -90,6 +90,44 @@ def init_db() -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_citations (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                platform TEXT,
+                source_type TEXT,
+                citation_label TEXT,
+                text TEXT,
+                score REAL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         _ensure_video_columns(connection)
         connection.commit()
 
@@ -601,6 +639,219 @@ def update_rag_chunk_qdrant_point_id(
         connection.commit()
 
 
+def create_chat_session(
+    project_id: str,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    init_db()
+    chat_session_id = session_id.strip() if isinstance(session_id, str) else ""
+    chat_session_id = chat_session_id or str(uuid4())
+    timestamp = _utc_timestamp()
+
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO chat_sessions (
+                id,
+                project_id,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                chat_session_id,
+                project_id,
+                timestamp,
+                timestamp,
+            ),
+        )
+        connection.commit()
+
+    record = get_chat_session(project_id=project_id, session_id=chat_session_id)
+    if record is None:
+        raise RuntimeError("Chat session record was not created.")
+
+    return record
+
+
+def get_chat_session(project_id: str, session_id: str) -> dict[str, Any] | None:
+    init_db()
+
+    with _connect() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                id AS session_id,
+                project_id,
+                created_at,
+                updated_at
+            FROM chat_sessions
+            WHERE project_id = ? AND id = ?
+            """,
+            (project_id, session_id),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return dict(row)
+
+
+def save_chat_message(
+    project_id: str,
+    session_id: str,
+    role: str,
+    content: str,
+) -> dict[str, Any]:
+    init_db()
+    message_id = str(uuid4())
+    timestamp = _utc_timestamp()
+
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO chat_messages (
+                id,
+                session_id,
+                project_id,
+                role,
+                content,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                message_id,
+                session_id,
+                project_id,
+                role,
+                content,
+                timestamp,
+            ),
+        )
+        connection.execute(
+            """
+            UPDATE chat_sessions
+            SET updated_at = ?
+            WHERE project_id = ? AND id = ?
+            """,
+            (timestamp, project_id, session_id),
+        )
+        connection.commit()
+
+    return {
+        "message_id": message_id,
+        "session_id": session_id,
+        "project_id": project_id,
+        "role": role,
+        "content": content,
+        "created_at": timestamp,
+    }
+
+
+def get_chat_messages(
+    project_id: str,
+    session_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    init_db()
+    safe_limit = max(1, min(limit, 100))
+
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id AS message_id,
+                session_id,
+                project_id,
+                role,
+                content,
+                created_at
+            FROM chat_messages
+            WHERE project_id = ? AND session_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (project_id, session_id, safe_limit),
+        ).fetchall()
+
+    return [dict(row) for row in reversed(rows)]
+
+
+def delete_chat_session(project_id: str, session_id: str) -> None:
+    init_db()
+
+    with _connect() as connection:
+        connection.execute(
+            """
+            DELETE FROM chat_citations
+            WHERE project_id = ? AND session_id = ?
+            """,
+            (project_id, session_id),
+        )
+        connection.execute(
+            """
+            DELETE FROM chat_messages
+            WHERE project_id = ? AND session_id = ?
+            """,
+            (project_id, session_id),
+        )
+        connection.execute(
+            """
+            DELETE FROM chat_sessions
+            WHERE project_id = ? AND id = ?
+            """,
+            (project_id, session_id),
+        )
+        connection.commit()
+
+
+def save_chat_citations(
+    message_id: str,
+    project_id: str,
+    session_id: str,
+    citations: list[dict[str, Any]],
+) -> None:
+    init_db()
+    timestamp = _utc_timestamp()
+
+    with _connect() as connection:
+        connection.executemany(
+            """
+            INSERT INTO chat_citations (
+                id,
+                message_id,
+                session_id,
+                project_id,
+                platform,
+                source_type,
+                citation_label,
+                text,
+                score,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    str(uuid4()),
+                    message_id,
+                    session_id,
+                    project_id,
+                    _optional_storage_text(citation.get("platform")),
+                    _optional_storage_text(citation.get("source_type")),
+                    _optional_storage_text(citation.get("citation_label")),
+                    _optional_storage_text(citation.get("text")),
+                    _optional_storage_float(citation.get("score")),
+                    timestamp,
+                )
+                for citation in citations
+            ],
+        )
+        connection.commit()
+
+
 def get_project_detail_record(project_id: str) -> dict[str, Any] | None:
     project = get_project_record(project_id)
 
@@ -625,6 +876,23 @@ def _connect() -> sqlite3.Connection:
 
 def _utc_timestamp() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _optional_storage_text(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+
+    return None
+
+
+def _optional_storage_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int | float):
+        return float(value)
+
+    return None
 
 
 def _video_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

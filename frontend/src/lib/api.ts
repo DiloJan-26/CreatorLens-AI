@@ -1,4 +1,6 @@
 import type {
+  ChatCitation,
+  ChatStreamRequest,
   HealthResponse,
   IndexProjectResponse,
   ProjectCreateRequest,
@@ -78,6 +80,73 @@ export async function retrieveProjectChunks(
   });
 }
 
+type StreamChatHandlers = {
+  onSession?: (sessionId: string) => void;
+  onToken?: (text: string) => void;
+  onCitations?: (citations: ChatCitation[]) => void;
+  onDone?: () => void;
+  onError?: (message: string) => void;
+};
+
+type ParsedSseEvent = {
+  event: string;
+  data: unknown;
+};
+
+export async function streamChatResponse(
+  projectId: string,
+  payload: ChatStreamRequest,
+  handlers: StreamChatHandlers,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/chat/stream`,
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  if (!response.body) {
+    throw new Error("Chat stream was not available.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const parsed = parseSseBuffer(buffer);
+    buffer = parsed.remaining;
+
+    for (const event of parsed.events) {
+      handleStreamEvent(event, handlers);
+    }
+  }
+
+  buffer += decoder.decode();
+
+  if (buffer.trim()) {
+    for (const event of parseSseBuffer(`${buffer}\n\n`).events) {
+      handleStreamEvent(event, handlers);
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     cache: "no-store",
@@ -139,4 +208,111 @@ function extractDetail(data: unknown): string | null {
   }
 
   return null;
+}
+
+function parseSseBuffer(buffer: string): {
+  events: ParsedSseEvent[];
+  remaining: string;
+} {
+  const normalized = buffer.replace(/\r\n/g, "\n");
+  const parts = normalized.split("\n\n");
+  const remaining = parts.pop() ?? "";
+  const events = parts
+    .map(parseSseEvent)
+    .filter((event): event is ParsedSseEvent => event !== null);
+
+  return {
+    events,
+    remaining,
+  };
+}
+
+function parseSseEvent(rawEvent: string): ParsedSseEvent | null {
+  const lines = rawEvent.split("\n");
+  let eventName = "message";
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      eventName = line.slice("event:".length).trim();
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  try {
+    return {
+      event: eventName,
+      data: JSON.parse(dataLines.join("\n")) as unknown,
+    };
+  } catch {
+    return {
+      event: "error",
+      data: {
+        message: "Could not parse chat stream event.",
+      },
+    };
+  }
+}
+
+function handleStreamEvent(
+  event: ParsedSseEvent,
+  handlers: StreamChatHandlers,
+) {
+  const data = event.data;
+
+  if (event.event === "token") {
+    const text = objectValue(data, "text");
+
+    if (typeof text === "string") {
+      handlers.onToken?.(text);
+    }
+
+    return;
+  }
+
+  if (event.event === "citations") {
+    const citations = objectValue(data, "citations");
+
+    if (Array.isArray(citations)) {
+      handlers.onCitations?.(citations as ChatCitation[]);
+    }
+
+    return;
+  }
+
+  if (event.event === "done") {
+    const sessionId = objectValue(data, "session_id");
+
+    if (typeof sessionId === "string" && sessionId) {
+      handlers.onSession?.(sessionId);
+    }
+
+    handlers.onDone?.();
+    return;
+  }
+
+  if (event.event === "error") {
+    const message = objectValue(data, "message");
+    handlers.onError?.(
+      typeof message === "string" && message
+        ? message
+        : "Could not stream chat response.",
+    );
+  }
+}
+
+function objectValue(data: unknown, key: string): unknown {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return (data as Record<string, unknown>)[key];
 }

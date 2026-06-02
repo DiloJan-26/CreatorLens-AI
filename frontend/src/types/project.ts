@@ -86,6 +86,25 @@ export type RetrieveResponse = {
   results: RetrievedChunk[];
 };
 
+export type ChatCitation = {
+  platform: string;
+  source_type: string;
+  citation_label: string;
+  text: string;
+  score?: number | null;
+};
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  citations?: ChatCitation[];
+};
+
+export type ChatStreamRequest = {
+  message: string;
+  session_id?: string | null;
+};
+
 export type ProjectRecord = {
   project_id: string;
   youtube_url: string;

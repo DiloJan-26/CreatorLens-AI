@@ -5,5 +5,7 @@ httpx
 sse-starlette
 qdrant-client
 fastembed
+langchain
+langchain-google-genai
 youtube-transcript-api
 yt-dlp

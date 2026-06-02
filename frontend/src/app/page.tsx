@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CreatorChatPanel } from "@/components/CreatorChatPanel";
 import { ProjectStatusCard } from "@/components/ProjectStatusCard";
 import { RagIndexPanel } from "@/components/RagIndexPanel";
 import { RetrievalTestPanel } from "@/components/RetrievalTestPanel";
@@ -163,6 +164,10 @@ export default function Home() {
                 onIndexed={setIndexResult}
               />
               <RetrievalTestPanel
+                projectId={projectDetail.project_id}
+                indexReady={indexReady}
+              />
+              <CreatorChatPanel
                 projectId={projectDetail.project_id}
                 indexReady={indexReady}
               />

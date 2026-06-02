@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
 from app.core.config import get_settings
+from app.models.chat import LLMHealthResponse
 from app.models.rag import EmbeddingHealthResponse, VectorStoreHealthResponse
+from app.services.llm_service import check_llm_configured
 from app.services.embedding_service import get_embedding_dimension
 from app.services.qdrant_service import (
     is_qdrant_configured,
@@ -66,3 +68,8 @@ def embeddings_health() -> EmbeddingHealthResponse:
             model_name=settings.embedding_model_name,
             message="Could not load embedding model.",
         )
+
+
+@router.get("/health/llm", response_model=LLMHealthResponse)
+def llm_health() -> LLMHealthResponse:
+    return check_llm_configured()
