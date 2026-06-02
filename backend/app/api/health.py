@@ -1,7 +1,12 @@
 from fastapi import APIRouter
-from qdrant_client import QdrantClient
 
 from app.core.config import get_settings
+from app.models.rag import EmbeddingHealthResponse, VectorStoreHealthResponse
+from app.services.embedding_service import get_embedding_dimension
+from app.services.qdrant_service import (
+    is_qdrant_configured,
+    list_qdrant_collections,
+)
 
 
 router = APIRouter(tags=["health"])
@@ -17,31 +22,47 @@ def health() -> dict[str, str]:
     }
 
 
-@router.get("/health/qdrant")
-def qdrant_health() -> dict[str, object]:
-    if not settings.qdrant_url:
-        return {
-            "status": "not_configured",
-            "message": "QDRANT_URL is missing.",
-        }
+@router.get("/health/qdrant", response_model=VectorStoreHealthResponse)
+def qdrant_health() -> VectorStoreHealthResponse:
+    if not is_qdrant_configured():
+        return VectorStoreHealthResponse(
+            status="not_configured",
+            collection=settings.qdrant_collection,
+            qdrant_configured=False,
+            message="QDRANT_URL is missing.",
+        )
 
     try:
-        client = QdrantClient(
-            url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key or None,
-        )
-        collections_response = client.get_collections()
-        collections = [
-            collection.name for collection in collections_response.collections
-        ]
+        collections = list_qdrant_collections()
 
-        return {
-            "status": "ok",
-            "collections": collections,
-        }
-    except Exception as exc:
-        return {
-            "status": "error",
-            "message": "Could not connect to Qdrant.",
-            "detail": str(exc)[:200],
-        }
+        return VectorStoreHealthResponse(
+            status="ok",
+            collection=settings.qdrant_collection,
+            qdrant_configured=True,
+            collections=collections,
+        )
+    except Exception:
+        return VectorStoreHealthResponse(
+            status="error",
+            collection=settings.qdrant_collection,
+            qdrant_configured=True,
+            message="Could not connect to Qdrant.",
+        )
+
+
+@router.get("/health/embeddings", response_model=EmbeddingHealthResponse)
+def embeddings_health() -> EmbeddingHealthResponse:
+    try:
+        vector_size = get_embedding_dimension()
+
+        return EmbeddingHealthResponse(
+            status="ok",
+            model_name=settings.embedding_model_name,
+            vector_size=vector_size,
+        )
+    except Exception:
+        return EmbeddingHealthResponse(
+            status="error",
+            model_name=settings.embedding_model_name,
+            message="Could not load embedding model.",
+        )

@@ -18,6 +18,7 @@ class VideoMetadata(BaseModel):
     platform: Platform
     url: str
     title: str | None = None
+    description: str | None = None
     creator: str | None = None
     follower_count: int | None = None
     views: int | None = None
@@ -31,8 +32,18 @@ class VideoMetadata(BaseModel):
     transcript_segment_count: int = 0
     extraction_status: ExtractionStatus = "pending"
     error_message: str | None = None
+    metric_source_note: str | None = None
+    transcript_source_note: str | None = None
 
 
 class VideoExtractionResult(BaseModel):
     metadata: VideoMetadata
     transcript_segments: list[TranscriptSegment] = Field(default_factory=list)
+
+
+class TranscriptPreviewResponse(BaseModel):
+    project_id: str
+    platform: Platform
+    transcript_available: bool
+    transcript_segment_count: int
+    segments: list[TranscriptSegment] = Field(default_factory=list)

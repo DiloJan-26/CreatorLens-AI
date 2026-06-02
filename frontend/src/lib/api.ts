@@ -1,8 +1,12 @@
 import type {
   HealthResponse,
+  IndexProjectResponse,
   ProjectCreateRequest,
   ProjectCreateResponse,
   ProjectDetailResponse,
+  RetrieveProjectChunksRequest,
+  RetrieveResponse,
+  TranscriptPreviewResponse,
 } from "@/types/project";
 
 const API_BASE_URL =
@@ -36,6 +40,42 @@ export async function getProject(
   projectId: string,
 ): Promise<ProjectDetailResponse> {
   return request<ProjectDetailResponse>(`/api/projects/${projectId}`);
+}
+
+export async function getTranscriptPreview(
+  projectId: string,
+  platform: "youtube" | "instagram",
+  limit = 5,
+): Promise<TranscriptPreviewResponse> {
+  const params = new URLSearchParams({
+    platform,
+    limit: String(limit),
+  });
+
+  return request<TranscriptPreviewResponse>(
+    `/api/projects/${projectId}/transcripts?${params.toString()}`,
+  );
+}
+
+export async function indexProject(
+  projectId: string,
+): Promise<IndexProjectResponse> {
+  return request<IndexProjectResponse>(`/api/projects/${projectId}/index`, {
+    method: "POST",
+  });
+}
+
+export async function retrieveProjectChunks(
+  projectId: string,
+  payload: RetrieveProjectChunksRequest,
+): Promise<RetrieveResponse> {
+  return request<RetrieveResponse>(`/api/projects/${projectId}/retrieve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

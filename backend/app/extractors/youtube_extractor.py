@@ -11,6 +11,16 @@ from app.services.metrics_service import calculate_engagement_rate
 
 
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([A-Za-z0-9_]+)")
+YOUTUBE_METRIC_SOURCE_NOTE = (
+    "YouTube counts are extracted from public metadata and may differ slightly "
+    "from the live UI because of rounding, caching, timezone, or updates."
+)
+YOUTUBE_TRANSCRIPT_AVAILABLE_NOTE = (
+    "Transcript extracted from YouTube captions/subtitles when available."
+)
+YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE = (
+    "YouTube captions/subtitles were unavailable for this video."
+)
 
 
 def extract_youtube_video_id(url: str) -> str:
@@ -138,6 +148,8 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
                 url=url,
                 extraction_status="failed",
                 error_message=_safe_error_message(exc),
+                metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
+                transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
             ),
             transcript_segments=[],
         )
@@ -145,11 +157,13 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     views = metadata.get("views")
     likes = metadata.get("likes")
     comments = metadata.get("comments")
+    transcript_available = len(transcript_segments) > 0
 
     video_metadata = VideoMetadata(
         platform="youtube",
         url=metadata.get("webpage_url") or url,
         title=metadata.get("title"),
+        description=metadata.get("description"),
         creator=metadata.get("creator"),
         follower_count=None,
         views=views,
@@ -159,10 +173,16 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         upload_date=metadata.get("upload_date"),
         duration_seconds=metadata.get("duration_seconds"),
         engagement_rate=calculate_engagement_rate(likes, comments, views),
-        transcript_available=len(transcript_segments) > 0,
+        transcript_available=transcript_available,
         transcript_segment_count=len(transcript_segments),
         extraction_status="ready",
         error_message=None,
+        metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
+        transcript_source_note=(
+            YOUTUBE_TRANSCRIPT_AVAILABLE_NOTE
+            if transcript_available
+            else YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
+        ),
     )
 
     return VideoExtractionResult(

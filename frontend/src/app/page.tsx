@@ -3,11 +3,15 @@
 import { useState } from "react";
 
 import { ProjectStatusCard } from "@/components/ProjectStatusCard";
+import { RagIndexPanel } from "@/components/RagIndexPanel";
+import { RetrievalTestPanel } from "@/components/RetrievalTestPanel";
 import { SystemStatusCard } from "@/components/SystemStatusCard";
+import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoInsightCard } from "@/components/VideoInsightCard";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import { checkBackend, createProject, extractProject } from "@/lib/api";
 import type {
+  IndexProjectResponse,
   ProjectCreateResponse,
   ProjectDetailResponse,
 } from "@/types/project";
@@ -25,7 +29,11 @@ export default function Home() {
     useState<ProjectCreateResponse | null>(null);
   const [projectDetail, setProjectDetail] =
     useState<ProjectDetailResponse | null>(null);
+  const [indexResult, setIndexResult] = useState<IndexProjectResponse | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const indexReady = indexResult?.status === "indexed";
 
   async function handleBackendCheck() {
     setIsChecking(true);
@@ -52,6 +60,7 @@ export default function Home() {
     setProgressMessage("Creating project...");
     setCreatedProject(null);
     setProjectDetail(null);
+    setIndexResult(null);
     setError(null);
 
     try {
@@ -67,7 +76,7 @@ export default function Home() {
 
       setProjectDetail(detail);
       setProgressMessage(
-        "Extraction completed. Some Instagram fields may be unavailable depending on public access.",
+        "Build the Qdrant search index and test cited source retrieval before adding the final chat layer.",
       );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -90,9 +99,9 @@ export default function Home() {
               Compare Shorts and Reels with cited creator intelligence.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Day 03: dynamic YouTube and Instagram extraction with normalized
-              metadata, transcript availability, and SQLite-backed project
-              detail.
+              Analyze YouTube Shorts and Instagram Reels, build a vector
+              search index, and retrieve cited creator insights from
+              transcripts, captions, descriptions, hashtags, and metadata.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -132,6 +141,34 @@ export default function Home() {
             isPending={isSubmitting}
           />
         </section>
+
+        {projectDetail ? (
+          <>
+            <section className="mt-4 grid gap-4 lg:grid-cols-2">
+              <TranscriptPreviewPanel
+                projectId={projectDetail.project_id}
+                platform="youtube"
+                title="YouTube transcript preview"
+              />
+              <TranscriptPreviewPanel
+                projectId={projectDetail.project_id}
+                platform="instagram"
+                title="Instagram transcript preview"
+              />
+            </section>
+
+            <section className="mt-4 grid gap-4">
+              <RagIndexPanel
+                projectId={projectDetail.project_id}
+                onIndexed={setIndexResult}
+              />
+              <RetrievalTestPanel
+                projectId={projectDetail.project_id}
+                indexReady={indexReady}
+              />
+            </section>
+          </>
+        ) : null}
       </section>
     </main>
   );

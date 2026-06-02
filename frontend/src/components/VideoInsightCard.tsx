@@ -53,6 +53,17 @@ export function VideoInsightCard({
         </p>
       ) : null}
 
+      {metadata.description ? (
+        <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+          <p className="text-sm font-medium text-slate-500">
+            {platform === "instagram" ? "Caption preview" : "Description preview"}
+          </p>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+            {truncateText(metadata.description, 300)}
+          </p>
+        </div>
+      ) : null}
+
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         <Metric label="Creator" value={metadata.creator} />
         <Metric
@@ -108,6 +119,14 @@ export function VideoInsightCard({
           </div>
         </div>
       ) : null}
+
+      <div className="mt-5 grid gap-3">
+        <SourceNote label="Metric source" value={metadata.metric_source_note} />
+        <SourceNote
+          label="Transcript source"
+          value={metadata.transcript_source_note}
+        />
+      </div>
     </section>
   );
 }
@@ -129,4 +148,31 @@ function Metric({
 
 function formatNumber(value: number | null | undefined): string | null {
   return value == null ? null : new Intl.NumberFormat("en-US").format(value);
+}
+
+function SourceNote({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+      <span className="font-medium text-slate-700">{label}: </span>
+      {value}
+    </div>
+  );
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength).trimEnd()}...`;
 }

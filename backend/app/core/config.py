@@ -17,11 +17,15 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
 
-    qdrant_url: str = Field(default="", alias="QDRANT_URL")
-    qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
+    qdrant_url: str | None = Field(default=None, alias="QDRANT_URL")
+    qdrant_api_key: str | None = Field(default=None, alias="QDRANT_API_KEY")
     qdrant_collection: str = Field(
         default="creatorlens_chunks",
         alias="QDRANT_COLLECTION",
+    )
+    embedding_model_name: str = Field(
+        default="BAAI/bge-small-en-v1.5",
+        alias="EMBEDDING_MODEL_NAME",
     )
 
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")

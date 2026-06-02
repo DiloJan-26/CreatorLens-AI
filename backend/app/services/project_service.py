@@ -12,13 +12,22 @@ from app.models.project import (
     ProjectListResponse,
     ProjectRecord,
 )
-from app.models.video import VideoExtractionResult, VideoMetadata
+from app.models.rag import ChunkBuildResponse, RagChunk
+from app.models.video import (
+    TranscriptPreviewResponse,
+    VideoExtractionResult,
+    VideoMetadata,
+)
+from app.rag.chunk_builder import build_project_chunks
 from app.services.storage_service import (
     create_project_record,
     get_project_detail_record,
     get_project_record,
+    get_rag_chunks,
+    get_transcript_preview,
     get_video_by_project_platform,
     list_project_records,
+    replace_rag_chunks,
     replace_transcript_segments,
     update_project_status,
     upsert_video_metadata,
@@ -116,6 +125,38 @@ def get_project_detail(project_id: str) -> ProjectDetailResponse:
     return ProjectDetailResponse(**record)
 
 
+def get_project_transcript_preview(
+    project_id: str,
+    platform: str,
+    limit: int = 10,
+) -> TranscriptPreviewResponse:
+    if platform not in {"youtube", "instagram"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Platform must be youtube or instagram.",
+        )
+
+    if get_project_record(project_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    preview = get_transcript_preview(
+        project_id=project_id,
+        platform=platform,
+        limit=limit,
+    )
+
+    if preview is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transcript data not found for this platform.",
+        )
+
+    return TranscriptPreviewResponse(**preview)
+
+
 def extract_project_videos(project_id: str) -> ProjectDetailResponse:
     record = get_project_record(project_id)
 
@@ -152,6 +193,41 @@ def extract_project_videos(project_id: str) -> ProjectDetailResponse:
 
 def extract_project_youtube(project_id: str) -> ProjectDetailResponse:
     return extract_project_videos(project_id)
+
+
+def build_and_store_project_chunks(project_id: str) -> ChunkBuildResponse:
+    if get_project_record(project_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    chunks = build_project_chunks(project_id)
+    replace_rag_chunks(project_id=project_id, chunks=chunks)
+
+    return _chunk_build_response(project_id, chunks)
+
+
+def get_project_chunks(
+    project_id: str,
+    platform: str | None = None,
+) -> ChunkBuildResponse:
+    if get_project_record(project_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
+        )
+
+    try:
+        chunk_records = get_rag_chunks(project_id=project_id, platform=platform)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from None
+
+    chunks = [RagChunk(**record) for record in chunk_records]
+    return _chunk_build_response(project_id, chunks)
 
 
 def _extract_and_store_platform(
@@ -206,6 +282,19 @@ def _project_status_from_video_statuses(video_statuses: list[str]) -> str:
         return "ready"
 
     return "failed"
+
+
+def _chunk_build_response(
+    project_id: str,
+    chunks: list[RagChunk],
+) -> ChunkBuildResponse:
+    return ChunkBuildResponse(
+        project_id=project_id,
+        total_chunks=len(chunks),
+        youtube_chunks=sum(1 for chunk in chunks if chunk.platform == "youtube"),
+        instagram_chunks=sum(1 for chunk in chunks if chunk.platform == "instagram"),
+        chunks=chunks,
+    )
 
 
 def _failed_video_metadata(platform: str, url: str, message: str) -> VideoMetadata:
