@@ -8,7 +8,7 @@ from app.models.project import (
 )
 from app.services.project_service import (
     create_project,
-    extract_project_youtube,
+    extract_project_videos,
     get_project_detail,
     list_projects,
 )
@@ -42,4 +42,4 @@ def get_project_endpoint(project_id: str) -> ProjectDetailResponse:
 
 @router.post("/{project_id}/extract", response_model=ProjectDetailResponse)
 def extract_project_endpoint(project_id: str) -> ProjectDetailResponse:
-    return extract_project_youtube(project_id)
+    return extract_project_videos(project_id)

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
+from app.extractors.instagram_extractor import extract_instagram_video
 from app.extractors.youtube_extractor import extract_youtube_video
 from app.models.project import (
     ProjectCreateRequest,
@@ -11,15 +12,20 @@ from app.models.project import (
     ProjectListResponse,
     ProjectRecord,
 )
+from app.models.video import VideoExtractionResult, VideoMetadata
 from app.services.storage_service import (
     create_project_record,
     get_project_detail_record,
     get_project_record,
+    get_video_by_project_platform,
     list_project_records,
     replace_transcript_segments,
     update_project_status,
     upsert_video_metadata,
 )
+
+
+SUCCESSFUL_VIDEO_STATUSES = {"ready", "partial"}
 
 
 def is_valid_youtube_url(url: str) -> bool:
@@ -82,7 +88,7 @@ def create_project(payload: ProjectCreateRequest) -> ProjectCreateResponse:
     return ProjectCreateResponse(
         project_id=project_id,
         status="created",
-        message="Project created successfully. Extraction pipeline will run in the next backend milestone.",
+        message="Project created successfully. YouTube and Instagram extraction can now run.",
     )
 
 
@@ -110,7 +116,7 @@ def get_project_detail(project_id: str) -> ProjectDetailResponse:
     return ProjectDetailResponse(**record)
 
 
-def extract_project_youtube(project_id: str) -> ProjectDetailResponse:
+def extract_project_videos(project_id: str) -> ProjectDetailResponse:
     record = get_project_record(project_id)
 
     if record is None:
@@ -119,34 +125,113 @@ def extract_project_youtube(project_id: str) -> ProjectDetailResponse:
             detail="Project not found.",
         )
 
+    update_project_status(project_id, "extracting")
+
+    platform_statuses = [
+        _extract_and_store_platform(
+            project_id=project_id,
+            platform="youtube",
+            url=str(record["youtube_url"]),
+            extractor=extract_youtube_video,
+        ),
+        _extract_and_store_platform(
+            project_id=project_id,
+            platform="instagram",
+            url=str(record["instagram_url"]),
+            extractor=extract_instagram_video,
+        ),
+    ]
+
+    update_project_status(
+        project_id,
+        _project_status_from_video_statuses(platform_statuses),
+    )
+
+    return get_project_detail(project_id)
+
+
+def extract_project_youtube(project_id: str) -> ProjectDetailResponse:
+    return extract_project_videos(project_id)
+
+
+def _extract_and_store_platform(
+    project_id: str,
+    platform: str,
+    url: str,
+    extractor,
+) -> str:
+    existing_video = get_video_by_project_platform(project_id, platform)
+
+    if _is_successful_video(existing_video):
+        return str(existing_video["extraction_status"])
+
     try:
-        update_project_status(project_id, "extracting")
-        extraction_result = extract_youtube_video(str(record["youtube_url"]))
+        extraction_result = extractor(url)
+    except Exception:
+        extraction_result = VideoExtractionResult(
+            metadata=_failed_video_metadata(
+                platform=platform,
+                url=url,
+                message=f"{_platform_display_name(platform)} extraction failed.",
+            ),
+            transcript_segments=[],
+        )
+
+    try:
         video_record = upsert_video_metadata(
             project_id=project_id,
             metadata=extraction_result.metadata,
         )
         replace_transcript_segments(
             project_id=project_id,
-            platform="youtube",
+            platform=platform,
             video_id=str(video_record["id"]),
             segments=extraction_result.transcript_segments,
         )
-
-        if extraction_result.metadata.extraction_status == "ready":
-            update_project_status(project_id, "ready")
-        elif extraction_result.metadata.extraction_status == "failed":
-            update_project_status(project_id, "failed")
-
-        return get_project_detail(project_id)
-    except HTTPException:
-        raise
     except Exception:
-        update_project_status(project_id, "failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not extract YouTube data for this project.",
-        ) from None
+        return "failed"
+
+    return extraction_result.metadata.extraction_status
+
+
+def _is_successful_video(record: dict | None) -> bool:
+    if record is None:
+        return False
+
+    return str(record.get("extraction_status")) in SUCCESSFUL_VIDEO_STATUSES
+
+
+def _project_status_from_video_statuses(video_statuses: list[str]) -> str:
+    if any(video_status in SUCCESSFUL_VIDEO_STATUSES for video_status in video_statuses):
+        return "ready"
+
+    return "failed"
+
+
+def _failed_video_metadata(platform: str, url: str, message: str) -> VideoMetadata:
+    return VideoMetadata(
+        platform=platform,
+        url=url,
+        extraction_status="failed",
+        error_message=_safe_error_message(message),
+        transcript_available=False,
+        transcript_segment_count=0,
+    )
+
+
+def _safe_error_message(message: str) -> str:
+    clean_message = message.strip().splitlines()[0] if message.strip() else ""
+    return (clean_message or "Extraction failed.")[:200]
+
+
+def _platform_display_name(platform: str) -> str:
+    if platform == "youtube":
+        return "YouTube"
+
+    if platform == "instagram":
+        return "Instagram"
+
+    return "Platform"
 
 
 def list_projects(limit: int = 20) -> ProjectListResponse:

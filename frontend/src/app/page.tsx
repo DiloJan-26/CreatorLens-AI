@@ -61,13 +61,13 @@ export default function Home() {
       });
 
       setCreatedProject(created);
-      setProgressMessage("Extracting YouTube metadata and transcript...");
+      setProgressMessage("Extracting YouTube and Instagram data...");
 
       const detail = await extractProject(created.project_id);
 
       setProjectDetail(detail);
       setProgressMessage(
-        "YouTube extraction completed. Instagram extraction is planned next.",
+        "Extraction completed. Some Instagram fields may be unavailable depending on public access.",
       );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -90,8 +90,9 @@ export default function Home() {
               Compare Shorts and Reels with cited creator intelligence.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Day 02: dynamic YouTube extraction pipeline, normalized metadata,
-              transcript availability, and SQLite-backed project detail.
+              Day 03: dynamic YouTube and Instagram extraction with normalized
+              metadata, transcript availability, and SQLite-backed project
+              detail.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -128,7 +129,7 @@ export default function Home() {
           <VideoInsightCard
             platform="instagram"
             metadata={projectDetail?.instagram ?? null}
-            isPending
+            isPending={isSubmitting}
           />
         </section>
       </section>

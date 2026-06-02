@@ -20,11 +20,11 @@ export function VideoInsightCard({
           {platformTitle}
         </p>
         <p className="mt-3 text-sm font-semibold text-slate-950">
-          Status: {isPending || platform === "instagram" ? "Pending" : "Unavailable"}
+          Status: {isPending ? "Pending" : "Unavailable"}
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           {platform === "instagram"
-            ? "Instagram extraction is prepared in the normalized schema and will be implemented next."
+            ? "Instagram extraction did not return metadata yet."
             : "Run analysis to extract YouTube metadata and transcript availability."}
         </p>
       </section>
@@ -55,6 +55,14 @@ export function VideoInsightCard({
 
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         <Metric label="Creator" value={metadata.creator} />
+        <Metric
+          label="Follower count"
+          value={
+            metadata.follower_count == null
+              ? "Unavailable from public extraction"
+              : formatNumber(metadata.follower_count)
+          }
+        />
         <Metric label="Views" value={formatNumber(metadata.views)} />
         <Metric label="Likes" value={formatNumber(metadata.likes)} />
         <Metric label="Comments" value={formatNumber(metadata.comments)} />

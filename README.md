@@ -15,14 +15,21 @@ Implemented:
 - YouTube extraction pipeline
 - YouTube metadata extraction with yt-dlp
 - YouTube transcript extraction with youtube-transcript-api
+- Instagram metadata extraction with yt-dlp
+- Instagram transcription using Deepgram when an audio URL is available
 - Normalized video metadata
+- SQLite storage for both YouTube and Instagram metadata
+- SQLite storage for both YouTube and Instagram transcript segments
 - Frontend dynamic YouTube card
-- Instagram-ready schema with pending UI
+- Frontend dynamic Instagram card
+- Honest unavailable states for missing public metrics
 - Qdrant Cloud-ready health check
 
 Not implemented yet:
 
-- Instagram extraction
+- Apify fallback/enrichment
+- AssemblyAI fallback
+- Transcript chunking for RAG
 - Embeddings
 - Qdrant chunk storage
 - LangChain RAG
@@ -34,6 +41,8 @@ Not implemented yet:
 - Frontend: Next.js, TypeScript, Tailwind
 - Backend: FastAPI, Pydantic, SQLite
 - YouTube extraction: yt-dlp, youtube-transcript-api
+- Instagram extraction: yt-dlp
+- Instagram transcription: Deepgram
 - Planned vector database: Qdrant Cloud
 - Planned RAG orchestration: LangChain
 
@@ -64,4 +73,3 @@ npm run dev
 ## Environment Variables
 
 Use `.env.example` and `backend/.env.example` as references.
-

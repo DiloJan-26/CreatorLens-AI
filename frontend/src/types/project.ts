@@ -24,7 +24,7 @@ export type VideoMetadata = {
   engagement_rate?: number | null;
   transcript_available: boolean;
   transcript_segment_count: number;
-  extraction_status: "pending" | "extracting" | "ready" | "failed";
+  extraction_status: "pending" | "extracting" | "ready" | "partial" | "failed";
   error_message?: string | null;
 };
 

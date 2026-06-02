@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 Platform = Literal["youtube", "instagram"]
-ExtractionStatus = Literal["pending", "extracting", "ready", "failed"]
+ExtractionStatus = Literal["pending", "extracting", "ready", "partial", "failed"]
 
 
 class TranscriptSegment(BaseModel):

@@ -24,9 +24,12 @@ class Settings(BaseSettings):
         alias="QDRANT_COLLECTION",
     )
 
-    apify_api_token: str = Field(default="", alias="APIFY_API_TOKEN")
-    deepgram_api_key: str = Field(default="", alias="DEEPGRAM_API_KEY")
-    assemblyai_api_key: str = Field(default="", alias="ASSEMBLYAI_API_KEY")
+    apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")
+    deepgram_api_key: str | None = Field(default=None, alias="DEEPGRAM_API_KEY")
+    assemblyai_api_key: str | None = Field(
+        default=None,
+        alias="ASSEMBLYAI_API_KEY",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:
