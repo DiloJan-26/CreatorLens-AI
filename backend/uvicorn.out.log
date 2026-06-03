@@ -1,0 +1,10 @@
+INFO:     127.0.0.1:51816 - "POST /health/llm/test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51822 - "GET /api/projects?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51827 - "GET /api/projects?limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51833 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/index HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51857 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51857 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51857 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51857 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51857 - "POST /api/projects/2fad8054-a537-447c-a039-fdbdbf97aef7/chat/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51939 - "POST /health/llm/stream-test HTTP/1.1" 200 OK

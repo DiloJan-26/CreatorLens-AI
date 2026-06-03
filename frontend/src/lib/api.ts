@@ -1,6 +1,7 @@
 import type {
   ChatCitation,
   ChatStreamRequest,
+  ChatTrace,
   ContentPlatform,
   ContentSlot,
   CreatorInsightSummaryResponse,
@@ -139,6 +140,7 @@ type StreamChatHandlers = {
   onSession?: (sessionId: string) => void;
   onToken?: (text: string) => void;
   onCitations?: (citations: ChatCitation[]) => void;
+  onTrace?: (trace: ChatTrace) => void;
   onDone?: () => void;
   onError?: (message: string) => void;
 };
@@ -343,6 +345,14 @@ function handleStreamEvent(
     return;
   }
 
+  if (event.event === "trace") {
+    if (isChatTrace(data)) {
+      handlers.onTrace?.(data);
+    }
+
+    return;
+  }
+
   if (event.event === "done") {
     const sessionId = objectValue(data, "session_id");
 
@@ -362,6 +372,15 @@ function handleStreamEvent(
         : "Could not stream chat response.",
     );
   }
+}
+
+function isChatTrace(data: unknown): data is ChatTrace {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+
+  const trace = data as Record<string, unknown>;
+  return typeof trace.mode === "string" && typeof trace.model === "string";
 }
 
 function objectValue(data: unknown, key: string): unknown {

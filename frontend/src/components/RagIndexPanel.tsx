@@ -7,17 +7,23 @@ import type { ContentChunkCount, IndexProjectResponse } from "@/types/project";
 
 type RagIndexPanelProps = {
   projectId: string | null;
+  initialResult?: IndexProjectResponse | null;
   onIndexed?: (result: IndexProjectResponse) => void;
 };
 
-export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
+export function RagIndexPanel({
+  projectId,
+  initialResult = null,
+  onIndexed,
+}: RagIndexPanelProps) {
   const [result, setResult] = useState<IndexProjectResponse | null>(null);
   const [isIndexing, setIsIndexing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const visibleResult = result ?? initialResult;
 
   async function handleBuildIndex() {
     if (!projectId) {
-      setError("Run extraction before building the search index.");
+      setError("Analyze content before rebuilding the evidence index.");
       return;
     }
 
@@ -30,7 +36,7 @@ export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
       onIndexed?.(indexResult);
 
       if (indexResult.status === "failed") {
-        setError(indexResult.message ?? "Search index build failed.");
+        setError(indexResult.message ?? "Evidence index rebuild failed.");
       }
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -45,14 +51,14 @@ export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            Vector search
+            Evidence Index
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">
-            RAG Search Index
+            Evidence Index Status
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Builds retrieval chunks from transcripts, captions, descriptions,
-            hashtags, and metadata, then stores embeddings in Qdrant.
+            The normal analysis flow builds cited evidence automatically from
+            transcripts, captions, descriptions, hashtags, and metadata.
           </p>
         </div>
         <button
@@ -61,13 +67,13 @@ export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
           disabled={isIndexing || !projectId}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isIndexing ? "Building..." : "Build Search Index"}
+          {isIndexing ? "Rebuilding..." : "Rebuild Evidence Index"}
         </button>
       </div>
 
       {isIndexing ? (
         <p className="mt-4 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
-          Building chunks and storing embeddings...
+          Rebuilding evidence chunks and storing embeddings...
         </p>
       ) : null}
 
@@ -77,26 +83,31 @@ export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
         </p>
       ) : null}
 
-      {result ? (
+      {visibleResult ? (
         <div className="mt-5 grid gap-5">
           <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="Status" value={result.status} />
-            <Metric label="Total chunks" value={result.total_chunks} />
-            <Metric label="Embedding model" value={result.embedding_model} />
-            <Metric label="Qdrant collection" value={result.qdrant_collection} />
+            <Metric label="Evidence index" value={statusLabel(visibleResult.status)} />
+            <Metric label="Total chunks" value={visibleResult.total_chunks} />
+            <Metric label="Embedding model" value={visibleResult.embedding_model} />
+            <Metric label="Qdrant collection" value={visibleResult.qdrant_collection} />
           </dl>
 
           <ChunkCountSection
             title="Content chunks"
-            items={contentChunkCounts(result)}
+            items={contentChunkCounts(visibleResult)}
           />
 
           <ChunkCountSection
             title="Platform chunks"
-            items={platformChunkCounts(result)}
+            items={platformChunkCounts(visibleResult)}
           />
         </div>
-      ) : null}
+      ) : (
+        <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+          Evidence index details appear after analysis. If indexing fails, you
+          can retry from this advanced section.
+        </p>
+      )}
     </section>
   );
 }
@@ -181,7 +192,7 @@ function platformChunkCounts(
 
 function contentChunkLabel(item: ContentChunkCount): string {
   const label = item.label || slotLabel(item.slot ?? "");
-  return `${label} · ${platformLabel(item.platform)}`;
+  return `${label} - ${platformLabel(item.platform)}`;
 }
 
 function slotLabel(slot: string): string {
@@ -212,10 +223,14 @@ function platformLabel(platform: string): string {
   return platform;
 }
 
+function statusLabel(status: string): string {
+  return status === "indexed" ? "Ready" : "Failed";
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
 
-  return "Could not build the search index.";
+  return "Could not rebuild the evidence index.";
 }

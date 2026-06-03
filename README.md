@@ -1,10 +1,14 @@
 # CreatorLens AI
 
-## Overview
+CreatorLens AI is a full-stack creator intelligence product for comparing any two supported short-form content URLs with confirmed public metadata, multilingual transcript evidence, cited insights, and streaming AI chat.
 
-CreatorLens AI is a full-stack creator intelligence application for comparing any two supported short-form content URLs with cited, retrieval-grounded insights.
+The UI is a polished one-page SaaS landing and app workspace. Users paste Content URL 1 and Content URL 2, click **Analyze Content**, and CreatorLens AI runs the normal workflow automatically:
 
-The app accepts Content URL 1 and Content URL 2, auto-detects each platform, extracts public metadata and transcript evidence when available, builds a vector search index, generates a Creator Insight Summary, and streams cited Creator Chat answers with memory.
+```text
+URLs -> platform detection -> public extraction -> transcripts -> evidence index -> Creator Insight Summary -> cited chat
+```
+
+No signup is required for the local demo.
 
 ## Supported Comparisons
 
@@ -21,144 +25,112 @@ Supported URL types:
 - Instagram Reels, posts, and TV URLs
 - Facebook Reels, public watch URLs, and public post video URLs
 
-## Current Capabilities
+## Product Flow
 
-- FastAPI backend
-- Next.js frontend
-- Content URL 1 and Content URL 2 project creation
+1. Paste Content URL 1 and Content URL 2.
+2. Click **Analyze Content**.
+3. The app creates the comparison, detects platforms, extracts best-effort public metadata, pulls or transcribes audio when available, builds the evidence index, and loads creator insights.
+4. Results show content overview cards, Metadata Availability, Executive Insight Snapshot, Creator Insight Summary, recommendations, streaming chat, citations, and advanced evidence controls.
+5. The **Evidence & System Details** section is collapsed by default and includes Evidence Index status, **Rebuild Evidence Index**, and the Evidence Explorer.
+
+## Key Features
+
+- Universal Content URL 1 and Content URL 2 comparison
 - Platform auto-detection for YouTube, Instagram, and Facebook
-- SQLite project, content, transcript, chunk, metric, and chat memory storage
-- YouTube public metadata extraction with yt-dlp
-- YouTube transcript extraction with youtube-transcript-api
-- Instagram public metadata extraction with yt-dlp
-- Multilingual Transcript Support for English, Hindi, Tamil, and supported multilingual audio
-- Instagram transcription using Deepgram multilingual transcription when a public audio URL is available
-- Facebook best-effort public metadata extraction with yt-dlp
-- Facebook transcription attempt with Deepgram multilingual transcription when public media audio is available
-- Normalized metadata for supported platforms
-- Metadata Availability summary
-- Confirmed public metrics display
+- Best-effort public metadata extraction
+- Multilingual transcript support
+- Metadata Availability with unavailable fields clearly marked
+- Confirmed public metrics only; missing values are not estimated
+- Rule-based Hook Analysis
+- Heuristic Creator Insight Score
+- Creator Insight Summary with strengths, weaknesses, recommendations, and Example Rewrite
 - FastEmbed embeddings with `BAAI/bge-small-en-v1.5`
-- Qdrant Cloud vector storage
-- Slot-aware RAG chunks for same-platform comparisons
-- Source retrieval with platform, content, and source-type filters
-- Gemini 2.5 Flash streaming chat through LangChain
-- Memory-aware chat sessions
-- Backend-derived citations shown under assistant answers
-- Creator Insight Summary with Hook Analysis, heuristic creator insight score, Metadata Confidence, strengths, weaknesses, recommendations, and Example Rewrite
-- Creator Insight Summary context integrated into streaming Creator Chat
+- Qdrant vector storage for cited evidence
+- Streaming Creator Chat using Gemini 2.5 Flash through LangChain
+- Backend-derived citations and memory-aware chat sessions
+
+## Metadata Availability
+
+CreatorLens AI separates confirmed public metrics from unavailable fields.
+
+Checked fields include:
+
+- transcript
+- views
+- likes/reactions
+- comments
+- creator
+- follower/subscriber count
+- hashtags
+- upload date
+- duration
+
+Missing fields remain **Unavailable**. They are not converted to zero, estimated by the backend, or filled in by Gemini.
+
+## Multilingual Transcripts
+
+Transcript extraction is best-effort:
+
+- YouTube captions/subtitles are preferred.
+- Language fallback prioritizes English (`en`), Hindi (`hi`), and Tamil (`ta`), then other available caption languages.
+- Instagram and Facebook transcription use Deepgram multilingual transcription when public audio is available.
+- Transcript Language, detected language, transcript source, and transcript source notes are stored when available.
+- Mixed-language, noisy, unsupported, or non-public media can still fail; those cases are shown as Transcript unavailable.
+
+## Evidence Index
+
+The evidence index is built automatically after analysis. It creates retrieval-ready chunks from:
+
+- metadata
+- descriptions/captions
+- hook openings
+- transcript segments
+
+Chunk payloads include project ID, content slot, platform, source type, timing when available, title, creator, text, content hash, and citation labels such as:
+
+- `Content 1 - YouTube - metadata`
+- `Content 2 - Instagram - hook - 0.00s-5.00s`
+- `Content 2 - Facebook - transcript - 0.16s-12.40s`
+
+The advanced **Evidence Explorer** lets interviewers or power users inspect retrieved transcript, caption, metadata, and hook chunks.
 
 ## Creator Insight Summary
 
-The Creator Insight Summary turns extracted evidence into structured creator intelligence without adding another LLM scoring step.
+The Creator Insight Summary turns extracted evidence into structured creator intelligence without an extra LLM scoring call.
 
 It includes:
 
-- Overall comparison for Content 1 and Content 2
-- Content 1 insight card
-- Content 2 insight card
+- Executive comparison
+- Content 1 and Content 2 insight cards
 - Hook Analysis
-- Heuristic creator insight score
+- heuristic Creator Insight Score
 - Metadata Confidence note
-- Strengths and weaknesses
-- Missing metadata
-- Recommendations
+- strengths and weaknesses
+- missing metadata
+- recommendations
 - Example Rewrite when enough context is available
 
-Scores are heuristic signals designed to support creator review. They are not a certainty about future performance.
-
-## Hook Analysis
-
-Hook Analysis uses rule-based classification over transcript openings when available. If transcript evidence is unavailable, it falls back to the caption or description opening.
-
-Hook labels include patterns such as:
-
-- problem_solution
-- curiosity
-- founder_story
-- statistic
-- question
-- transformation
-- product_reveal
-- educational
-- lifestyle
-- trend_based
-- weak_context_only
-- unavailable
-
-Hook scores use simple deterministic signals such as specificity, payoff clarity, curiosity gap, concise opening, and audience relevance.
-
-## Heuristic Insight Scores
-
-The heuristic creator insight score combines:
-
-- hook clarity
-- problem-solution clarity
-- CTA strength
-- caption strength
-- audience specificity
-- Metadata Availability
-- engagement confidence from confirmed public metrics
-
-Missing fields are unavailable, not estimated. The scoring service does not invent views, likes, reactions, comments, shares, follower/subscriber counts, upload dates, duration, or transcript evidence.
+Scores are heuristic review signals, not guaranteed performance predictions.
 
 ## Streaming Creator Chat
 
-Streaming Creator Chat answers questions using:
+Creator Chat answers follow-up questions using:
 
 - Creator Insight Summary
 - structured metadata
 - confirmed public metrics
-- retrieved source chunks
+- retrieved evidence chunks
 - recent chat memory
 
-The backend prepares citations, streams assistant tokens, stores chat history, and displays sources separately under each answer. Deterministic direct answers handle high-risk factual questions when possible, such as missing metadata, engagement rates, hook type, Creator Insight Score, and comparison winners.
+Suggested demo questions:
 
-## Metadata Availability and Missing Fields
-
-CreatorLens AI uses confirmed public metrics only.
-
-- Missing views, likes, reactions, comments, shares, follower/subscriber counts, upload dates, duration, and transcript evidence are shown as Unavailable.
-- Missing public metrics are not converted to zero.
-- Missing public metrics are not estimated by the backend or by Gemini.
-- Instagram and Facebook public extraction can be incomplete because platform UIs and public metadata endpoints expose different values.
-- Facebook extraction is best-effort and does not use login, cookies, Meta API, or private/authenticated scraping.
-
-## Transcript Pipeline
-
-- YouTube transcripts prefer public captions/subtitles when available.
-- Caption/subtitle language fallback prioritizes English (`en`), Hindi (`hi`), and Tamil (`ta`), then falls back to any available caption language.
-- Instagram transcripts are generated with Deepgram multilingual transcription when yt-dlp exposes a public audio URL.
-- Facebook transcripts are generated with Deepgram multilingual transcription when public media audio can be extracted.
-- If transcript evidence is unavailable, the UI shows Unavailable and keeps metadata extraction results.
-- Transcript Language, detected language, source, and source notes are stored when available.
-
-## Multilingual Transcript Support
-
-CreatorLens AI uses best-effort transcription for English, Hindi, Tamil, and supported multilingual audio.
-
-- Captions/subtitles are preferred when available.
-- Deepgram multilingual transcription is used when public media audio is available.
-- Missing transcripts are marked unavailable, not fabricated.
-- Transcript Language is shown in transcript previews and content cards when known.
-- Mixed-language, noisy, unsupported, or non-public media can still fail; those cases are shown as Transcript unavailable.
-
-## Vector Search Index
-
-The search index is built from each content item:
-
-- Metadata chunks
-- Description/caption chunks
-- Hook chunks from opening transcript segments
-- Transcript chunks
-
-Each chunk payload includes project ID, content slot, platform, source type, timing when available, title, creator, text, content hash, and a citation label such as:
-
-- `Content 1 - YouTube - metadata`
-- `Content 2 - YouTube - hook - 0.16s-8.44s`
-- `Content 2 - Facebook - transcript - 0.16s-12.40s`
-
-Payload filters support project, content slot, platform, and source type.
+- What is the engagement rate of each content item?
+- Compare the hooks in the first 5 seconds.
+- Give me the Creator Insight Summary.
+- Which content has stronger confirmed public engagement?
+- What metadata is missing?
+- Suggest improvements for Content 2 based on Content 1.
+- Rewrite the opening for Content 2.
 
 ## Local Setup
 

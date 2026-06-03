@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import { getCreatorInsightSummary } from "@/lib/api";
 import type {
   ComparisonInsight,
-  ContentInsight,
   CreatorInsightSummaryResponse,
 } from "@/types/project";
 
@@ -16,36 +15,49 @@ import { RecommendationList } from "./RecommendationList";
 type CreatorInsightSummaryPanelProps = {
   projectId: string | null;
   indexReady?: boolean;
+  initialSummary?: CreatorInsightSummaryResponse | null;
+  onSummaryLoaded?: (summary: CreatorInsightSummaryResponse) => void;
 };
 
 export function CreatorInsightSummaryPanel({
   projectId,
   indexReady = false,
+  initialSummary = null,
+  onSummaryLoaded,
 }: CreatorInsightSummaryPanelProps) {
   const [summary, setSummary] =
     useState<CreatorInsightSummaryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const visibleSummary = summary ?? initialSummary;
   const activeSummary =
-    projectId && summary?.project_id === projectId ? summary : null;
+    projectId && visibleSummary?.project_id === projectId ? visibleSummary : null;
 
-  const loadInsights = useCallback(async (activeProjectId: string) => {
-    setIsLoading(true);
-    setError(null);
+  const loadInsights = useCallback(
+    async (activeProjectId: string) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      setSummary(await getCreatorInsightSummary(activeProjectId));
-    } catch (caughtError) {
-      setSummary(null);
-      setError(getErrorMessage(caughtError));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      try {
+        const nextSummary = await getCreatorInsightSummary(activeProjectId);
+        setSummary(nextSummary);
+        onSummaryLoaded?.(nextSummary);
+      } catch (caughtError) {
+        setSummary(null);
+        setError(getErrorMessage(caughtError));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [onSummaryLoaded],
+  );
 
   useEffect(() => {
     if (!projectId) {
-      setSummary(null);
+      return;
+    }
+
+    if (initialSummary?.project_id === projectId) {
       return;
     }
 
@@ -54,7 +66,7 @@ export function CreatorInsightSummaryPanel({
     }, 0);
 
     return () => window.clearTimeout(loadTimer);
-  }, [loadInsights, projectId]);
+  }, [initialSummary?.project_id, loadInsights, projectId]);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -63,7 +75,7 @@ export function CreatorInsightSummaryPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
             Creator intelligence
           </p>
-          <h2 className="mt-2 text-base font-semibold text-slate-950">
+          <h2 className="mt-2 text-xl font-semibold text-slate-950">
             Creator Insight Summary
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
@@ -82,8 +94,8 @@ export function CreatorInsightSummaryPanel({
       </div>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
-        Scores are heuristic signals designed to support creator review, not
-        a certainty about future performance.
+        Scores are heuristic review signals, not guaranteed performance
+        predictions.
         {!indexReady ? " Vector search is not required for this summary." : ""}
       </p>
 

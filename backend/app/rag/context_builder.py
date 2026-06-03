@@ -137,8 +137,11 @@ def build_rag_context(
         )
         retrieved_context = _retrieved_context_text(retrieval_response.results)
         citations = [_citation_from_chunk(chunk) for chunk in retrieval_response.results]
+
+        if not citations:
+            citations = _fallback_context_citations(project, structured_context)
     else:
-        citations = _metadata_citations(project)
+        citations = _fallback_context_citations(project, structured_context)
 
     if recent_messages:
         history_text = _history_text(recent_messages)
@@ -189,40 +192,8 @@ def build_direct_answer_if_possible(
 
     content_items = _content_items(project)
 
-    if _is_insight_summary_question(normalized_message):
-        return _creator_insight_summary_answer(
-            project_id=project_id,
-            project=project,
-            rag_context=rag_context,
-        )
-
-    if _is_rewrite_request(normalized_message):
-        return _rewrite_answer(
-            project_id=project_id,
-            project=project,
-            rag_context=rag_context,
-        )
-
-    if _is_improvement_question(normalized_message):
-        return _improvement_answer(
-            project_id=project_id,
-            project=project,
-            rag_context=rag_context,
-        )
-
-    if _is_hook_analysis_question(normalized_message):
-        return _hook_analysis_answer(
-            project_id=project_id,
-            project=project,
-            rag_context=rag_context,
-        )
-
-    if _is_stronger_content_question(normalized_message):
-        return _stronger_content_answer(
-            project_id=project_id,
-            project=project,
-            rag_context=rag_context,
-        )
+    if _requires_gemini_rag_reasoning(normalized_message):
+        return None
 
     if _is_missing_metadata_question(normalized_message):
         return _missing_metadata_answer(project, content_items)
@@ -581,6 +552,37 @@ def _metadata_citations(project: dict[str, Any]) -> list[Citation]:
         )
 
     return citations
+
+
+def _fallback_context_citations(
+    project: dict[str, Any],
+    structured_context: str,
+) -> list[Citation]:
+    citations = _metadata_citations(project)
+    insight_context = _insight_context_from_structured_context(structured_context)
+
+    if insight_context:
+        citations.append(
+            Citation(
+                platform="CreatorLens AI",
+                source_type="insight",
+                citation_label="Creator Insight Summary",
+                text=_compact_text(insight_context, max_length=1200),
+                score=None,
+            )
+        )
+
+    return citations
+
+
+def _insight_context_from_structured_context(structured_context: str) -> str:
+    marker = "Creator Insight Summary:"
+    marker_index = structured_context.find(marker)
+
+    if marker_index < 0:
+        return ""
+
+    return structured_context[marker_index:].strip()
 
 
 def _metric_citations(summary: MetricSummaryResponse) -> list[Citation]:
@@ -1135,6 +1137,23 @@ def _is_creator_question(message: str) -> bool:
     )
 
 
+def _requires_gemini_rag_reasoning(message: str) -> bool:
+    return (
+        _is_insight_summary_question(message)
+        or _is_rewrite_request(message)
+        or _is_improvement_question(message)
+        or _is_hook_analysis_question(message)
+        or _is_stronger_content_question(message)
+        or _is_performance_comparison_question(message)
+        or "explain the difference" in message
+        or "strategic recommendation" in message
+        or "strategic recommendations" in message
+        or "what should the creator do next" in message
+        or "create a new hook" in message
+        or "improve the caption" in message
+    )
+
+
 def _is_insight_summary_question(message: str) -> bool:
     return (
         "creator insight summary" in message
@@ -1308,10 +1327,10 @@ def _content_label(metadata: dict[str, Any]) -> str:
     platform = _platform_label(str(metadata.get("platform") or ""))
 
     if slot == "content_1":
-        return f"Content 1 · {platform}"
+        return f"Content 1 - {platform}"
 
     if slot == "content_2":
-        return f"Content 2 · {platform}"
+        return f"Content 2 - {platform}"
 
     return platform
 

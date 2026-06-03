@@ -146,10 +146,28 @@ export type ChatCitation = {
   score?: number | null;
 };
 
+export type ChatTrace = {
+  mode: "direct_metric_answer" | "gemini_rag_answer" | string;
+  model: string;
+  intent?: string | null;
+  retrieved_sources?: number | null;
+  has_creator_insights?: boolean | null;
+  has_structured_metadata?: boolean | null;
+  has_memory?: boolean | null;
+  prompt_context_summary?: {
+    structured_context_chars?: number;
+    retrieved_context_chars?: number;
+    insight_context_chars?: number;
+    history_message_count?: number;
+    citation_count?: number;
+  } | null;
+};
+
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: ChatCitation[];
+  trace?: ChatTrace | null;
 };
 
 export type ChatStreamRequest = {

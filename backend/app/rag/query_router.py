@@ -160,10 +160,10 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
         return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
 
     if intent == "insight_summary":
-        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
+        return _plan(retrieve=True, source_type=None, platform=None, top_k=6)
 
     if intent == "hook_analysis":
-        return _plan(retrieve=False, source_type="hook", platform=None, top_k=4)
+        return _plan(retrieve=True, source_type="hook", platform=None, top_k=6)
 
     if intent == "content_summary":
         return _plan(
@@ -176,7 +176,7 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
     if intent == "performance_reasoning":
         return _plan(
-            retrieve=False,
+            retrieve=True,
             source_type=None,
             platform=inferred_platform,
             slot=inferred_slot,
@@ -185,7 +185,7 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
     if intent == "improvement_suggestions":
         return _plan(
-            retrieve=False,
+            retrieve=True,
             source_type=None,
             platform=inferred_platform,
             slot=None,
@@ -194,7 +194,7 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
     if intent == "rewrite_request":
         return _plan(
-            retrieve=False,
+            retrieve=True,
             source_type="hook",
             platform=inferred_platform,
             slot=inferred_slot,

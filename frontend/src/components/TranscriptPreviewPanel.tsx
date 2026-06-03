@@ -26,7 +26,7 @@ export function TranscriptPreviewPanel({
 
   async function handleLoadPreview() {
     if (!projectId) {
-      setError("Run extraction before loading a transcript preview.");
+      setError("Analyze content before loading a transcript preview.");
       return;
     }
 
@@ -56,13 +56,14 @@ export function TranscriptPreviewPanel({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            {label} {item ? `· ${platformLabel(item.platform)}` : ""}
+            {label} {item ? `- ${platformLabel(item.platform)}` : ""}
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Transcript Preview
+            Transcript Evidence Preview
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Transcript preview for indexing readiness.
+            Review extracted transcript segments when public captions or
+            best-effort transcription are available.
           </p>
         </div>
         <button
@@ -71,7 +72,7 @@ export function TranscriptPreviewPanel({
           disabled={isLoading || !projectId || !item}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Loading..." : "Load transcript preview"}
+          {isLoading ? "Loading..." : "View transcript preview"}
         </button>
       </div>
 

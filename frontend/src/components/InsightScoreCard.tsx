@@ -10,7 +10,7 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            {content.label} · {platformLabel(content.platform)}
+            {content.label} - {platformLabel(content.platform)}
           </p>
           <h3 className="mt-2 text-base font-semibold text-slate-950">
             {content.title || "Untitled content"}

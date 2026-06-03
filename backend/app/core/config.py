@@ -23,6 +23,7 @@ class Settings(BaseSettings):
         default=1200,
         alias="LLM_MAX_OUTPUT_TOKENS",
     )
+    debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")
 
     qdrant_url: str | None = Field(default=None, alias="QDRANT_URL")
     qdrant_api_key: str | None = Field(default=None, alias="QDRANT_API_KEY")

@@ -4,6 +4,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.core.config import get_settings
 from app.models.chat import ChatMessage, ChatStreamRequest, Citation
 from app.rag.context_builder import (
     RagContextProjectNotFoundError,
@@ -29,23 +30,22 @@ def build_system_prompt() -> str:
     return "\n".join(
         [
             "You are CreatorLens AI, a creator intelligence assistant.",
-            "The compared items are Content 1 and Content 2.",
-            "Answer using only Creator Insight Summary, structured metadata, confirmed public metrics, and retrieved source context.",
-            "Always identify the platform when comparing Content 1 and Content 2.",
-            "Use confirmed public metrics only.",
+            "Use confirmed public metrics, Creator Insight Summary, retrieved transcript/caption/metadata chunks, metadata availability, and conversation memory.",
+            "The compared items are Content 1 and Content 2. Use those labels exactly.",
+            "Always mention platform names: YouTube, Instagram, or Facebook.",
+            "Use confirmed public metrics only and say Unavailable when public data is missing.",
             "Do not invent views, likes, comments, reactions, shares, follower counts, subscriber counts, engagement rates, dates, duration, or transcript details.",
-            "If a value is unavailable, say it is unavailable.",
             "Distinguish confirmed metric performance from heuristic content-quality signals such as Hook Analysis and Creator Insight Score.",
+            "Creator Insight Scores are heuristic review signals, not guaranteed performance predictions.",
             "If metric data is incomplete, say the comparison is limited.",
             "For Instagram, mention public extraction limitations or Facebook cross-post caveats when relevant.",
             "Do not assume Instagram or Facebook metrics are complete.",
             "If same-platform comparison appears, use Content 1 and Content 2 labels to avoid confusion.",
-            "Give structured, creator-focused, actionable answers.",
-            "When suggesting improvements, include diagnosis, what worked in the stronger content, what to improve, and an example rewrite when helpful.",
-            "Use YouTube, Instagram, and Facebook names exactly.",
-            "Do not mention internal implementation labels or development phases.",
-            "Do not fabricate citations.",
-            "The frontend will display citations separately, so do not create fake source labels.",
+            "For reasoning questions, give structured insight, not a generic paragraph.",
+            "For improvement questions, include diagnosis, what worked, what to change, and an example rewrite.",
+            "For hook questions, identify hook type, first-second clarity, payoff, and recommendation.",
+            "Use citations only from backend-provided source labels. Do not fabricate citation labels.",
+            "The frontend will display citations separately, so do not invent source labels in the answer.",
             "If useful, refer to sources naturally, but citations are provided separately.",
             "Treat the structured Content 1 and Content 2 metadata as the source of truth for content metrics.",
             "Distinguish YouTube, Instagram, Facebook, and Combined Meta Metrics when those appear.",
@@ -76,6 +76,7 @@ async def stream_chat_answer(
     assistant_answer = ""
     session_id = request.session_id
     citations: list[Citation] = []
+    settings = get_settings()
 
     try:
         question = request.message.strip()
@@ -118,6 +119,17 @@ async def stream_chat_answer(
                 for citation in direct_answer["citations"]
                 if isinstance(citation, Citation)
             ]
+            yield sse_event(
+                "trace",
+                _trace_payload(
+                    mode="direct_metric_answer",
+                    model=settings.llm_model,
+                    intent=rag_context.intent,
+                    rag_context=rag_context,
+                    recent_messages=recent_messages,
+                    citations=citations,
+                ),
+            )
 
             for token in _direct_answer_tokens(assistant_answer):
                 yield sse_event("token", {"text": token})
@@ -149,6 +161,12 @@ async def stream_chat_answer(
 
         citations = rag_context.citations
         llm = get_llm(streaming=True)
+        history_text = format_chat_history(recent_messages)
+        prompt_context_summary = _prompt_context_summary(
+            rag_context=rag_context,
+            history_message_count=len(recent_messages),
+            citation_count=len(citations),
+        )
         messages = [
             SystemMessage(content=build_system_prompt()),
             HumanMessage(
@@ -157,10 +175,26 @@ async def stream_chat_answer(
                     intent=rag_context.intent,
                     structured_context=rag_context.structured_context,
                     retrieved_context=rag_context.retrieved_context,
-                    history_text=format_chat_history(recent_messages),
+                    history_text=history_text,
                 )
             ),
         ]
+        _maybe_debug_prompt(
+            messages=messages,
+            prompt_context_summary=prompt_context_summary,
+        )
+        yield sse_event(
+            "trace",
+            _trace_payload(
+                mode="gemini_rag_answer",
+                model=settings.llm_model,
+                intent=rag_context.intent,
+                rag_context=rag_context,
+                recent_messages=recent_messages,
+                citations=citations,
+                prompt_context_summary=prompt_context_summary,
+            ),
+        )
 
         async for chunk in llm.astream(messages):
             token = _chunk_text(chunk)
@@ -221,6 +255,83 @@ def sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _trace_payload(
+    mode: str,
+    model: str,
+    intent: str,
+    rag_context: Any,
+    recent_messages: list[ChatMessage],
+    citations: list[Citation],
+    prompt_context_summary: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    context_summary = prompt_context_summary or _prompt_context_summary(
+        rag_context=rag_context,
+        history_message_count=len(recent_messages),
+        citation_count=len(citations),
+    )
+
+    return {
+        "mode": mode,
+        "model": model,
+        "intent": intent,
+        "retrieved_sources": len(citations),
+        "has_creator_insights": _has_creator_insights(rag_context),
+        "has_structured_metadata": bool(rag_context.structured_context.strip()),
+        "has_memory": len(recent_messages) > 1,
+        "prompt_context_summary": context_summary,
+    }
+
+
+def _prompt_context_summary(
+    rag_context: Any,
+    history_message_count: int,
+    citation_count: int,
+) -> dict[str, int]:
+    structured_context = rag_context.structured_context or ""
+    retrieved_context = rag_context.retrieved_context or ""
+    insight_context = _insight_context(structured_context)
+
+    return {
+        "structured_context_chars": len(structured_context),
+        "retrieved_context_chars": len(retrieved_context),
+        "insight_context_chars": len(insight_context),
+        "history_message_count": history_message_count,
+        "citation_count": citation_count,
+    }
+
+
+def _has_creator_insights(rag_context: Any) -> bool:
+    return bool(_insight_context(rag_context.structured_context or ""))
+
+
+def _insight_context(structured_context: str) -> str:
+    marker = "Creator Insight Summary:"
+    marker_index = structured_context.find(marker)
+
+    if marker_index < 0:
+        return ""
+
+    return structured_context[marker_index:].strip()
+
+
+def _maybe_debug_prompt(
+    messages: list[SystemMessage | HumanMessage],
+    prompt_context_summary: dict[str, int],
+) -> None:
+    if not get_settings().debug_rag_prompt:
+        return
+
+    print(
+        "Prompt Context Preview:",
+        json.dumps(
+            {
+                "message_count": len(messages),
+                **prompt_context_summary,
+            }
+        ),
+    )
+
+
 def _human_prompt(
     question: str,
     intent: str,
@@ -241,6 +352,8 @@ def _human_prompt(
             "Answer requirements:\n"
             "- Ground every claim in the provided context.\n"
             "- Say Unavailable when public data is missing.\n"
+            "- Name Content 1 and Content 2 with their platform names.\n"
+            "- Separate confirmed public metrics from heuristic insight scores.\n"
             "- Keep the answer concise and useful for creator analysis.\n"
             "- Do not output fake citation labels.\n"
             f"{style_instructions}",
@@ -251,20 +364,31 @@ def _human_prompt(
 def _answer_style_instructions(intent: str) -> str:
     if intent == "performance_reasoning":
         return (
-            "- Use this format: Confirmed metric comparison; Hook/content difference; "
-            "Caption/CTA difference; Metadata limitation; Recommendation."
+            "- Use this format:\n"
+            "1. Confirmed metric comparison\n"
+            "2. Hook/content difference\n"
+            "3. Caption/CTA difference\n"
+            "4. Metadata limitations\n"
+            "5. Actionable recommendation"
         )
 
     if intent == "hook_analysis":
         return (
-            "- Use this format: Content 1 hook type and reason; Content 2 hook type "
-            "and reason; which is stronger; suggested rewrite."
+            "- Use this format:\n"
+            "1. Content 1 hook type and evidence\n"
+            "2. Content 2 hook type and evidence\n"
+            "3. Which opening is stronger and why\n"
+            "4. Rewrite suggestion"
         )
 
     if intent == "improvement_suggestions":
         return (
-            "- Use this format: Diagnosis; what to copy from Content 1; what to "
-            "change in Content 2; example rewrite; why this should help."
+            "- Use this format:\n"
+            "1. Diagnosis\n"
+            "2. What worked in stronger content\n"
+            "3. What Content 2 should change\n"
+            "4. Example rewrite\n"
+            "5. Why this may improve engagement"
         )
 
     if intent == "rewrite_request":

@@ -78,17 +78,17 @@ export function RetrievalTestPanel({
 
   async function handleSearch() {
     if (!projectId) {
-      setError("Run extraction before testing retrieval.");
+      setError("Analyze content before searching evidence.");
       return;
     }
 
     if (!indexReady) {
-      setError("Build the search index before testing retrieval.");
+      setError("The evidence index must be ready before searching evidence.");
       return;
     }
 
     if (!query.trim()) {
-      setError("Enter a retrieval query.");
+      setError("Enter an evidence query.");
       return;
     }
 
@@ -117,22 +117,21 @@ export function RetrievalTestPanel({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            Source retrieval
+            Evidence Explorer
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Test Source Retrieval
+            Search Evidence
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Semantic source retrieval test for indexed YouTube, Instagram, and
-            Facebook chunks. This panel verifies the sources that will ground
-            the final chat answers.
+            Inspect retrieved transcript, caption, metadata, and hook chunks
+            used to ground CreatorLens AI answers.
           </p>
         </div>
       </div>
 
       <div className="mt-5 grid gap-3">
         <label className="text-sm font-medium text-slate-900">
-          Retrieval query
+          Evidence query
           <input
             type="text"
             value={query}
@@ -227,7 +226,7 @@ export function RetrievalTestPanel({
           disabled={isSearching || !projectId || !indexReady}
           className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isSearching ? "Searching..." : "Search Chunks"}
+          {isSearching ? "Searching..." : "Search Evidence"}
         </button>
       </div>
 
@@ -250,7 +249,7 @@ export function RetrievalTestPanel({
           </p>
           {result.results.length === 0 ? (
             <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              No indexed chunks matched this query.
+              No indexed evidence matched this query.
             </p>
           ) : (
             <ol className="mt-3 grid gap-3">
@@ -285,9 +284,14 @@ function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
           {chunk.score.toFixed(4)}
         </span>
       </div>
-      <p className="mt-3 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-        {chunk.text}
-      </p>
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm font-medium text-teal-700">
+          View source text
+        </summary>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+          {chunk.text}
+        </p>
+      </details>
     </li>
   );
 }
@@ -361,5 +365,5 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Could not search indexed chunks.";
+  return "Could not search evidence.";
 }

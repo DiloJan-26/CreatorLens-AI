@@ -47,14 +47,14 @@ export function VideoUrlForm({
         <UrlCard
           label="Content 1"
           title="Content URL 1"
-          placeholder="https://www.youtube.com/shorts/..."
+          placeholder="Paste a YouTube Short, Instagram Reel, or Facebook Reel URL"
           value={content1Url}
           onChange={setContent1Url}
         />
         <UrlCard
           label="Content 2"
           title="Content URL 2"
-          placeholder="https://www.instagram.com/reel/..."
+          placeholder="Paste a YouTube Short, Instagram Reel, or Facebook Reel URL"
           value={content2Url}
           onChange={setContent2Url}
         />
@@ -69,9 +69,9 @@ export function VideoUrlForm({
       <button
         type="submit"
         disabled={isSubmitting || !content1Url.trim() || !content2Url.trim()}
-        className="inline-flex h-11 items-center justify-center rounded-md bg-teal-700 px-5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        className="inline-flex h-12 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
       >
-        {isSubmitting ? "Creating project..." : "Analyze Content"}
+        {isSubmitting ? "Analyzing Content..." : "Analyze Content"}
       </button>
     </form>
   );
@@ -100,15 +100,15 @@ function UrlCard({
       <label className="mt-3 block text-sm font-medium text-slate-900">
         {title}
         <span className="mt-1 block text-sm font-normal leading-6 text-slate-600">
-          Paste any supported short-form URL: YouTube Short, Instagram Reel, or
-          Facebook Reel/post video.
+          Paste any supported short-form URL from YouTube, Instagram, or
+          Facebook.
         </span>
         <input
           type="url"
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="mt-3 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+          className="mt-3 h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
         />
       </label>
     </section>

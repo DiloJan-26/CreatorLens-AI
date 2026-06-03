@@ -26,6 +26,18 @@ class LLMHealthResponse(BaseModel):
     message: str | None = None
 
 
+class LLMGenerationTestRequest(BaseModel):
+    prompt: str = "In one sentence, say that Gemini is connected for CreatorLens AI."
+
+
+class LLMGenerationTestResponse(BaseModel):
+    status: str
+    provider: str
+    model: str
+    generated_text: str | None = None
+    message: str | None = None
+
+
 class ChatMessage(BaseModel):
     message_id: str
     session_id: str

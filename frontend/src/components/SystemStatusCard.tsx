@@ -23,7 +23,7 @@ export function SystemStatusCard({
               isOk ? "text-emerald-700" : "text-slate-600"
             }`}
           >
-            Backend status: {statusText}
+            System status: {statusText}
           </p>
         </div>
         <button
@@ -32,7 +32,7 @@ export function SystemStatusCard({
           disabled={isChecking}
           className="inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isChecking ? "Checking..." : "Check Backend"}
+          {isChecking ? "Checking..." : "Check System"}
         </button>
       </div>
     </section>

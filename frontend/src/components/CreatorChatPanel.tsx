@@ -3,14 +3,16 @@
 import { FormEvent, useState } from "react";
 
 import { streamChatResponse } from "@/lib/api";
-import type { ChatCitation, ChatMessage } from "@/types/project";
+import type { ChatCitation, ChatMessage, ChatTrace } from "@/types/project";
 
 const SUGGESTED_QUESTIONS = [
   "What is the engagement rate of each content item?",
   "Compare the hooks in the first 5 seconds.",
+  "Give me the Creator Insight Summary.",
   "Which content has stronger confirmed public engagement?",
-  "What metadata is missing or unavailable?",
+  "What metadata is missing?",
   "Suggest improvements for Content 2 based on Content 1.",
+  "Rewrite the opening for Content 2.",
 ];
 
 type CreatorChatPanelProps = {
@@ -35,12 +37,12 @@ export function CreatorChatPanel({
     event.preventDefault();
 
     if (!projectId) {
-      setError("Analyze videos before starting the chat.");
+      setError("Analyze content before starting the chat.");
       return;
     }
 
     if (!indexReady) {
-      setError("Build the search index before starting the cited chat.");
+      setError("The evidence index must be ready before starting cited chat.");
       return;
     }
 
@@ -93,6 +95,13 @@ export function CreatorChatPanel({
               }),
             );
           },
+          onTrace: (trace) => {
+            setMessages((previousMessages) =>
+              updateLastAssistantMessage(previousMessages, {
+                trace,
+              }),
+            );
+          },
           onError: (message) => {
             setError(message);
           },
@@ -110,14 +119,14 @@ export function CreatorChatPanel({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            Cited Creator Insights
+            Ask CreatorLens AI
           </p>
-          <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Streaming Creator Chat
+          <h2 className="mt-2 text-xl font-semibold text-slate-950">
+            Streaming creator chat
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Ask performance, hook, and improvement questions grounded in
-            retrieved sources from both content items.
+            Ask performance, hook, rewrite, and improvement questions grounded
+            in cited sources.
           </p>
         </div>
         {sessionId ? (
@@ -129,11 +138,12 @@ export function CreatorChatPanel({
 
       {!projectId ? (
         <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Analyze videos before starting the chat.
+          Analyze content before starting the chat.
         </p>
       ) : !indexReady ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Build the search index before starting the cited chat.
+          The evidence index is still unavailable. Chat will unlock when cited
+          evidence is ready.
         </p>
       ) : null}
 
@@ -156,7 +166,7 @@ export function CreatorChatPanel({
         ))}
       </div>
 
-      <div className="mt-5 grid max-h-[520px] gap-3 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="mt-5 grid max-h-[560px] gap-3 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-3">
         {messages.length === 0 ? (
           <p className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
             Answers are grounded in retrieved sources and extracted metadata.
@@ -200,7 +210,7 @@ export function CreatorChatPanel({
         <button
           type="submit"
           disabled={!canChat || isStreaming || !input.trim()}
-          className="inline-flex h-10 w-fit items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="inline-flex h-11 w-fit items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {isStreaming ? "Streaming..." : "Send"}
         </button>
@@ -235,7 +245,58 @@ function ChatMessageBubble({
       {!isUser && message.citations && message.citations.length > 0 ? (
         <CitationList citations={message.citations} />
       ) : null}
+      {!isUser && message.trace ? <TraceDetails trace={message.trace} /> : null}
     </article>
+  );
+}
+
+function TraceDetails({ trace }: { trace: ChatTrace }) {
+  const summary = trace.prompt_context_summary;
+
+  return (
+    <details className="mt-4 border-t border-slate-200 pt-3">
+      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+        AI System Check
+      </summary>
+      <dl className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+        <TraceMetric label="Answer mode" value={answerModeLabel(trace.mode)} />
+        <TraceMetric label="Model" value={trace.model} />
+        <TraceMetric
+          label="Retrieved sources"
+          value={formatTraceValue(trace.retrieved_sources)}
+        />
+        <TraceMetric label="Intent" value={trace.intent || "Unavailable"} />
+        <TraceMetric
+          label="Creator insights"
+          value={trace.has_creator_insights ? "Included" : "Unavailable"}
+        />
+        <TraceMetric
+          label="Memory"
+          value={trace.has_memory ? "Included" : "No prior memory"}
+        />
+        {summary ? (
+          <>
+            <TraceMetric
+              label="Structured context"
+              value={formatTraceValue(summary.structured_context_chars)}
+            />
+            <TraceMetric
+              label="Retrieved context"
+              value={formatTraceValue(summary.retrieved_context_chars)}
+            />
+          </>
+        ) : null}
+      </dl>
+    </details>
+  );
+}
+
+function TraceMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 break-words text-slate-800">{value}</dd>
+    </div>
   );
 }
 
@@ -243,7 +304,7 @@ function CitationList({ citations }: { citations: ChatCitation[] }) {
   return (
     <div className="mt-4 border-t border-slate-200 pt-3">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-        Sources
+        Citations
       </p>
       <ol className="mt-2 grid gap-2">
         {citations.map((citation, index) => (
@@ -261,9 +322,14 @@ function CitationList({ citations }: { citations: ChatCitation[] }) {
                 ? ` / ${citation.score.toFixed(4)}`
                 : ""}
             </p>
-            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-              {citation.text}
-            </p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-semibold text-teal-700">
+                View source text
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                {citation.text}
+              </p>
+            </details>
           </li>
         ))}
       </ol>
@@ -276,6 +342,7 @@ function updateLastAssistantMessage(
   update: {
     appendText?: string;
     citations?: ChatCitation[];
+    trace?: ChatTrace;
   },
 ): ChatMessage[] {
   const nextMessages = [...messages];
@@ -291,6 +358,7 @@ function updateLastAssistantMessage(
       ...message,
       content: `${message.content}${update.appendText ?? ""}`,
       citations: update.citations ?? message.citations,
+      trace: update.trace ?? message.trace,
     };
     break;
   }
@@ -333,7 +401,31 @@ function sourceTypeLabel(sourceType: string): string {
     return "Transcript";
   }
 
+  if (sourceType === "insight") {
+    return "Creator Insight Summary";
+  }
+
   return sourceType;
+}
+
+function answerModeLabel(mode: string): string {
+  if (mode === "gemini_rag_answer") {
+    return "Gemini RAG";
+  }
+
+  if (mode === "direct_metric_answer") {
+    return "Direct Metric Answer";
+  }
+
+  return mode;
+}
+
+function formatTraceValue(value: number | null | undefined): string {
+  if (typeof value !== "number") {
+    return "Unavailable";
+  }
+
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
 function getErrorMessage(error: unknown): string {

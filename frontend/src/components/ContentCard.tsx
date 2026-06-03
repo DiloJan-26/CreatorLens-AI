@@ -18,10 +18,11 @@ export function ContentCard({
           {label}
         </p>
         <p className="mt-3 text-sm font-semibold text-slate-950">
-          Status: {isPending ? "Pending" : "Unavailable"}
+          {isPending ? "Analysis running" : "Waiting for analysis"}
         </p>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          Run analysis to extract public metadata and transcript availability.
+          Public metadata, transcript availability, and confirmed metrics appear
+          here after analysis.
         </p>
       </section>
     );
@@ -33,15 +34,16 @@ export function ContentCard({
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            {label} · {platformLabel(item.platform)}
+            {label} - {platformLabel(item.platform)}
           </p>
-          <h2 className="mt-3 text-lg font-semibold text-slate-950">
+          <h2 className="mt-3 break-words text-lg font-semibold text-slate-950">
             {item.title || "Unavailable"}
           </h2>
+          <p className="mt-2 break-all text-xs text-slate-500">{item.url}</p>
         </div>
-        <span className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
+        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
           {item.extraction_status}
         </span>
       </div>
@@ -56,22 +58,24 @@ export function ContentCard({
         <p className="text-sm font-medium text-slate-500">
           {item.platform === "instagram" ? "Caption preview" : "Description preview"}
         </p>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
           {description ? truncateText(description, 300) : "Unavailable"}
         </p>
       </div>
 
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-        <Metric label="Creator" value={item.creator} />
+        <Metric label="Platform" value={platformLabel(item.platform)} />
+        <Metric label="Creator" value={item.creator ?? item.creator_handle} />
         <Metric
           label="Follower/subscriber count"
           value={formatNumber(item.follower_count ?? item.subscriber_count)}
         />
         <Metric label="Views" value={formatNumber(item.views)} />
-        <Metric label="Likes" value={formatNumber(item.likes)} />
         {isFacebook ? (
           <Metric label="Reactions" value={formatNumber(item.reactions)} />
-        ) : null}
+        ) : (
+          <Metric label="Likes" value={formatNumber(item.likes)} />
+        )}
         <Metric label="Comments" value={formatNumber(item.comments)} />
         {isFacebook ? (
           <Metric label="Shares" value={formatNumber(item.shares)} />
@@ -91,10 +95,7 @@ export function ContentCard({
           }
         />
         <Metric label="Upload date" value={item.upload_date} />
-        <Metric
-          label="Transcript"
-          value={transcriptStatus(item)}
-        />
+        <Metric label="Transcript language/source" value={transcriptStatus(item)} />
         <Metric
           label="Transcript segments"
           value={formatNumber(item.transcript_segment_count)}
@@ -108,7 +109,7 @@ export function ContentCard({
             {item.hashtags.map((hashtag) => (
               <span
                 key={hashtag}
-                className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
               >
                 #{hashtag}
               </span>
@@ -118,6 +119,22 @@ export function ContentCard({
           <p className="mt-1 text-sm text-slate-950">Unavailable</p>
         )}
       </div>
+
+      {item.missing_fields && item.missing_fields.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-sm font-medium text-slate-500">Missing fields</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {item.missing_fields.slice(0, 8).map((field) => (
+              <span
+                key={field}
+                className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900"
+              >
+                {fieldLabel(field)} unavailable
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-3">
         <SourceNote label="Metric source" value={item.metric_source_note} />
@@ -183,9 +200,24 @@ function transcriptStatus(item: ContentItem): string {
     return "Unavailable";
   }
 
-  return `Available · ${languageLabel(
-    item.detected_language ?? item.transcript_language,
-  )}`;
+  const source = item.transcript_source ? sourceLabel(item.transcript_source) : "Unknown";
+  return `${languageLabel(item.detected_language ?? item.transcript_language)} / ${source}`;
+}
+
+function sourceLabel(source: string): string {
+  if (source === "platform_captions") {
+    return "Captions";
+  }
+
+  if (source === "deepgram_multilingual") {
+    return "Deepgram multilingual";
+  }
+
+  if (source === "unavailable") {
+    return "Unavailable";
+  }
+
+  return source;
 }
 
 function languageLabel(language: string | null | undefined): string {
@@ -212,6 +244,10 @@ function languageLabel(language: string | null | undefined): string {
   }
 
   return language;
+}
+
+function fieldLabel(value: string): string {
+  return value.replace(/_/g, " ");
 }
 
 function truncateText(value: string, maxLength: number): string {
