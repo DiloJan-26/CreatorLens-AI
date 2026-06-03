@@ -1,9 +1,11 @@
 from typing import Any
 
 from app.models.chat import ChatMessage, Citation, RagContext
+from app.models.metrics import MetricSourceRecord, MetricSummaryResponse
 from app.models.rag import RetrieveRequest, RetrievedChunk
 from app.rag.query_router import classify_question, get_retrieval_plan
 from app.rag.retrieval_service import retrieve_project_chunks
+from app.services.metric_source_service import get_metric_summary
 from app.services.storage_service import get_project_detail_record
 
 
@@ -21,12 +23,52 @@ def build_structured_metadata_context(project_id: str) -> str:
     if project is None:
         raise RagContextProjectNotFoundError("Project not found.")
 
-    sections = [
-        _platform_metadata_section("YouTube", project.get("youtube")),
-        _platform_metadata_section("Instagram", project.get("instagram")),
+    content_items = [
+        item
+        for item in project.get("content_items", [])
+        if isinstance(item, dict)
     ]
+    sections = [
+        _platform_metadata_section(_content_label(item), item)
+        for item in content_items
+    ]
+    sections.append(build_metric_source_context(project_id))
 
     return "\n\n".join(sections)
+
+
+def build_metric_source_context(project_id: str) -> str:
+    summary = get_metric_summary(project_id)
+    lines = ["Metric Source Resolver Summary:"]
+
+    if summary.records:
+        for record in summary.records:
+            lines.append(
+                f"- {_platform_label(record.source_platform)} {record.metric_scope}: "
+                f"{_metric_record_summary(record)}"
+            )
+    else:
+        lines.append("- No extracted metric source records are available yet.")
+
+    if summary.combined_meta_engagement_rate is not None:
+        lines.append(
+            "- Combined Meta engagement: "
+            f"views {_display_number(summary.combined_meta_views)}; "
+            f"interactions {_display_number(summary.combined_meta_interactions)}; "
+            f"engagement rate {_display_percent(summary.combined_meta_engagement_rate)}."
+        )
+    else:
+        lines.append(
+            "- Combined Meta engagement: unavailable unless required public or "
+            "verified Meta values are available."
+        )
+
+    for note in summary.notes:
+        lines.append(f"- Note: {note}")
+
+    lines.append("- Rule: unavailable confirmed public metrics must not be estimated.")
+
+    return "\n".join(lines)
 
 
 def build_rag_context(
@@ -57,6 +99,7 @@ def build_rag_context(
                 query=query,
                 top_k=plan["top_k"],
                 platform=plan["platform"],  # type: ignore[arg-type]
+                slot=plan["slot"],  # type: ignore[arg-type]
                 source_type=plan["source_type"],  # type: ignore[arg-type]
             ),
         )
@@ -101,28 +144,77 @@ def build_grounded_prompt_inputs(
     }
 
 
+def build_direct_answer_if_possible(
+    project_id: str,
+    message: str,
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    normalized_message = _normalize(message)
+    project = get_project_detail_record(project_id)
+
+    if project is None:
+        raise RagContextProjectNotFoundError("Project not found.")
+
+    content_items = _content_items(project)
+
+    if _is_missing_metadata_question(normalized_message):
+        return _missing_metadata_answer(project, content_items)
+
+    if _is_creator_question(normalized_message):
+        return _creator_answer(project, content_items)
+
+    if _is_facebook_data_question(normalized_message):
+        return _extracted_data_answer(project, content_items, platform="facebook")
+
+    if _is_facebook_crosspost_question(normalized_message):
+        return _facebook_crosspost_answer(get_metric_summary(project_id))
+
+    if _is_combined_meta_question(normalized_message):
+        return _combined_meta_answer(get_metric_summary(project_id))
+
+    if _is_metric_comparison_question(normalized_message):
+        return _generic_metric_comparison_answer(project, content_items, normalized_message)
+
+    if _is_engagement_metric_question(normalized_message):
+        return _generic_engagement_rates_answer(project, content_items)
+
+    return None
+
+
 def _platform_metadata_section(platform_label: str, metadata: Any) -> str:
     if not isinstance(metadata, dict):
         return f"{platform_label} metadata:\nStatus: Unavailable"
 
-    description_label = "Caption" if platform_label == "Instagram" else "Description"
+    description_label = (
+        "Caption" if str(metadata.get("platform")) == "instagram" else "Description"
+    )
     lines = [
         f"{platform_label} metadata:",
+        f"Slot: {_display_value(metadata.get('slot'))}",
+        f"Platform: {_platform_label(str(metadata.get('platform')))}",
         f"Title: {_display_value(metadata.get('title'))}",
-        f"{description_label}: {_display_long_text(metadata.get('description'))}",
+        f"{description_label}: {_display_long_text(metadata.get('caption') or metadata.get('description'))}",
         f"Creator: {_display_value(metadata.get('creator'))}",
+        "Confirmed public metrics:",
         f"Views: {_display_number(metadata.get('views'))}",
         f"Likes: {_display_number(metadata.get('likes'))}",
+        f"Reactions: {_display_number(metadata.get('reactions'))}",
         f"Comments: {_display_number(metadata.get('comments'))}",
+        f"Shares: {_display_number(metadata.get('shares'))}",
         f"Engagement rate: {_display_percent(metadata.get('engagement_rate'))}",
         f"Follower count: {_display_number(metadata.get('follower_count'))}",
+        f"Subscriber count: {_display_number(metadata.get('subscriber_count'))}",
         f"Duration seconds: {_display_number(metadata.get('duration_seconds'))}",
         f"Upload date: {_display_value(metadata.get('upload_date'))}",
         f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
+        f"Available fields: {_display_field_list(_metadata_available_fields(metadata))}",
+        f"Missing fields: {_display_field_list(_metadata_missing_fields(metadata))}",
         f"Metric note: {_display_value(metadata.get('metric_source_note'))}",
+        f"Transcript note: {_display_value(metadata.get('transcript_source_note'))}",
+        "Rule: missing confirmed public metrics are unavailable and not estimated.",
     ]
 
-    if platform_label == "Instagram":
+    if str(metadata.get("platform")) == "instagram":
         lines.append(
             "Instagram caveat: Public extraction may not include "
             "Facebook-crossposted reactions or comments."
@@ -160,15 +252,11 @@ def _citation_from_chunk(chunk: RetrievedChunk) -> Citation:
 def _metadata_citations(project: dict[str, Any]) -> list[Citation]:
     citations: list[Citation] = []
 
-    for platform_key, platform_label in (
-        ("youtube", "YouTube"),
-        ("instagram", "Instagram"),
-    ):
-        metadata = project.get(platform_key)
-
+    for metadata in project.get("content_items", []):
         if not isinstance(metadata, dict):
             continue
 
+        platform_label = _content_label(metadata)
         citations.append(
             Citation(
                 platform=platform_label,
@@ -180,6 +268,622 @@ def _metadata_citations(project: dict[str, Any]) -> list[Citation]:
         )
 
     return citations
+
+
+def _metric_citations(summary: MetricSummaryResponse) -> list[Citation]:
+    citations = [
+        Citation(
+            platform="Meta",
+            source_type="metadata",
+            citation_label="Metric Source Resolver Summary",
+            text=build_metric_summary_text(summary),
+            score=None,
+        )
+    ]
+
+    for record in summary.records:
+        citations.append(
+            Citation(
+                platform=_platform_label(record.source_platform),
+                source_type="metadata",
+                citation_label=f"{_platform_label(record.source_platform)} {record.metric_scope} metrics",
+                text=_metric_record_summary(record),
+                score=None,
+            )
+        )
+
+    return citations
+
+
+def build_metric_summary_text(summary: MetricSummaryResponse) -> str:
+    return "\n".join(
+        [
+            "Metric Source Resolver Summary:",
+            f"YouTube native status: {summary.youtube_status}",
+            f"Instagram native status: {summary.instagram_native_status}",
+            f"Facebook cross-post status: {summary.facebook_crosspost_status}",
+            f"Combined Meta status: {summary.combined_meta_status}",
+            f"Combined Meta views: {_display_number(summary.combined_meta_views)}",
+            f"Combined Meta interactions: {_display_number(summary.combined_meta_interactions)}",
+            f"Combined Meta engagement rate: {_display_percent(summary.combined_meta_engagement_rate)}",
+            "Unavailable metrics are not estimated.",
+        ]
+    )
+
+
+def _generic_engagement_rates_answer(
+    project: dict[str, Any],
+    content_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lines = [
+        "Confirmed public engagement rates:",
+        *[
+            f"- {_content_label(item)}: {_display_percent(item.get('engagement_rate'))}."
+            for item in content_items
+        ],
+        "Unavailable engagement rates are not estimated.",
+    ]
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metadata_citations(project),
+    }
+
+
+def _creator_answer(
+    project: dict[str, Any],
+    content_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lines = [
+        "Creators from confirmed public metadata:",
+        *[
+            f"- {_content_label(item)} creator: {_display_value(item.get('creator'))}."
+            for item in content_items
+        ],
+        "Unavailable creator or follower/subscriber fields are not estimated.",
+    ]
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metadata_citations(project),
+    }
+
+
+def _missing_metadata_answer(
+    project: dict[str, Any],
+    content_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lines = ["Metadata Availability:"]
+
+    for item in content_items:
+        missing_fields = _metadata_missing_fields(item)
+        lines.append(
+            f"- {_content_label(item)} missing fields: "
+            f"{_display_field_list(missing_fields)}."
+        )
+
+    lines.append("Missing fields are unavailable and not estimated.")
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metadata_citations(project),
+    }
+
+
+def _extracted_data_answer(
+    project: dict[str, Any],
+    content_items: list[dict[str, Any]],
+    platform: str,
+) -> dict[str, Any]:
+    matching_items = [
+        item for item in content_items if str(item.get("platform")) == platform
+    ]
+    selected_items = matching_items or content_items
+    lines = ["Confirmed public metadata extracted:"]
+
+    for item in selected_items:
+        lines.append(
+            f"- {_content_label(item)} available fields: "
+            f"{_display_field_list(_metadata_available_fields(item))}; "
+            f"missing fields: {_display_field_list(_metadata_missing_fields(item))}."
+        )
+
+    lines.append("Unavailable fields are not estimated.")
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metadata_citations(project),
+    }
+
+
+def _generic_metric_comparison_answer(
+    project: dict[str, Any],
+    content_items: list[dict[str, Any]],
+    message: str,
+) -> dict[str, Any]:
+    metric_name = _comparison_metric_name(message)
+    values = [
+        (item, _numeric_value(item.get(metric_name)))
+        for item in content_items
+    ]
+    lines = [f"Confirmed public {metric_name.replace('_', ' ')} comparison:"]
+
+    for item, value in values:
+        lines.append(f"- {_content_label(item)}: {_display_metric_value(metric_name, value)}.")
+
+    available_values = [(item, value) for item, value in values if value is not None]
+
+    if len(available_values) < len(values):
+        lines.append("Comparison is incomplete because one or more values are unavailable.")
+    elif len(available_values) >= 2:
+        winner, winner_value = max(available_values, key=lambda pair: pair[1])
+        tied_items = [
+            item for item, value in available_values if value == winner_value
+        ]
+
+        if len(tied_items) > 1:
+            lines.append("The confirmed public values are tied.")
+        else:
+            lines.append(
+                f"{_content_label(winner)} has the higher confirmed public "
+                f"{metric_name.replace('_', ' ')}."
+            )
+
+    lines.append("Unavailable metrics are not estimated.")
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metadata_citations(project),
+    }
+
+
+def _instagram_creator_answer(
+    project: dict[str, Any],
+    summary: MetricSummaryResponse,
+) -> dict[str, Any]:
+    instagram_metadata = project.get("instagram") if isinstance(project, dict) else None
+    instagram_native = _latest_record(summary.records, "instagram", "native")
+    creator = (
+        _display_value(instagram_metadata.get("creator"))
+        if isinstance(instagram_metadata, dict)
+        else "Unavailable"
+    )
+    followers = (
+        _display_number(instagram_native.followers)
+        if instagram_native and instagram_native.followers is not None
+        else "Unavailable"
+    )
+    source_method = (
+        _source_method_label(instagram_native.source_method)
+        if instagram_native
+        else "no metric source record"
+    )
+    answer = "\n".join(
+        [
+            f"Instagram creator: {creator}.",
+            f"Instagram follower count: {followers}.",
+            f"Follower count source: {source_method}.",
+            "If the follower count is unavailable, CreatorLens AI will not estimate it unless Verified Metrics provide it.",
+        ]
+    )
+
+    return {
+        "answer": answer,
+        "citations": _metric_citations(summary),
+    }
+
+
+def _engagement_rates_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
+    youtube_native = _latest_record(summary.records, "youtube", "native")
+    instagram_native = _latest_record(summary.records, "instagram", "native")
+    facebook_crosspost = _latest_record(summary.records, "facebook", "cross_post")
+    lines = [
+        f"YouTube confirmed public engagement rate: {_record_percent(youtube_native)}.",
+        f"Instagram confirmed public engagement rate: {_record_percent(instagram_native)}.",
+        f"Facebook cross-post engagement rate: {_record_percent(facebook_crosspost)}.",
+        f"Combined Meta engagement rate: {_display_percent(summary.combined_meta_engagement_rate)}.",
+        "Unavailable metrics are not estimated.",
+    ]
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _metric_citations(summary),
+    }
+
+
+def _facebook_crosspost_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
+    facebook_crosspost = _latest_record(summary.records, "facebook", "cross_post")
+
+    if facebook_crosspost is None:
+        answer = "No Facebook cross-post metrics are connected yet."
+    else:
+        answer = "\n".join(
+            [
+                f"Facebook cross-post views: {_display_number(facebook_crosspost.views)}.",
+                f"Facebook cross-post reactions: {_display_number(facebook_crosspost.reactions)}.",
+                f"Facebook cross-post comments: {_display_number(facebook_crosspost.comments)}.",
+                f"Facebook cross-post shares: {_display_number(facebook_crosspost.shares)}.",
+                f"Facebook cross-post engagement rate: {_display_percent(facebook_crosspost.engagement_rate)}.",
+                f"Source: {_source_method_label(facebook_crosspost.source_method)}.",
+            ]
+        )
+
+    return {
+        "answer": answer,
+        "citations": _metric_citations(summary),
+    }
+
+
+def _combined_meta_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
+    if summary.combined_meta_engagement_rate is not None:
+        answer = "\n".join(
+            [
+                f"Combined Meta views: {_display_number(summary.combined_meta_views)}.",
+                f"Combined Meta interactions: {_display_number(summary.combined_meta_interactions)}.",
+                f"Combined Meta engagement rate: {_display_percent(summary.combined_meta_engagement_rate)}.",
+                "Combined Meta Metrics use available Instagram native metrics and verified Facebook cross-post metrics only.",
+            ]
+        )
+    else:
+        missing = _combined_missing_fields(summary) or "required Instagram/Facebook views or interaction metrics"
+        answer = (
+            "Combined Meta engagement is unavailable because "
+            f"{missing} are not provided. Unavailable metrics are not estimated."
+        )
+
+    return {
+        "answer": answer,
+        "citations": _metric_citations(summary),
+    }
+
+
+def _performance_comparison_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
+    youtube_native = _latest_record(summary.records, "youtube", "native")
+    instagram_native = _latest_record(summary.records, "instagram", "native")
+    youtube_rate_value = _record_engagement_rate(youtube_native)
+    instagram_rate_value = _record_engagement_rate(instagram_native)
+    youtube_rate = _record_percent(youtube_native)
+    instagram_rate = _record_percent(instagram_native)
+
+    if youtube_rate_value is None or instagram_rate_value is None:
+        comparison = (
+            "A confirmed engagement winner is unavailable because one or both "
+            "native engagement rates are unavailable."
+        )
+    elif youtube_rate_value > instagram_rate_value:
+        comparison = (
+            "YouTube has stronger confirmed public engagement based on the "
+            "available extracted metrics."
+        )
+    elif instagram_rate_value > youtube_rate_value:
+        comparison = (
+            "Instagram has stronger confirmed public engagement based on the "
+            "available extracted metrics."
+        )
+    else:
+        comparison = (
+            "The compared platforms have the same confirmed public engagement "
+            "rate based on the available extracted metrics."
+        )
+
+    answer = "\n".join(
+        [
+            comparison,
+            f"YouTube confirmed public engagement rate: {youtube_rate}.",
+            f"Instagram confirmed public engagement rate: {instagram_rate}.",
+            "Instagram combined Meta performance may be incomplete without Facebook cross-post metrics.",
+            "Unavailable metrics are not estimated.",
+        ]
+    )
+
+    return {
+        "answer": answer,
+        "citations": _metric_citations(summary),
+    }
+
+
+def _latest_record(
+    records: list[MetricSourceRecord],
+    source_platform: str,
+    metric_scope: str,
+) -> MetricSourceRecord | None:
+    verified_methods = {"user_verified", "manual_entry", "screenshot_verified"}
+
+    for record in records:
+        if (
+            record.source_platform == source_platform
+            and record.metric_scope == metric_scope
+            and record.source_method in verified_methods
+        ):
+            return record
+
+    for record in records:
+        if record.source_platform == source_platform and record.metric_scope == metric_scope:
+            return record
+
+    return None
+
+
+def _metric_record_summary(record: MetricSourceRecord | None) -> str:
+    if record is None:
+        return "unavailable."
+
+    return (
+        f"views {_display_number(record.views)}; "
+        f"likes {_display_number(record.likes)}; "
+        f"reactions {_display_number(record.reactions)}; "
+        f"comments {_display_number(record.comments)}; "
+        f"shares {_display_number(record.shares)}; "
+        f"followers {_display_number(record.followers)}; "
+        f"engagement rate {_display_percent(record.engagement_rate)}; "
+        f"source {_source_method_label(record.source_method)}; "
+        f"confidence {record.confidence}."
+    )
+
+
+def _record_percent(record: MetricSourceRecord | None) -> str:
+    if record is None:
+        return "Unavailable"
+
+    return _display_percent(record.engagement_rate)
+
+
+def _record_engagement_rate(record: MetricSourceRecord | None) -> float | None:
+    if record is None or isinstance(record.engagement_rate, bool):
+        return None
+
+    if isinstance(record.engagement_rate, int | float):
+        return float(record.engagement_rate)
+
+    return None
+
+
+def _combined_missing_fields(summary: MetricSummaryResponse) -> str:
+    combined = next(
+        (
+            item
+            for item in summary.completeness
+            if item.label == "Combined Meta Metrics"
+        ),
+        None,
+    )
+
+    if combined is None or not combined.missing_fields:
+        return ""
+
+    return ", ".join(field.replace("_", " ") for field in combined.missing_fields)
+
+
+def _source_method_label(source_method: str) -> str:
+    if source_method == "public_extractor":
+        return "public extractor"
+
+    if source_method == "user_verified":
+        return "user verified"
+
+    if source_method == "manual_entry":
+        return "manual entry"
+
+    if source_method == "screenshot_verified":
+        return "screenshot verified"
+
+    if source_method == "meta_api":
+        return "Meta API"
+
+    return source_method
+
+
+def _content_items(project: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in project.get("content_items", [])
+        if isinstance(item, dict)
+    ]
+
+
+def _metadata_available_fields(item: dict[str, Any]) -> list[str]:
+    field_values = {
+        "transcript": bool(item.get("transcript_available")),
+        "views": item.get("views") is not None,
+        "likes": item.get("likes") is not None,
+        "reactions": item.get("reactions") is not None,
+        "comments": item.get("comments") is not None,
+        "shares": item.get("shares") is not None,
+        "creator": _display_value(item.get("creator")) != "Unavailable",
+        "follower_count": item.get("follower_count") is not None,
+        "subscriber_count": item.get("subscriber_count") is not None,
+        "hashtags": bool(item.get("hashtags")),
+        "upload_date": item.get("upload_date") is not None,
+        "duration_seconds": item.get("duration_seconds") is not None,
+        "engagement_rate": item.get("engagement_rate") is not None,
+    }
+
+    return [
+        field_name
+        for field_name, is_available in field_values.items()
+        if is_available
+    ]
+
+
+def _metadata_missing_fields(item: dict[str, Any]) -> list[str]:
+    explicit_missing = item.get("missing_fields")
+
+    if isinstance(explicit_missing, list):
+        fields = [
+            field
+            for field in explicit_missing
+            if isinstance(field, str) and field.strip()
+        ]
+
+        if fields:
+            return fields
+
+    available_fields = set(_metadata_available_fields(item))
+    expected_fields = {
+        "transcript",
+        "views",
+        "creator",
+        "comments",
+        "hashtags",
+        "upload_date",
+        "duration_seconds",
+        "engagement_rate",
+    }
+
+    if item.get("platform") == "facebook":
+        expected_fields.update({"reactions", "shares"})
+    else:
+        expected_fields.add("likes")
+
+    if item.get("follower_count") is None and item.get("subscriber_count") is None:
+        expected_fields.add("follower_count/subscriber_count")
+
+    return sorted(expected_fields - available_fields)
+
+
+def _display_field_list(fields: list[str]) -> str:
+    clean_fields = [
+        field.replace("_", " ")
+        for field in fields
+        if isinstance(field, str) and field.strip()
+    ]
+
+    return ", ".join(clean_fields) if clean_fields else "Unavailable"
+
+
+def _numeric_value(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int | float):
+        return float(value)
+
+    return None
+
+
+def _display_metric_value(metric_name: str, value: float | None) -> str:
+    if value is None:
+        return "Unavailable"
+
+    if metric_name == "engagement_rate":
+        return _display_percent(value)
+
+    return _display_number(value)
+
+
+def _comparison_metric_name(message: str) -> str:
+    if "like" in message:
+        return "likes"
+
+    if "comment" in message:
+        return "comments"
+
+    if "reaction" in message:
+        return "reactions"
+
+    if "share" in message:
+        return "shares"
+
+    if "view" in message:
+        return "views"
+
+    return "engagement_rate"
+
+
+def _is_creator_question(message: str) -> bool:
+    return (
+        "creator" in message
+        or "who is" in message
+        or "who made" in message
+    )
+
+
+def _is_missing_metadata_question(message: str) -> bool:
+    return (
+        "metadata is missing" in message
+        or "metadata missing" in message
+        or "missing metadata" in message
+        or "what metadata" in message
+        or "missing or unavailable" in message
+        or "unavailable" in message and "metadata" in message
+    )
+
+
+def _is_facebook_data_question(message: str) -> bool:
+    return (
+        "facebook" in message
+        and (
+            "what data" in message
+            or "what could be extracted" in message
+            or "extracted from facebook" in message
+            or "available from facebook" in message
+        )
+    )
+
+
+def _is_metric_comparison_question(message: str) -> bool:
+    comparison_words = (
+        "more",
+        "higher",
+        "stronger",
+        "compare",
+        "outperform",
+        "performed better",
+        "has better",
+    )
+    metric_words = (
+        "views",
+        "likes",
+        "comments",
+        "reactions",
+        "shares",
+        "engagement",
+        "performance",
+    )
+
+    return any(word in message for word in comparison_words) and any(
+        word in message for word in metric_words
+    )
+
+
+def _is_creator_follower_question(message: str) -> bool:
+    return "instagram" in message and (
+        "creator" in message
+        or "who is" in message
+        or "follower count" in message
+        or "followers" in message
+    )
+
+
+def _is_engagement_metric_question(message: str) -> bool:
+    return (
+        "engagement rate" in message
+        or "engagement of each" in message
+        or "metrics" in message
+        or "views" in message
+        or "likes" in message
+        or "comments" in message
+    )
+
+
+def _is_facebook_crosspost_question(message: str) -> bool:
+    return "cross-post" in message or "cross post" in message
+
+
+def _is_combined_meta_question(message: str) -> bool:
+    return "combined meta" in message or "meta engagement" in message
+
+
+def _is_performance_comparison_question(message: str) -> bool:
+    return (
+        "why" in message
+        and ("youtube" in message or "instagram" in message)
+        and ("engagement" in message or "performance" in message)
+    ) or "more engagement than instagram" in message
+
+
+def _normalize(message: str) -> str:
+    return " ".join(message.lower().strip().split())
 
 
 def _history_text(messages: list[ChatMessage]) -> str:
@@ -199,6 +903,25 @@ def _platform_label(platform: str) -> str:
 
     if platform == "instagram":
         return "Instagram"
+
+    if platform == "facebook":
+        return "Facebook"
+
+    if platform == "meta":
+        return "Meta"
+
+    return platform
+
+
+def _content_label(metadata: dict[str, Any]) -> str:
+    slot = metadata.get("slot")
+    platform = _platform_label(str(metadata.get("platform") or ""))
+
+    if slot == "content_1":
+        return f"Content 1 · {platform}"
+
+    if slot == "content_2":
+        return f"Content 2 · {platform}"
 
     return platform
 

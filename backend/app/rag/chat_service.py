@@ -8,6 +8,7 @@ from app.models.chat import ChatMessage, ChatStreamRequest, Citation
 from app.rag.context_builder import (
     RagContextProjectNotFoundError,
     RagContextValidationError,
+    build_direct_answer_if_possible,
     build_rag_context,
 )
 from app.rag.retrieval_service import RetrievalProjectNotFoundError
@@ -28,16 +29,27 @@ def build_system_prompt() -> str:
     return "\n".join(
         [
             "You are CreatorLens AI, a creator intelligence assistant.",
+            "The compared items are Content 1 and Content 2.",
             "Answer using only structured metadata and retrieved source context.",
-            "Do not invent views, likes, comments, follower counts, engagement rates, dates, or transcript details.",
+            "Always identify the platform when comparing Content 1 and Content 2.",
+            "Use confirmed public metrics only.",
+            "Do not invent views, likes, comments, reactions, shares, follower counts, subscriber counts, engagement rates, dates, duration, or transcript details.",
             "If a value is unavailable, say it is unavailable.",
             "For Instagram, mention public extraction limitations or Facebook cross-post caveats when relevant.",
+            "Do not assume Instagram or Facebook metrics are complete.",
+            "If same-platform comparison appears, use Content 1 and Content 2 labels to avoid confusion.",
             "Prefer concise, creator-focused, actionable answers.",
-            "Use YouTube and Instagram names exactly.",
+            "Use YouTube, Instagram, and Facebook names exactly.",
             "Do not mention internal implementation labels or development phases.",
             "Do not fabricate citations.",
             "The frontend will display citations separately, so do not create fake source labels.",
             "If useful, refer to sources naturally, but citations are provided separately.",
+            "Treat the structured Content 1 and Content 2 metadata as the source of truth for content metrics.",
+            "Distinguish YouTube, Instagram, Facebook, and Combined Meta Metrics when those appear.",
+            "Never claim Instagram underperformed solely from missing views.",
+            "Say confirmed public metrics when only public extracted metrics exist.",
+            "If Facebook cross-post data is not connected, say combined Meta performance may be incomplete.",
+            "Do not invent missing follower counts, subscriber counts, views, comments, duration, or upload dates.",
         ]
     )
 
@@ -85,7 +97,53 @@ async def stream_chat_answer(
             session_id=session_id,
             limit=10,
         )
-        rag_context = build_rag_context(project_id=project_id, message=question)
+        rag_context = build_rag_context(
+            project_id=project_id,
+            message=question,
+            recent_messages=recent_messages,
+        )
+        direct_answer = build_direct_answer_if_possible(
+            project_id=project_id,
+            message=question,
+            rag_context=rag_context,
+        )
+
+        if direct_answer is not None:
+            assistant_answer = str(direct_answer["answer"]).strip()
+            citations = [
+                citation
+                for citation in direct_answer["citations"]
+                if isinstance(citation, Citation)
+            ]
+
+            for token in _direct_answer_tokens(assistant_answer):
+                yield sse_event("token", {"text": token})
+
+            assistant_message = add_message(
+                project_id=project_id,
+                session_id=session_id,
+                role="assistant",
+                content=assistant_answer,
+            )
+            save_chat_citations(
+                message_id=assistant_message.message_id,
+                project_id=project_id,
+                session_id=session_id,
+                citations=[citation.model_dump() for citation in citations],
+            )
+            yield sse_event(
+                "citations",
+                {"citations": [citation.model_dump() for citation in citations]},
+            )
+            yield sse_event(
+                "done",
+                {
+                    "session_id": session_id,
+                    "status": "complete",
+                },
+            )
+            return
+
         citations = rag_context.citations
         llm = get_llm(streaming=True)
         messages = [
@@ -203,6 +261,17 @@ def _chunk_text(chunk: Any) -> str:
         return "".join(parts)
 
     return ""
+
+
+def _direct_answer_tokens(answer: str) -> list[str]:
+    lines = answer.splitlines()
+    tokens: list[str] = []
+
+    for index, line in enumerate(lines):
+        suffix = "\n" if index < len(lines) - 1 else ""
+        tokens.append(f"{line}{suffix}")
+
+    return tokens or [answer]
 
 
 def _compact_text(value: str, max_length: int) -> str:

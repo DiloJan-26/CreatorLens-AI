@@ -1,169 +1,114 @@
 # CreatorLens AI
 
-CreatorLens AI is a full-stack creator intelligence application for comparing a YouTube Short and an Instagram Reel. It extracts public creator/video signals, normalizes them into a shared schema, stores local project state, builds a vector search index, and streams cited creator insights through a memory-aware chat experience.
+## Overview
+
+CreatorLens AI is a full-stack creator intelligence application for comparing any two supported short-form content URLs with cited, retrieval-grounded insights.
+
+The app accepts Content URL 1 and Content URL 2, auto-detects each platform, extracts public metadata and transcript evidence when available, builds a vector search index, and streams cited Creator Chat answers with memory.
+
+## Supported Comparisons
+
+- YouTube vs YouTube
+- YouTube vs Instagram
+- YouTube vs Facebook
+- Instagram vs Instagram
+- Instagram vs Facebook
+- Facebook vs Facebook
+
+Supported URL types:
+
+- YouTube Shorts and public YouTube watch URLs
+- Instagram Reels, posts, and TV URLs
+- Facebook Reels, public watch URLs, and public post video URLs
 
 ## Current Capabilities
 
 - FastAPI backend
 - Next.js frontend
-- Project creation flow
-- SQLite project storage
-- SQLite video metadata storage
-- SQLite transcript segment storage
-- SQLite chat session and message storage
-- YouTube extraction pipeline
-- YouTube metadata extraction with yt-dlp
+- Content URL 1 and Content URL 2 project creation
+- Platform auto-detection for YouTube, Instagram, and Facebook
+- SQLite project, content, transcript, chunk, metric, and chat memory storage
+- YouTube public metadata extraction with yt-dlp
 - YouTube transcript extraction with youtube-transcript-api
-- Instagram metadata extraction with yt-dlp
+- Instagram public metadata extraction with yt-dlp
 - Instagram transcription using Deepgram when a public audio URL is available
-- Normalized YouTube and Instagram metadata
-- Description/caption storage for retrieval context
-- Metric source notes for YouTube and Instagram
-- Transcript source notes for YouTube and Instagram
-- Transcript preview endpoint
-- Dynamic YouTube and Instagram insight cards
-- Honest unavailable states for missing public metrics
-- FastEmbed embedding foundation
+- Facebook best-effort public metadata extraction with yt-dlp
+- Facebook transcription attempt with Deepgram when public media audio is available
+- Normalized metadata for supported platforms
+- Metadata Availability summary
+- Confirmed Public Metrics display
+- FastEmbed embeddings with `BAAI/bge-small-en-v1.5`
 - Qdrant Cloud vector storage
-- SQLite RAG chunk storage
-- Metadata, description/caption, hook, and transcript chunks
-- Vector indexing endpoint
-- Source retrieval endpoint
-- LangChain and Gemini LLM configuration foundation
-- Safe LLM health endpoint
-- Memory-aware chat session endpoints
-- Query intent routing for chat context
-- Structured metadata and retrieved source context builder
-- Backend-derived citation preparation
-- Streaming Creator Chat backend endpoint
-- Server-sent token, citation, and completion events
-- Frontend search index panel
-- Frontend source retrieval panel
-- Frontend Streaming Creator Chat panel
-- Suggested cited insight questions
-- Source citation display under assistant answers
+- Slot-aware RAG chunks for same-platform comparisons
+- Source retrieval with platform, content, and source-type filters
+- Gemini 2.5 Flash streaming chat through LangChain
+- Memory-aware chat sessions
+- Backend-derived citations shown under assistant answers
 
-## Architecture
+## Metadata Extraction
 
-CreatorLens AI follows a retrieval-first architecture:
+The system attempts to extract transcript, views, likes/reactions, comments, creator, follower/subscriber count, hashtags, upload date, and duration. Platform limitations may make some fields unavailable; CreatorLens AI does not estimate missing metrics.
 
-```text
-YouTube + Instagram URLs
-  -> extraction and normalization
-  -> SQLite project/video/transcript storage
-  -> chunk builder
-  -> rag_chunks table
-  -> FastEmbed embeddings
-  -> Qdrant vector index
-  -> source retrieval
-  -> Gemini/LangChain LLM foundation
-  -> SQLite chat memory
-  -> query routing and grounded context builder
-  -> streaming RAG chat backend
-  -> frontend Streaming Creator Chat panel
-```
+Each content item stores extracted values when available. Missing values are stored as `null`, shown as Unavailable, and included in `missing_fields`.
 
-## Extraction Pipeline
+Facebook public metadata is extracted when available. Missing fields are marked unavailable and are not estimated.
 
-The backend extracts public metadata and transcript/caption context without guessing missing values.
+## Transcript Pipeline
 
-- YouTube metadata comes from yt-dlp.
-- YouTube transcript segments come from youtube-transcript-api when captions are available.
-- Instagram metadata comes from yt-dlp.
-- Instagram transcripts are generated with Deepgram when a public audio URL is available.
-- Missing public metrics are shown as unavailable, not estimated or converted to zero.
+- YouTube transcripts come from public captions/subtitles when available.
+- Instagram transcripts are generated with Deepgram when yt-dlp exposes a public audio URL.
+- Facebook transcripts are generated with Deepgram when public media audio can be extracted.
+- If transcript evidence is unavailable, the UI shows Unavailable and keeps metadata extraction results.
 
 ## Vector Search Index
 
-The search index is built from multiple evidence types:
+The search index is built from each content item:
 
 - Metadata chunks
-- YouTube description chunks
-- Instagram caption chunks
-- Hook chunks for opening-seconds comparison
+- Description/caption chunks
+- Hook chunks from opening transcript segments
 - Transcript chunks
 
-Embeddings use FastEmbed with `BAAI/bge-small-en-v1.5`. Vectors are stored in Qdrant Cloud with citation-ready payloads.
+Each chunk payload includes project ID, content slot, platform, source type, timing when available, title, creator, text, content hash, and a citation label such as:
 
-## Source Retrieval
+- `Content 1 · YouTube · metadata`
+- `Content 2 · YouTube · hook · 0.16s-8.44s`
+- `Content 2 · Facebook · transcript · 0.16s-12.40s`
 
-The retrieval endpoint searches Qdrant dynamically and returns source chunks with:
-
-- Platform
-- Source type
-- Score
-- Citation label
-- Timing when available
-- Chunk text
-
-Frontend retrieval filters support platform and source-type narrowing for validating the sources that ground chat answers.
-
-## LLM Configuration
-
-CreatorLens AI includes a lightweight LLM foundation for the Streaming Creator Chat layer.
-
-- Primary provider: Gemini
-- Default model: `gemini-2.5-flash`
-- Orchestration foundation: LangChain
-- Health endpoint: `GET /health/llm`
-
-The LLM client is created lazily and the health endpoint verifies configuration without generating a chat answer. API keys are read from environment variables and are not printed by the application.
-
-## Memory-Aware Chat Storage
-
-The backend stores chat sessions and messages in SQLite so Cited RAG Chat can use recent conversation history. Chat endpoints create, read, clear, and stream memory-aware chat sessions.
-
-## RAG Context Builder
-
-The backend classifies chat questions, selects a retrieval strategy, combines structured YouTube and Instagram metadata with retrieved source chunks, and prepares backend-derived citations.
+Payload filters support project, content slot, platform, and source type.
 
 ## Streaming Creator Chat
 
-The frontend Streaming Creator Chat panel calls `POST /api/projects/{project_id}/chat/stream` after extraction and indexing. It streams assistant tokens live, preserves the session ID for follow-up questions, and displays backend-derived sources under assistant answers.
+Streaming Creator Chat answers questions using structured metadata and retrieved source chunks. The backend prepares citations, streams assistant tokens, stores chat history, and displays sources separately under each answer.
 
-The backend creates or reuses a chat session, saves the user message, builds grounded RAG context, streams Gemini response tokens through LangChain, emits citations as a separate event, and saves the assistant response for memory.
+Suggested demo questions:
 
-## Data Transparency
+- What is the engagement rate of each content item?
+- Compare the hooks in the first 5 seconds.
+- Which content has stronger confirmed public engagement?
+- What metadata is missing or unavailable?
+- Suggest improvements for Content 2 based on Content 1.
 
-CreatorLens AI does not guess missing public metrics.
+## Confirmed Public Metrics and Missing Data
 
-- YouTube public counts can differ from the live UI because of rounding, caching, timezone differences, and update delay.
-- Instagram browser UI may include Facebook-crossposted reactions or comments that public Instagram extraction does not include.
-- Missing public metrics are shown as unavailable, not estimated or converted to zero.
+CreatorLens AI uses Confirmed Public Metrics only.
+
+- Missing views, likes, reactions, comments, shares, follower/subscriber counts, upload dates, duration, and transcript evidence are shown as Unavailable.
+- Missing public metrics are not converted to zero.
+- Missing public metrics are not estimated by the backend or by Gemini.
+- Instagram and Facebook public extraction can be incomplete because platform UIs and public metadata endpoints expose different values.
+- Facebook extraction is best-effort and does not use login, cookies, Meta API, or private/authenticated scraping.
 
 ## Cost and Scaling Choices
 
 - SQLite keeps local demo state simple.
-- FastEmbed avoids paid embedding API cost.
+- FastEmbed keeps embeddings local and cost-free.
 - Qdrant Cloud stores citation-ready vectors.
 - Retrieval filters keep context small.
+- Metadata questions can be answered from SQLite to reduce unnecessary LLM calls.
+- Gemini 2.5 Flash is selected for cost-aware streaming reasoning.
+- Deepgram is used only when public media audio is available.
 - Re-indexing replaces old project vectors by project ID.
-- Gemini 2.5 Flash is selected for low-latency, cost-aware reasoning.
-- Metric questions use structured metadata context to reduce unnecessary retrieval and token usage.
-- Embeddings stay local with FastEmbed.
-
-## Tech Stack
-
-- Frontend: Next.js, TypeScript, Tailwind
-- Backend: FastAPI, Pydantic, SQLite
-- YouTube extraction: yt-dlp, youtube-transcript-api
-- Instagram extraction: yt-dlp
-- Instagram transcription: Deepgram
-- Embeddings: FastEmbed with BAAI/bge-small-en-v1.5
-- Vector database: Qdrant Cloud
-- RAG orchestration foundation: LangChain
-- LLM provider: Gemini 2.5 Flash
-
-## Not Implemented Yet
-
-- Apify fallback/enrichment
-- AssemblyAI fallback
-- Production deployment
-- Analytics and usage monitoring
-
-## Next Step: Final Polish
-
-The next major milestone is final polish, deployment preparation, and a concise README/demo script for recruiters.
 
 ## Local Setup
 
@@ -182,7 +127,7 @@ cd frontend
 npm run dev
 ```
 
-## Local URLs
+Local URLs:
 
 - http://localhost:8000/health
 - http://localhost:8000/health/qdrant
@@ -192,6 +137,5 @@ npm run dev
 - http://localhost:8000/api/projects
 - http://localhost:3000
 
-## Environment Variables
-
 Use `.env.example` and `backend/.env.example` as references.
+

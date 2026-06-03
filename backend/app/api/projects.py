@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.project import (
+    MetadataAvailabilityResponse,
     ProjectCreateRequest,
     ProjectCreateResponse,
     ProjectDetailResponse,
@@ -30,6 +31,7 @@ from app.services.project_service import (
     create_project,
     extract_project_videos,
     get_project_detail,
+    get_metadata_availability,
     get_project_transcript_preview,
     list_projects,
 )
@@ -61,15 +63,27 @@ def get_project_endpoint(project_id: str) -> ProjectDetailResponse:
     return get_project_detail(project_id)
 
 
+@router.get(
+    "/{project_id}/metadata-availability",
+    response_model=MetadataAvailabilityResponse,
+)
+def get_project_metadata_availability_endpoint(
+    project_id: str,
+) -> MetadataAvailabilityResponse:
+    return get_metadata_availability(project_id)
+
+
 @router.get("/{project_id}/transcripts", response_model=TranscriptPreviewResponse)
 def get_project_transcript_endpoint(
     project_id: str,
-    platform: Platform = Query(...),
+    platform: Platform | None = Query(default=None),
+    slot: str | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
 ) -> TranscriptPreviewResponse:
     return get_project_transcript_preview(
         project_id=project_id,
         platform=platform,
+        slot=slot,
         limit=limit,
     )
 

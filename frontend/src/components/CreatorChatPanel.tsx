@@ -6,11 +6,11 @@ import { streamChatResponse } from "@/lib/api";
 import type { ChatCitation, ChatMessage } from "@/types/project";
 
 const SUGGESTED_QUESTIONS = [
-  "What is the engagement rate of each?",
+  "What is the engagement rate of each content item?",
   "Compare the hooks in the first 5 seconds.",
-  "Why did the YouTube video get more engagement than Instagram?",
-  "Who is the creator of Instagram and what is their follower count?",
-  "Suggest improvements for Instagram based on what worked in YouTube.",
+  "Which content has stronger confirmed public engagement?",
+  "What metadata is missing or unavailable?",
+  "Suggest improvements for Content 2 based on Content 1.",
 ];
 
 type CreatorChatPanelProps = {
@@ -117,7 +117,7 @@ export function CreatorChatPanel({
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Ask performance, hook, and improvement questions grounded in
-            retrieved YouTube and Instagram sources.
+            retrieved sources from both content items.
           </p>
         </div>
         {sessionId ? (
@@ -136,6 +136,11 @@ export function CreatorChatPanel({
           Build the search index before starting the cited chat.
         </p>
       ) : null}
+
+      <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+        Metric and follower questions use confirmed public metrics first to
+        avoid estimating unavailable values.
+      </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
         {SUGGESTED_QUESTIONS.map((question) => (
@@ -302,6 +307,10 @@ function platformLabel(platform: string): string {
 
   if (normalizedPlatform === "instagram") {
     return "Instagram";
+  }
+
+  if (normalizedPlatform === "facebook") {
+    return "Facebook";
   }
 
   return platform;

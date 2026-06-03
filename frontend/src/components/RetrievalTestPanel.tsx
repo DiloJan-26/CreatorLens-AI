@@ -3,15 +3,22 @@
 import { useState } from "react";
 
 import { retrieveProjectChunks } from "@/lib/api";
-import type { RetrievedChunk, RetrieveResponse } from "@/types/project";
+import type {
+  ContentPlatform,
+  ContentSlot,
+  RetrievedChunk,
+  RetrieveResponse,
+} from "@/types/project";
 
-type PlatformFilter = "youtube" | "instagram" | null;
+type PlatformFilter = ContentPlatform | null;
+type SlotFilter = ContentSlot | null;
 type SourceTypeFilter = "metadata" | "description" | "hook" | "transcript" | null;
 
 type SuggestedQuery = {
   label: string;
   query: string;
   platform: PlatformFilter;
+  slot: SlotFilter;
   sourceType: SourceTypeFilter;
 };
 
@@ -20,24 +27,28 @@ const SUGGESTED_QUERIES: SuggestedQuery[] = [
     label: "Compare hooks in the first 5 seconds",
     query: "Compare the hooks in the first 5 seconds",
     platform: null,
+    slot: null,
     sourceType: "hook",
   },
   {
-    label: "What is the Instagram story about?",
-    query: "What is the Instagram story about?",
-    platform: "instagram",
+    label: "Which content has stronger confirmed engagement?",
+    query: "Which content has stronger confirmed engagement?",
+    platform: null,
+    slot: null,
     sourceType: null,
   },
   {
-    label: "What worked in the YouTube description?",
-    query: "What worked in the YouTube description?",
-    platform: "youtube",
-    sourceType: "description",
+    label: "What metadata is missing?",
+    query: "What metadata is missing?",
+    platform: null,
+    slot: null,
+    sourceType: "metadata",
   },
   {
-    label: "Suggest improvements for Instagram based on YouTube",
-    query: "Suggest improvements for Instagram based on YouTube",
+    label: "Suggest improvements for Content 2 based on Content 1",
+    query: "Suggest improvements for Content 2 based on Content 1",
     platform: null,
+    slot: null,
     sourceType: null,
   },
 ];
@@ -54,6 +65,9 @@ export function RetrievalTestPanel({
   const [query, setQuery] = useState(SUGGESTED_QUERIES[0].query);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>(
     SUGGESTED_QUERIES[0].platform,
+  );
+  const [slotFilter, setSlotFilter] = useState<SlotFilter>(
+    SUGGESTED_QUERIES[0].slot,
   );
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(
     SUGGESTED_QUERIES[0].sourceType,
@@ -86,6 +100,7 @@ export function RetrievalTestPanel({
         query: query.trim(),
         top_k: 6,
         platform: platformFilter,
+        slot: slotFilter,
         source_type: sourceTypeFilter,
       });
       setResult(retrievalResult);
@@ -108,9 +123,9 @@ export function RetrievalTestPanel({
             Test Source Retrieval
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Semantic source retrieval test for indexed YouTube and Instagram
-            chunks. This panel verifies the sources that will ground the final
-            chat answers.
+            Semantic source retrieval test for indexed YouTube, Instagram, and
+            Facebook chunks. This panel verifies the sources that will ground
+            the final chat answers.
           </p>
         </div>
       </div>
@@ -126,7 +141,7 @@ export function RetrievalTestPanel({
           />
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-sm font-medium text-slate-900">
             Platform
             <select
@@ -143,6 +158,26 @@ export function RetrievalTestPanel({
               <option value="all">All platforms</option>
               <option value="youtube">YouTube</option>
               <option value="instagram">Instagram</option>
+              <option value="facebook">Facebook</option>
+            </select>
+          </label>
+
+          <label className="text-sm font-medium text-slate-900">
+            Content
+            <select
+              value={slotFilter ?? "all"}
+              onChange={(event) =>
+                setSlotFilter(
+                  event.target.value === "all"
+                    ? null
+                    : (event.target.value as Exclude<SlotFilter, null>),
+                )
+              }
+              className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+            >
+              <option value="all">Both contents</option>
+              <option value="content_1">Content 1</option>
+              <option value="content_2">Content 2</option>
             </select>
           </label>
 
@@ -176,6 +211,7 @@ export function RetrievalTestPanel({
               onClick={() => {
                 setQuery(suggestedQuery.query);
                 setPlatformFilter(suggestedQuery.platform);
+                setSlotFilter(suggestedQuery.slot);
                 setSourceTypeFilter(suggestedQuery.sourceType);
               }}
               className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:border-teal-300 hover:bg-teal-50"
@@ -208,7 +244,8 @@ export function RetrievalTestPanel({
             <span className="block">
               Filters: platform ={" "}
               {platformFilterLabel(result.applied_platform ?? null)}, source ={" "}
-              {sourceTypeLabel(result.applied_source_type ?? null)}
+              {sourceTypeLabel(result.applied_source_type ?? null)}, content ={" "}
+              {slotFilterLabel(result.applied_slot ?? null)}
             </span>
           </p>
           {result.results.length === 0 ? (
@@ -241,6 +278,7 @@ function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
           </p>
           <p className="mt-1 text-xs font-medium uppercase text-slate-500">
             {platformLabel(chunk.platform)} / {sourceTypeLabel(chunk.source_type)}
+            {chunk.slot ? ` / ${slotFilterLabel(chunk.slot as SlotFilter)}` : ""}
           </p>
         </div>
         <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700">
@@ -263,6 +301,10 @@ function platformLabel(platform: string): string {
     return "Instagram";
   }
 
+  if (platform === "facebook") {
+    return "Facebook";
+  }
+
   return platform;
 }
 
@@ -275,7 +317,23 @@ function platformFilterLabel(platform: PlatformFilter): string {
     return "Instagram";
   }
 
+  if (platform === "facebook") {
+    return "Facebook";
+  }
+
   return "All platforms";
+}
+
+function slotFilterLabel(slot: SlotFilter): string {
+  if (slot === "content_1") {
+    return "Content 1";
+  }
+
+  if (slot === "content_2") {
+    return "Content 2";
+  }
+
+  return "Both contents";
 }
 
 function sourceTypeLabel(sourceType: string | null): string {

@@ -3,7 +3,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-RagPlatform = Literal["youtube", "instagram"]
+RagPlatform = Literal["youtube", "instagram", "facebook"]
+RagSlot = Literal["content_1", "content_2"]
 RagSourceType = Literal["metadata", "description", "hook", "transcript"]
 IndexProjectStatus = Literal["indexed", "failed"]
 
@@ -26,6 +27,8 @@ class VectorStoreHealthResponse(BaseModel):
 class RagChunk(BaseModel):
     chunk_id: str
     project_id: str
+    content_id: str | None = None
+    slot: RagSlot | None = None
     platform: RagPlatform
     source_type: RagSourceType
     chunk_index: int
@@ -68,10 +71,13 @@ class RetrieveRequest(BaseModel):
     query: str
     top_k: int = 6
     platform: RagPlatform | None = None
+    slot: RagSlot | None = None
     source_type: RagSourceType | None = None
 
 
 class RetrievedChunk(BaseModel):
+    content_id: str | None = None
+    slot: str | None = None
     platform: str
     source_type: str
     score: float
@@ -88,6 +94,7 @@ class RetrieveResponse(BaseModel):
     project_id: str
     query: str
     applied_platform: RagPlatform | None = None
+    applied_slot: RagSlot | None = None
     applied_source_type: RagSourceType | None = None
     total_results: int
     results: list[RetrievedChunk] = Field(default_factory=list)

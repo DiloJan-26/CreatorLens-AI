@@ -1,14 +1,20 @@
 import type {
   ChatCitation,
   ChatStreamRequest,
+  ContentPlatform,
+  ContentSlot,
   HealthResponse,
   IndexProjectResponse,
+  MetadataAvailabilityResponse,
+  MetricSummaryResponse,
   ProjectCreateRequest,
   ProjectCreateResponse,
   ProjectDetailResponse,
   RetrieveProjectChunksRequest,
   RetrieveResponse,
+  SaveVerifiedMetricsResponse,
   TranscriptPreviewResponse,
+  VerifiedMetricInput,
 } from "@/types/project";
 
 const API_BASE_URL =
@@ -46,16 +52,32 @@ export async function getProject(
 
 export async function getTranscriptPreview(
   projectId: string,
-  platform: "youtube" | "instagram",
+  options: {
+    slot?: ContentSlot | null;
+    platform?: ContentPlatform | null;
+  },
   limit = 5,
 ): Promise<TranscriptPreviewResponse> {
-  const params = new URLSearchParams({
-    platform,
-    limit: String(limit),
-  });
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  if (options.slot) {
+    params.set("slot", options.slot);
+  }
+
+  if (options.platform) {
+    params.set("platform", options.platform);
+  }
 
   return request<TranscriptPreviewResponse>(
     `/api/projects/${projectId}/transcripts?${params.toString()}`,
+  );
+}
+
+export async function getMetadataAvailability(
+  projectId: string,
+): Promise<MetadataAvailabilityResponse> {
+  return request<MetadataAvailabilityResponse>(
+    `/api/projects/${projectId}/metadata-availability`,
   );
 }
 
@@ -78,6 +100,30 @@ export async function retrieveProjectChunks(
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function getMetricSources(
+  projectId: string,
+): Promise<MetricSummaryResponse> {
+  return request<MetricSummaryResponse>(
+    `/api/projects/${projectId}/metrics/sources`,
+  );
+}
+
+export async function saveVerifiedMetrics(
+  projectId: string,
+  payload: VerifiedMetricInput,
+): Promise<SaveVerifiedMetricsResponse> {
+  return request<SaveVerifiedMetricsResponse>(
+    `/api/projects/${projectId}/metrics/verify`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 type StreamChatHandlers = {

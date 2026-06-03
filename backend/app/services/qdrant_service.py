@@ -25,7 +25,7 @@ class QdrantCollectionError(Exception):
     """Raised when the configured Qdrant collection is incompatible."""
 
 
-FILTER_PAYLOAD_FIELDS = ("project_id", "platform", "source_type")
+FILTER_PAYLOAD_FIELDS = ("project_id", "slot", "platform", "source_type")
 
 
 def get_qdrant_client() -> QdrantClient:
@@ -172,6 +172,7 @@ def search_project_chunks(
     query_vector: list[float],
     top_k: int = 6,
     platform: str | None = None,
+    slot: str | None = None,
     source_type: str | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
@@ -186,6 +187,7 @@ def search_project_chunks(
     query_filter = _project_search_filter(
         project_id=project_id,
         platform=platform,
+        slot=slot,
         source_type=source_type,
     )
     safe_limit = max(1, min(top_k, 12))
@@ -216,6 +218,8 @@ def search_project_chunks(
 def make_qdrant_point_id(chunk: RagChunk) -> str:
     base = (
         f"{chunk.project_id}:"
+        f"{chunk.content_id}:"
+        f"{chunk.slot}:"
         f"{chunk.platform}:"
         f"{chunk.source_type}:"
         f"{chunk.chunk_index}:"
@@ -227,6 +231,8 @@ def make_qdrant_point_id(chunk: RagChunk) -> str:
 def _chunk_payload(chunk: RagChunk) -> dict[str, Any]:
     return {
         "project_id": _payload_value(chunk.project_id),
+        "content_id": _payload_value(chunk.content_id),
+        "slot": _payload_value(chunk.slot),
         "platform": _payload_value(chunk.platform),
         "source_type": _payload_value(chunk.source_type),
         "chunk_index": _payload_value(chunk.chunk_index),
@@ -269,6 +275,7 @@ def _payload_text(value: Any) -> str:
 def _project_search_filter(
     project_id: str,
     platform: str | None = None,
+    slot: str | None = None,
     source_type: str | None = None,
 ) -> Filter:
     conditions = [
@@ -283,6 +290,14 @@ def _project_search_filter(
             FieldCondition(
                 key="platform",
                 match=MatchValue(value=platform),
+            )
+        )
+
+    if slot is not None:
+        conditions.append(
+            FieldCondition(
+                key="slot",
+                match=MatchValue(value=slot),
             )
         )
 

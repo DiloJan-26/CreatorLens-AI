@@ -4,20 +4,21 @@ import { useState } from "react";
 
 import { getTranscriptPreview } from "@/lib/api";
 import type {
+  ContentItem,
   TranscriptPreviewResponse,
   TranscriptSegment,
 } from "@/types/project";
 
 type TranscriptPreviewPanelProps = {
   projectId: string | null;
-  platform: "youtube" | "instagram";
-  title: string;
+  item: ContentItem | null;
+  label: "Content 1" | "Content 2";
 };
 
 export function TranscriptPreviewPanel({
   projectId,
-  platform,
-  title,
+  item,
+  label,
 }: TranscriptPreviewPanelProps) {
   const [preview, setPreview] = useState<TranscriptPreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +34,14 @@ export function TranscriptPreviewPanel({
     setError(null);
 
     try {
-      const transcriptPreview = await getTranscriptPreview(projectId, platform, 5);
+      const transcriptPreview = await getTranscriptPreview(
+        projectId,
+        {
+          slot: item?.slot ?? null,
+          platform: item?.platform ?? null,
+        },
+        5,
+      );
       setPreview(transcriptPreview);
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -48,9 +56,11 @@ export function TranscriptPreviewPanel({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            {platform === "youtube" ? "YouTube" : "Instagram"}
+            {label} {item ? `· ${platformLabel(item.platform)}` : ""}
           </p>
-          <h2 className="mt-2 text-base font-semibold text-slate-950">{title}</h2>
+          <h2 className="mt-2 text-base font-semibold text-slate-950">
+            Transcript Preview
+          </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Transcript preview for indexing readiness.
           </p>
@@ -58,7 +68,7 @@ export function TranscriptPreviewPanel({
         <button
           type="button"
           onClick={handleLoadPreview}
-          disabled={isLoading || !projectId}
+          disabled={isLoading || !projectId || !item}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {isLoading ? "Loading..." : "Load transcript preview"}
@@ -78,7 +88,7 @@ export function TranscriptPreviewPanel({
           </p>
           {!preview.transcript_available || preview.segments.length === 0 ? (
             <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Transcript unavailable for this platform.
+              Transcript unavailable for this content item.
             </p>
           ) : (
             <ol className="mt-3 grid gap-3">
@@ -97,6 +107,22 @@ export function TranscriptPreviewPanel({
       ) : null}
     </section>
   );
+}
+
+function platformLabel(platform: string): string {
+  if (platform === "youtube") {
+    return "YouTube";
+  }
+
+  if (platform === "instagram") {
+    return "Instagram";
+  }
+
+  if (platform === "facebook") {
+    return "Facebook";
+  }
+
+  return platform;
 }
 
 function SegmentTimestamp({ segment }: { segment: TranscriptSegment }) {

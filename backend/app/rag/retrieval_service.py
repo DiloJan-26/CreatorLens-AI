@@ -47,6 +47,7 @@ def retrieve_project_chunks(
 
     top_k = max(1, min(request.top_k, 12))
     platform = request.platform
+    slot = request.slot
     source_type = request.source_type
     query_vector = embed_query(query)
     search_results = search_project_chunks(
@@ -54,6 +55,7 @@ def retrieve_project_chunks(
         query_vector=query_vector,
         top_k=top_k,
         platform=platform,
+        slot=slot,
         source_type=source_type,
     )
     retrieved_chunks = [
@@ -66,6 +68,7 @@ def retrieve_project_chunks(
         project_id=project_id,
         query=query,
         applied_platform=platform,
+        applied_slot=slot,
         applied_source_type=source_type,
         total_results=len(retrieved_chunks),
         results=retrieved_chunks,
@@ -87,6 +90,8 @@ def _retrieved_chunk_from_result(result: dict[str, Any]) -> RetrievedChunk | Non
         return None
 
     return RetrievedChunk(
+        content_id=_string_value(payload.get("content_id")),
+        slot=_string_value(payload.get("slot")),
         platform=platform,
         source_type=source_type,
         score=_float_value(result.get("score")) or 0.0,

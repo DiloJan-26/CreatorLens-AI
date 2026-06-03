@@ -6,8 +6,8 @@ from urllib.parse import parse_qs, urlparse
 from youtube_transcript_api import YouTubeTranscriptApi
 from yt_dlp import YoutubeDL
 
+from app.extractors.metadata_normalizer import normalize_metadata
 from app.models.video import TranscriptSegment, VideoExtractionResult, VideoMetadata
-from app.services.metrics_service import calculate_engagement_rate
 
 
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([A-Za-z0-9_]+)")
@@ -72,7 +72,7 @@ def extract_hashtags(
     return normalized
 
 
-def fetch_youtube_metadata(url: str) -> dict[str, Any]:
+def fetch_youtube_info(url: str) -> dict[str, Any]:
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -86,24 +86,17 @@ def fetch_youtube_metadata(url: str) -> dict[str, Any]:
     if not isinstance(info, dict):
         raise ValueError("Could not read YouTube metadata.")
 
-    title = _as_optional_string(info.get("title"))
-    description = _as_optional_string(info.get("description"))
-    tags = _as_string_list(info.get("tags"))
+    return info
 
-    return {
-        "title": title,
-        "creator": _as_optional_string(info.get("channel"))
-        or _as_optional_string(info.get("uploader")),
-        "views": _as_optional_int(info.get("view_count")),
-        "likes": _as_optional_int(info.get("like_count")),
-        "comments": _as_optional_int(info.get("comment_count")),
-        "duration_seconds": _as_optional_int(info.get("duration")),
-        "upload_date": _format_upload_date(info.get("upload_date")),
-        "description": description,
-        "tags": tags,
-        "hashtags": extract_hashtags(title, description, tags),
-        "webpage_url": _as_optional_string(info.get("webpage_url")),
-    }
+
+def fetch_youtube_metadata(url: str) -> dict[str, Any]:
+    return normalize_metadata(
+        platform="youtube",
+        url=url,
+        info=fetch_youtube_info(url),
+        metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
+        transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
+    ).model_dump()
 
 
 def fetch_youtube_transcript(video_id: str) -> list[TranscriptSegment]:
@@ -139,7 +132,7 @@ def fetch_youtube_transcript(video_id: str) -> list[TranscriptSegment]:
 def extract_youtube_video(url: str) -> VideoExtractionResult:
     try:
         video_id = extract_youtube_video_id(url)
-        metadata = fetch_youtube_metadata(url)
+        info = fetch_youtube_info(url)
         transcript_segments = fetch_youtube_transcript(video_id)
     except Exception as exc:
         return VideoExtractionResult(
@@ -154,25 +147,12 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
             transcript_segments=[],
         )
 
-    views = metadata.get("views")
-    likes = metadata.get("likes")
-    comments = metadata.get("comments")
     transcript_available = len(transcript_segments) > 0
 
-    video_metadata = VideoMetadata(
+    video_metadata = normalize_metadata(
         platform="youtube",
-        url=metadata.get("webpage_url") or url,
-        title=metadata.get("title"),
-        description=metadata.get("description"),
-        creator=metadata.get("creator"),
-        follower_count=None,
-        views=views,
-        likes=likes,
-        comments=comments,
-        hashtags=metadata.get("hashtags") or [],
-        upload_date=metadata.get("upload_date"),
-        duration_seconds=metadata.get("duration_seconds"),
-        engagement_rate=calculate_engagement_rate(likes, comments, views),
+        url=url,
+        info=info,
         transcript_available=transcript_available,
         transcript_segment_count=len(transcript_segments),
         extraction_status="ready",

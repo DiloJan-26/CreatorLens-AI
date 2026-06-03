@@ -52,8 +52,8 @@ export function ProjectStatusCard({
             </div>
           </dl>
           <p className="mt-4 text-sm leading-6 text-slate-600">
-            YouTube and Instagram extraction run together. Missing public
-            metrics remain unavailable instead of being estimated.
+            Content extraction runs for both URLs. Missing public metrics
+            remain unavailable instead of being estimated.
           </p>
         </div>
       ) : null}

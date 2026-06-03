@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 
+import { ContentCard } from "@/components/ContentCard";
 import { CreatorChatPanel } from "@/components/CreatorChatPanel";
+import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
 import { ProjectStatusCard } from "@/components/ProjectStatusCard";
 import { RagIndexPanel } from "@/components/RagIndexPanel";
 import { RetrievalTestPanel } from "@/components/RetrievalTestPanel";
 import { SystemStatusCard } from "@/components/SystemStatusCard";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
-import { VideoInsightCard } from "@/components/VideoInsightCard";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import { checkBackend, createProject, extractProject } from "@/lib/api";
 import type {
@@ -18,8 +19,8 @@ import type {
 } from "@/types/project";
 
 export default function Home() {
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [instagramUrl, setInstagramUrl] = useState("");
+  const [content1Url, setContent1Url] = useState("");
+  const [content2Url, setContent2Url] = useState("");
   const [backendStatus, setBackendStatus] = useState(
     "Backend status has not been checked yet.",
   );
@@ -66,12 +67,12 @@ export default function Home() {
 
     try {
       const created = await createProject({
-        youtube_url: youtubeUrl,
-        instagram_url: instagramUrl,
+        content_1_url: content1Url,
+        content_2_url: content2Url,
       });
 
       setCreatedProject(created);
-      setProgressMessage("Extracting YouTube and Instagram data...");
+      setProgressMessage("Extracting public metadata and transcripts...");
 
       const detail = await extractProject(created.project_id);
 
@@ -97,12 +98,12 @@ export default function Home() {
         <div className="grid flex-1 gap-10 lg:grid-cols-[1fr_440px]">
           <section className="max-w-3xl">
             <h1 className="text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
-              Compare Shorts and Reels with cited creator intelligence.
+              Compare Any Two Shorts/Reels with cited creator intelligence.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Analyze YouTube Shorts and Instagram Reels, build a vector
-              search index, and retrieve cited creator insights from
-              transcripts, captions, descriptions, hashtags, and metadata.
+              Analyze YouTube Shorts, Instagram Reels, and Facebook Reels/post
+              videos, then retrieve cited creator insights from transcripts,
+              captions, descriptions, hashtags, and metadata.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -121,24 +122,24 @@ export default function Home() {
           </section>
 
           <VideoUrlForm
-            youtubeUrl={youtubeUrl}
-            instagramUrl={instagramUrl}
-            setYoutubeUrl={setYoutubeUrl}
-            setInstagramUrl={setInstagramUrl}
+            content1Url={content1Url}
+            content2Url={content2Url}
+            setContent1Url={setContent1Url}
+            setContent2Url={setContent2Url}
             onSubmit={handleAnalyzeVideos}
             isSubmitting={isSubmitting}
           />
         </div>
 
         <section className="mt-10 grid gap-4 lg:grid-cols-2">
-          <VideoInsightCard
-            platform="youtube"
-            metadata={projectDetail?.youtube ?? null}
+          <ContentCard
+            label="Content 1"
+            item={contentItem(projectDetail, "content_1")}
             isPending={isSubmitting}
           />
-          <VideoInsightCard
-            platform="instagram"
-            metadata={projectDetail?.instagram ?? null}
+          <ContentCard
+            label="Content 2"
+            item={contentItem(projectDetail, "content_2")}
             isPending={isSubmitting}
           />
         </section>
@@ -148,14 +149,18 @@ export default function Home() {
             <section className="mt-4 grid gap-4 lg:grid-cols-2">
               <TranscriptPreviewPanel
                 projectId={projectDetail.project_id}
-                platform="youtube"
-                title="YouTube transcript preview"
+                item={contentItem(projectDetail, "content_1")}
+                label="Content 1"
               />
               <TranscriptPreviewPanel
                 projectId={projectDetail.project_id}
-                platform="instagram"
-                title="Instagram transcript preview"
+                item={contentItem(projectDetail, "content_2")}
+                label="Content 2"
               />
+            </section>
+
+            <section className="mt-4 grid gap-4">
+              <MetadataAvailabilityPanel projectId={projectDetail.project_id} />
             </section>
 
             <section className="mt-4 grid gap-4">
@@ -176,6 +181,15 @@ export default function Home() {
         ) : null}
       </section>
     </main>
+  );
+}
+
+function contentItem(
+  projectDetail: ProjectDetailResponse | null,
+  slot: "content_1" | "content_2",
+) {
+  return (
+    projectDetail?.content_items.find((item) => item.slot === slot) ?? null
   );
 }
 

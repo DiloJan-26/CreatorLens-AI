@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from yt_dlp import YoutubeDL
 
+from app.extractors.metadata_normalizer import normalize_metadata
 from app.models.video import VideoExtractionResult, VideoMetadata
-from app.services.metrics_service import calculate_engagement_rate
 from app.services.transcription_service import transcribe_instagram_audio_url
 
 
@@ -178,41 +178,16 @@ def normalize_instagram_metadata(
     transcript_available: bool = False,
     error_message: str | None = None,
 ) -> VideoMetadata:
-    title = _as_optional_string(info.get("title")) or _as_optional_string(
-        info.get("description")
-    )
-    description = _as_optional_string(info.get("description")) or title
-    tags = _as_string_list(info.get("tags"))
-    views = safe_int(info.get("view_count"))
-    likes = safe_int(info.get("like_count"))
-    comments = safe_int(info.get("comment_count"))
     extraction_status = "ready" if transcript_available else "partial"
     safe_message = _safe_error_message(error_message or "") if error_message else None
 
     if extraction_status == "partial" and safe_message is None:
         safe_message = "Instagram transcript not extracted yet."
 
-    return VideoMetadata(
+    return normalize_metadata(
         platform=INSTAGRAM_PLATFORM,
-        url=_as_optional_string(info.get("webpage_url")) or url,
-        title=title,
-        description=description,
-        creator=(
-            _as_optional_string(info.get("uploader"))
-            or _as_optional_string(info.get("channel"))
-            or _as_optional_string(info.get("creator"))
-            or _as_optional_string(info.get("uploader_id"))
-        ),
-        follower_count=None,
-        views=views,
-        likes=likes,
-        comments=comments,
-        hashtags=extract_instagram_hashtags(title, description, *tags),
-        upload_date=normalize_instagram_upload_date(
-            info.get("upload_date") or info.get("timestamp")
-        ),
-        duration_seconds=safe_int(info.get("duration")),
-        engagement_rate=calculate_engagement_rate(likes, comments, views),
+        url=url,
+        info=info,
         transcript_available=transcript_available,
         transcript_segment_count=transcript_segment_count,
         extraction_status=extraction_status,
@@ -273,7 +248,7 @@ def extract_instagram_video(url: str) -> VideoExtractionResult:
     )
 
 
-def debug_instagram_metadata(url: str) -> dict[str, Any]:
+def inspect_instagram_metadata(url: str) -> dict[str, Any]:
     info = fetch_instagram_info(url)
     metadata = normalize_instagram_metadata(url, info)
 

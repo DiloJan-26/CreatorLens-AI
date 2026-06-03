@@ -8,11 +8,28 @@ class RetrievalPlan(TypedDict):
     retrieve: bool
     source_type: str | None
     platform: str | None
+    slot: str | None
     top_k: int
 
 
 def classify_question(message: str) -> QuestionIntent:
     normalized_message = _normalize(message)
+
+    if _contains_any(
+        normalized_message,
+        [
+            "facebook",
+            "meta",
+            "cross-post",
+            "cross post",
+            "combined engagement",
+            "combined meta",
+            "verified metrics",
+            "metric completeness",
+            "follower count",
+        ],
+    ):
+        return "metrics"
 
     if _contains_any(
         normalized_message,
@@ -96,6 +113,7 @@ def classify_question(message: str) -> QuestionIntent:
 
 def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
     inferred_platform = _infer_platform(message)
+    inferred_slot = _infer_slot(message)
 
     if intent == "metrics":
         return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
@@ -111,19 +129,33 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
             retrieve=True,
             source_type=None,
             platform=inferred_platform,
+            slot=inferred_slot,
             top_k=6,
         )
 
     if intent == "performance_reasoning":
-        return _plan(retrieve=True, source_type=None, platform=None, top_k=8)
+        return _plan(
+            retrieve=True,
+            source_type=None,
+            platform=inferred_platform,
+            slot=inferred_slot,
+            top_k=8,
+        )
 
     if intent == "improvement_suggestions":
-        return _plan(retrieve=True, source_type=None, platform=None, top_k=8)
+        return _plan(
+            retrieve=True,
+            source_type=None,
+            platform=inferred_platform,
+            slot=None,
+            top_k=8,
+        )
 
     return _plan(
         retrieve=True,
         source_type=None,
         platform=inferred_platform,
+        slot=inferred_slot,
         top_k=6,
     )
 
@@ -133,12 +165,14 @@ def _plan(
     source_type: str | None,
     platform: str | None,
     top_k: int,
+    slot: str | None = None,
 ) -> RetrievalPlan:
     return {
         "use_structured_metadata": True,
         "retrieve": retrieve,
         "source_type": source_type,
         "platform": platform,
+        "slot": slot,
         "top_k": top_k,
     }
 
@@ -147,12 +181,46 @@ def _infer_platform(message: str) -> str | None:
     normalized_message = _normalize(message)
     mentions_youtube = "youtube" in normalized_message
     mentions_instagram = "instagram" in normalized_message
+    mentions_facebook = "facebook" in normalized_message
 
-    if mentions_youtube and not mentions_instagram:
+    mentioned_platforms = [
+        platform
+        for platform, mentioned in (
+            ("youtube", mentions_youtube),
+            ("instagram", mentions_instagram),
+            ("facebook", mentions_facebook),
+        )
+        if mentioned
+    ]
+
+    if len(mentioned_platforms) == 1:
+        return mentioned_platforms[0]
+
+    if mentions_youtube and not mentions_instagram and not mentions_facebook:
         return "youtube"
 
-    if mentions_instagram and not mentions_youtube:
+    if mentions_instagram and not mentions_youtube and not mentions_facebook:
         return "instagram"
+
+    return None
+
+
+def _infer_slot(message: str) -> str | None:
+    normalized_message = _normalize(message)
+    mentions_content_1 = (
+        "content 1" in normalized_message
+        or "content one" in normalized_message
+    )
+    mentions_content_2 = (
+        "content 2" in normalized_message
+        or "content two" in normalized_message
+    )
+
+    if mentions_content_1 and not mentions_content_2:
+        return "content_1"
+
+    if mentions_content_2 and not mentions_content_1:
+        return "content_2"
 
     return None
 

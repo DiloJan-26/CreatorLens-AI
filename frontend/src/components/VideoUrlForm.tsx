@@ -2,19 +2,19 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 
 type VideoUrlFormProps = {
-  youtubeUrl: string;
-  instagramUrl: string;
-  setYoutubeUrl: (value: string) => void;
-  setInstagramUrl: (value: string) => void;
+  content1Url: string;
+  content2Url: string;
+  setContent1Url: (value: string) => void;
+  setContent2Url: (value: string) => void;
   onSubmit: () => void;
   isSubmitting: boolean;
 };
 
 export function VideoUrlForm({
-  youtubeUrl,
-  instagramUrl,
-  setYoutubeUrl,
-  setInstagramUrl,
+  content1Url,
+  content2Url,
+  setContent1Url,
+  setContent2Url,
   onSubmit,
   isSubmitting,
 }: VideoUrlFormProps) {
@@ -25,8 +25,15 @@ export function VideoUrlForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!youtubeUrl.trim() || !instagramUrl.trim()) {
-      setValidationMessage("Enter both YouTube and Instagram URLs.");
+    if (!content1Url.trim() || !content2Url.trim()) {
+      setValidationMessage("Enter Content URL 1 and Content URL 2.");
+      return;
+    }
+
+    if (!isSupportedUrl(content1Url) || !isSupportedUrl(content2Url)) {
+      setValidationMessage(
+        "Use a YouTube Short, Instagram Reel, or Facebook Reel/post video URL.",
+      );
       return;
     }
 
@@ -38,18 +45,18 @@ export function VideoUrlForm({
     <form onSubmit={handleSubmit} className="grid gap-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
         <UrlCard
-          label="YouTube"
-          title="YouTube Short URL"
+          label="Content 1"
+          title="Content URL 1"
           placeholder="https://www.youtube.com/shorts/..."
-          value={youtubeUrl}
-          onChange={setYoutubeUrl}
+          value={content1Url}
+          onChange={setContent1Url}
         />
         <UrlCard
-          label="Instagram"
-          title="Instagram Reel URL"
+          label="Content 2"
+          title="Content URL 2"
           placeholder="https://www.instagram.com/reel/..."
-          value={instagramUrl}
-          onChange={setInstagramUrl}
+          value={content2Url}
+          onChange={setContent2Url}
         />
       </div>
 
@@ -61,10 +68,10 @@ export function VideoUrlForm({
 
       <button
         type="submit"
-        disabled={isSubmitting || !youtubeUrl.trim() || !instagramUrl.trim()}
+        disabled={isSubmitting || !content1Url.trim() || !content2Url.trim()}
         className="inline-flex h-11 items-center justify-center rounded-md bg-teal-700 px-5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-400"
       >
-        {isSubmitting ? "Creating project..." : "Analyze Videos"}
+        {isSubmitting ? "Creating project..." : "Analyze Content"}
       </button>
     </form>
   );
@@ -92,6 +99,10 @@ function UrlCard({
       </p>
       <label className="mt-3 block text-sm font-medium text-slate-900">
         {title}
+        <span className="mt-1 block text-sm font-normal leading-6 text-slate-600">
+          Paste any supported short-form URL: YouTube Short, Instagram Reel, or
+          Facebook Reel/post video.
+        </span>
         <input
           type="url"
           placeholder={placeholder}
@@ -102,4 +113,45 @@ function UrlCard({
       </label>
     </section>
   );
+}
+
+function isSupportedUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const path = url.pathname.toLowerCase();
+
+    if (host === "youtu.be") {
+      return Boolean(path.replace("/", ""));
+    }
+
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      return path.startsWith("/shorts/") || path === "/watch";
+    }
+
+    if (host === "instagram.com" || host.endsWith(".instagram.com")) {
+      return (
+        path.startsWith("/reel/") ||
+        path.startsWith("/p/") ||
+        path.startsWith("/tv/")
+      );
+    }
+
+    if (host === "fb.watch") {
+      return Boolean(path.replace("/", ""));
+    }
+
+    if (host === "facebook.com" || host.endsWith(".facebook.com")) {
+      return (
+        path.startsWith("/reel/") ||
+        path.startsWith("/watch") ||
+        path.includes("/videos/") ||
+        path.startsWith("/share/r/")
+      );
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 }

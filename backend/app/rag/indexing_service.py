@@ -34,7 +34,7 @@ def index_project(project_id: str) -> IndexProjectResponse:
         return _failed_response(
             project_id=project_id,
             chunks=chunks,
-            message="No extracted YouTube or Instagram data found to index.",
+            message="No extracted content data found to index.",
         )
 
     if not is_qdrant_configured():

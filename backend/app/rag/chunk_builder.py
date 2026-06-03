@@ -3,6 +3,7 @@ import uuid
 from typing import Any
 
 from app.models.rag import RagChunk, RagPlatform, RagSourceType
+from app.services.metric_source_service import get_metric_summary
 from app.services.storage_service import (
     get_project_detail_record,
     get_transcript_segments,
@@ -21,16 +22,25 @@ def build_project_chunks(project_id: str) -> list[RagChunk]:
 
     chunks: list[RagChunk] = []
 
-    for platform in _platforms():
-        metadata = project.get(platform)
-
+    for metadata in project.get("content_items", []):
         if not isinstance(metadata, dict):
             continue
 
-        transcript_segments = get_transcript_segments(project_id, platform)
+        platform = metadata.get("platform")
+        slot = metadata.get("slot")
+
+        if platform not in {"youtube", "instagram", "facebook"}:
+            continue
+
+        transcript_segments = get_transcript_segments(
+            project_id=project_id,
+            platform=platform,
+            slot=slot,
+        )
         chunks.extend(
             _build_platform_chunks(
                 project_id=project_id,
+                slot=slot,
                 platform=platform,
                 metadata=metadata,
                 transcript_segments=transcript_segments,
@@ -42,23 +52,30 @@ def build_project_chunks(project_id: str) -> list[RagChunk]:
 
 def _build_platform_chunks(
     project_id: str,
+    slot: str | None,
     platform: RagPlatform,
     metadata: dict[str, Any],
     transcript_segments: list[dict[str, Any]],
 ) -> list[RagChunk]:
     chunks: list[RagChunk] = []
     chunk_index = 0
+    content_id = (
+        _optional_text(metadata.get("content_id"))
+        or _optional_text(metadata.get("id"))
+    )
 
     chunks.append(
         _make_chunk(
             project_id=project_id,
+            content_id=content_id,
+            slot=slot,
             platform=platform,
             source_type="metadata",
             chunk_index=chunk_index,
             title=_optional_text(metadata.get("title")),
             creator=_optional_text(metadata.get("creator")),
-            text=_metadata_text(platform, metadata),
-            citation_label=f"{_platform_label(platform)} · metadata",
+            text=_metadata_text(project_id, platform, metadata),
+            citation_label=_citation_label(slot, platform, "metadata", None, None),
         )
     )
     chunk_index += 1
@@ -70,13 +87,21 @@ def _build_platform_chunks(
         chunks.append(
             _make_chunk(
                 project_id=project_id,
+                content_id=content_id,
+                slot=slot,
                 platform=platform,
                 source_type="description",
                 chunk_index=chunk_index,
                 title=_optional_text(metadata.get("title")),
                 creator=_optional_text(metadata.get("creator")),
                 text=_description_text(platform, metadata, description),
-                citation_label=f"{_platform_label(platform)} · {description_label}",
+                citation_label=_citation_label(
+                    slot,
+                    platform,
+                    description_label,
+                    None,
+                    None,
+                ),
             )
         )
         chunk_index += 1
@@ -89,6 +114,8 @@ def _build_platform_chunks(
         chunks.append(
             _make_chunk(
                 project_id=project_id,
+                content_id=content_id,
+                slot=slot,
                 platform=platform,
                 source_type="hook",
                 chunk_index=chunk_index,
@@ -97,7 +124,7 @@ def _build_platform_chunks(
                 title=_optional_text(metadata.get("title")),
                 creator=_optional_text(metadata.get("creator")),
                 text=_segments_text(hook_segments),
-                citation_label=_citation_label(platform, "hook", start_time, end_time),
+                citation_label=_citation_label(slot, platform, "hook", start_time, end_time),
             )
         )
         chunk_index += 1
@@ -107,6 +134,8 @@ def _build_platform_chunks(
         chunks.append(
             _make_chunk(
                 project_id=project_id,
+                content_id=content_id,
+                slot=slot,
                 platform=platform,
                 source_type="transcript",
                 chunk_index=chunk_index,
@@ -116,6 +145,7 @@ def _build_platform_chunks(
                 creator=_optional_text(metadata.get("creator")),
                 text=_segments_text(transcript_chunk_segments),
                 citation_label=_citation_label(
+                    slot,
                     platform,
                     "transcript",
                     start_time,
@@ -128,23 +158,39 @@ def _build_platform_chunks(
     return chunks
 
 
-def _metadata_text(platform: RagPlatform, metadata: dict[str, Any]) -> str:
-    return "\n".join(
-        [
-            f"Platform: {_platform_label(platform)}",
-            f"Title: {_display_value(metadata.get('title'))}",
-            f"Creator: {_display_value(metadata.get('creator'))}",
-            f"Views: {_display_number(metadata.get('views'))}",
-            f"Likes: {_display_number(metadata.get('likes'))}",
-            f"Comments: {_display_number(metadata.get('comments'))}",
-            f"Engagement rate: {_display_percent(metadata.get('engagement_rate'))}",
-            f"Follower count: {_display_number(metadata.get('follower_count'))}",
-            f"Duration seconds: {_display_number(metadata.get('duration_seconds'))}",
-            f"Upload date: {_display_value(metadata.get('upload_date'))}",
-            f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
-            f"Metric source note: {_display_value(metadata.get('metric_source_note'))}",
-        ]
-    )
+def _metadata_text(
+    project_id: str,
+    platform: RagPlatform,
+    metadata: dict[str, Any],
+) -> str:
+    lines = [
+        f"Platform: {_platform_label(platform)}",
+        f"Content slot: {_slot_label(_optional_text(metadata.get('slot')))}",
+        f"Title: {_display_value(metadata.get('title'))}",
+        f"Creator: {_display_value(metadata.get('creator'))}",
+        "Confirmed public metrics:",
+        f"Views: {_display_number(metadata.get('views'))}",
+        f"Likes: {_display_number(metadata.get('likes'))}",
+        f"Reactions: {_display_number(metadata.get('reactions'))}",
+        f"Comments: {_display_number(metadata.get('comments'))}",
+        f"Shares: {_display_number(metadata.get('shares'))}",
+        f"Engagement rate: {_display_percent(metadata.get('engagement_rate'))}",
+        f"Follower count: {_display_number(metadata.get('follower_count'))}",
+        f"Subscriber count: {_display_number(metadata.get('subscriber_count'))}",
+        f"Duration seconds: {_display_number(metadata.get('duration_seconds'))}",
+        f"Upload date: {_display_value(metadata.get('upload_date'))}",
+        f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
+        f"Available fields: {_display_field_list(_available_fields(metadata))}",
+        f"Missing fields: {_display_field_list(metadata.get('missing_fields'))}",
+        f"Metric source note: {_display_value(metadata.get('metric_source_note'))}",
+        f"Transcript source note: {_display_value(metadata.get('transcript_source_note'))}",
+    ]
+    metric_source_text = _metric_source_text(project_id, platform)
+
+    if metric_source_text:
+        lines.append(metric_source_text)
+
+    return "\n".join(lines)
 
 
 def _description_text(
@@ -156,6 +202,7 @@ def _description_text(
 
     return "\n".join(
         [
+            f"Content slot: {_slot_label(_optional_text(metadata.get('slot')))}",
             f"Platform: {_platform_label(platform)}",
             f"Title: {_display_value(metadata.get('title'))}",
             f"{description_name}: {description}",
@@ -208,6 +255,8 @@ def _transcript_chunk_segments(
 
 def _make_chunk(
     project_id: str,
+    content_id: str | None,
+    slot: str | None,
     platform: RagPlatform,
     source_type: RagSourceType,
     chunk_index: int,
@@ -218,17 +267,19 @@ def _make_chunk(
     title: str | None = None,
     creator: str | None = None,
 ) -> RagChunk:
-    content_hash = _content_hash(project_id, platform, source_type, text)
+    content_hash = _content_hash(project_id, slot, platform, source_type, text)
     chunk_id = str(
         uuid.uuid5(
             uuid.NAMESPACE_URL,
-            f"creatorlens:{project_id}:{platform}:{source_type}:{chunk_index}:{content_hash}",
+            f"creatorlens:{project_id}:{slot}:{platform}:{source_type}:{chunk_index}:{content_hash}",
         )
     )
 
     return RagChunk(
         chunk_id=chunk_id,
         project_id=project_id,
+        content_id=content_id,
+        slot=slot,  # type: ignore[arg-type]
         platform=platform,
         source_type=source_type,
         chunk_index=chunk_index,
@@ -245,26 +296,28 @@ def _make_chunk(
 
 def _content_hash(
     project_id: str,
+    slot: str | None,
     platform: RagPlatform,
     source_type: RagSourceType,
     text: str,
 ) -> str:
-    raw_content = f"{project_id}|{platform}|{source_type}|{text}"
+    raw_content = f"{project_id}|{slot}|{platform}|{source_type}|{text}"
     return hashlib.sha256(raw_content.encode("utf-8")).hexdigest()
 
 
 def _citation_label(
+    slot: str | None,
     platform: RagPlatform,
     source_label: str,
     start_time: float | None,
     end_time: float | None,
 ) -> str:
-    label = f"{_platform_label(platform)} · {source_label}"
+    label = f"{_slot_label(slot)} · {_platform_label(platform)} · {source_label}"
 
     if start_time is None or end_time is None:
         return label
 
-    return f"{label} · {_format_seconds(start_time)}–{_format_seconds(end_time)}"
+    return f"{label} · {_format_seconds(start_time)}-{_format_seconds(end_time)}"
 
 
 def _segment_time_range(segments: list[dict[str, Any]]) -> tuple[float | None, float | None]:
@@ -305,16 +358,154 @@ def _segments_length(segments: list[dict[str, Any]]) -> int:
     return len(_segments_text(segments))
 
 
-def _platforms() -> tuple[RagPlatform, RagPlatform]:
-    return "youtube", "instagram"
+def _metric_source_text(project_id: str, platform: RagPlatform) -> str:
+    try:
+        summary = get_metric_summary(project_id)
+    except Exception:
+        return ""
+
+    source_record = next(
+        (
+            record
+            for record in summary.records
+            if record.source_platform == platform and record.metric_scope == "native"
+        ),
+        None,
+    )
+    platform_status = _platform_status(summary, platform)
+    lines = [
+        "Metric Source Resolver:",
+        f"{_platform_label(platform)} native completeness status: {platform_status}",
+    ]
+
+    if source_record is not None:
+        lines.extend(
+            [
+                f"Metric source method: {source_record.source_method}",
+                f"Metric source confidence: {source_record.confidence}",
+                f"Verified followers: {_display_number(source_record.followers)}",
+                f"Unavailable native fields: {_missing_record_fields(source_record)}",
+            ]
+        )
+
+    if platform == "instagram":
+        lines.extend(
+            [
+                f"Facebook cross-post status: {summary.facebook_crosspost_status}",
+                f"Combined Meta engagement rate: {_display_percent(summary.combined_meta_engagement_rate)}",
+                f"Combined Meta views: {_display_number(summary.combined_meta_views)}",
+                f"Combined Meta interactions: {_display_number(summary.combined_meta_interactions)}",
+            ]
+        )
+
+    lines.append("Rule: unavailable metrics must not be estimated.")
+
+    return "\n".join(lines)
+
+
+def _missing_record_fields(record: Any) -> str:
+    missing_fields = [
+        field_name
+        for field_name in (
+            "views",
+            "likes",
+            "reactions",
+            "comments",
+            "shares",
+            "followers",
+            "engagement_rate",
+        )
+        if getattr(record, field_name, None) is None
+    ]
+
+    return ", ".join(missing_fields) if missing_fields else "None"
+
+
+def _platform_status(summary: Any, platform: RagPlatform) -> str:
+    if platform == "youtube":
+        return str(summary.youtube_status)
+
+    if platform == "instagram":
+        return str(summary.instagram_native_status)
+
+    matching_record = next(
+        (
+            record
+            for record in summary.records
+            if record.source_platform == platform and record.metric_scope == "native"
+        ),
+        None,
+    )
+
+    if matching_record is None:
+        return "unavailable"
+
+    missing_fields = _missing_record_fields(matching_record)
+    return "complete" if missing_fields == "None" else "partial"
+
+
+def _available_fields(metadata: dict[str, Any]) -> list[str]:
+    field_values = {
+        "transcript": bool(metadata.get("transcript_available")),
+        "views": metadata.get("views") is not None,
+        "likes": metadata.get("likes") is not None,
+        "reactions": metadata.get("reactions") is not None,
+        "comments": metadata.get("comments") is not None,
+        "shares": metadata.get("shares") is not None,
+        "creator": _optional_text(metadata.get("creator")) is not None,
+        "follower_count": metadata.get("follower_count") is not None,
+        "subscriber_count": metadata.get("subscriber_count") is not None,
+        "hashtags": bool(metadata.get("hashtags")),
+        "upload_date": metadata.get("upload_date") is not None,
+        "duration_seconds": metadata.get("duration_seconds") is not None,
+        "engagement_rate": metadata.get("engagement_rate") is not None,
+    }
+
+    return [
+        field_name
+        for field_name, is_available in field_values.items()
+        if is_available
+    ]
+
+
+def _display_field_list(value: Any) -> str:
+    if not isinstance(value, list) or not value:
+        return "Unavailable"
+
+    fields = [
+        str(item).replace("_", " ")
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+
+    return ", ".join(fields) if fields else "Unavailable"
 
 
 def _platform_label(platform: RagPlatform) -> str:
-    return "YouTube" if platform == "youtube" else "Instagram"
+    if platform == "youtube":
+        return "YouTube"
+
+    if platform == "instagram":
+        return "Instagram"
+
+    if platform == "facebook":
+        return "Facebook"
+
+    return platform
 
 
 def _description_label(platform: RagPlatform) -> str:
     return "caption" if platform == "instagram" else "description"
+
+
+def _slot_label(slot: str | None) -> str:
+    if slot == "content_1":
+        return "Content 1"
+
+    if slot == "content_2":
+        return "Content 2"
+
+    return "Content"
 
 
 def _display_value(value: Any) -> str:
