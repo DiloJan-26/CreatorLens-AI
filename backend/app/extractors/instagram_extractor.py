@@ -7,7 +7,10 @@ from yt_dlp import YoutubeDL
 
 from app.extractors.metadata_normalizer import normalize_metadata
 from app.models.video import VideoExtractionResult, VideoMetadata
-from app.services.transcription_service import transcribe_instagram_audio_url
+from app.services.transcription_service import (
+    TranscriptionUnavailableError,
+    transcribe_instagram_audio_url_with_metadata,
+)
 
 
 INSTAGRAM_PLATFORM = "instagram"
@@ -18,12 +21,10 @@ INSTAGRAM_METRIC_SOURCE_NOTE = (
     "be included."
 )
 INSTAGRAM_TRANSCRIPT_AVAILABLE_NOTE = (
-    "Transcript generated from Instagram audio using Deepgram when a public "
-    "audio URL is available."
+    "Transcript generated from public media audio using Deepgram multilingual transcription."
 )
 INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE = (
-    "Instagram audio transcription was unavailable or failed; metadata was "
-    "preserved."
+    "Transcript unavailable because audio transcription failed or public media audio could not be extracted."
 )
 
 
@@ -176,6 +177,11 @@ def normalize_instagram_metadata(
     info: dict[str, Any],
     transcript_segment_count: int = 0,
     transcript_available: bool = False,
+    transcript_language: str | None = None,
+    detected_language: str | None = None,
+    language_confidence: float | None = None,
+    transcript_source: str | None = None,
+    transcript_source_note: str | None = None,
     error_message: str | None = None,
 ) -> VideoMetadata:
     extraction_status = "ready" if transcript_available else "partial"
@@ -190,10 +196,16 @@ def normalize_instagram_metadata(
         info=info,
         transcript_available=transcript_available,
         transcript_segment_count=transcript_segment_count,
+        transcript_language=transcript_language,
+        detected_language=detected_language,
+        language_confidence=language_confidence,
+        transcript_source=transcript_source
+        or ("unavailable" if not transcript_available else None),
         extraction_status=extraction_status,
         error_message=safe_message,
         metric_source_note=INSTAGRAM_METRIC_SOURCE_NOTE,
-        transcript_source_note=(
+        transcript_source_note=transcript_source_note
+        or (
             INSTAGRAM_TRANSCRIPT_AVAILABLE_NOTE
             if transcript_available
             else INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE
@@ -224,21 +236,36 @@ def extract_instagram_video(url: str) -> VideoExtractionResult:
     if metadata.extraction_status == "failed":
         return VideoExtractionResult(metadata=metadata, transcript_segments=[])
 
-    transcript_segments = transcribe_instagram_audio_url(audio_url)
+    try:
+        transcript_result = transcribe_instagram_audio_url_with_metadata(audio_url)
+    except TranscriptionUnavailableError:
+        transcript_result = None
+
+    transcript_segments = transcript_result.segments if transcript_result else []
 
     if transcript_segments:
         metadata.transcript_available = True
         metadata.transcript_segment_count = len(transcript_segments)
+        metadata.transcript_language = transcript_result.transcript_language
+        metadata.detected_language = transcript_result.detected_language
+        metadata.language_confidence = transcript_result.language_confidence
+        metadata.transcript_source = transcript_result.transcript_source
         metadata.extraction_status = "ready"
         metadata.error_message = None
-        metadata.transcript_source_note = INSTAGRAM_TRANSCRIPT_AVAILABLE_NOTE
+        metadata.transcript_source_note = (
+            transcript_result.transcript_source_note or INSTAGRAM_TRANSCRIPT_AVAILABLE_NOTE
+        )
     else:
         metadata.transcript_available = False
         metadata.transcript_segment_count = 0
+        metadata.transcript_language = None
+        metadata.detected_language = None
+        metadata.language_confidence = None
+        metadata.transcript_source = "unavailable"
         metadata.extraction_status = "partial"
         metadata.error_message = (
             "Instagram metadata extracted, but transcript was unavailable from "
-            "audio transcription."
+            "best-effort transcription."
         )
         metadata.transcript_source_note = INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE
 
@@ -268,6 +295,7 @@ def build_failed_instagram_result(url: str, message: str) -> VideoExtractionResu
             error_message=_safe_error_message(message),
             transcript_available=False,
             transcript_segment_count=0,
+            transcript_source="unavailable",
             metric_source_note=INSTAGRAM_METRIC_SOURCE_NOTE,
             transcript_source_note=INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE,
         ),

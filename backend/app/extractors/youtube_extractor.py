@@ -6,8 +6,14 @@ from urllib.parse import parse_qs, urlparse
 from youtube_transcript_api import YouTubeTranscriptApi
 from yt_dlp import YoutubeDL
 
-from app.extractors.metadata_normalizer import normalize_metadata
+from app.core.config import get_settings
+from app.extractors.metadata_normalizer import extract_best_audio_url, normalize_metadata
 from app.models.video import TranscriptSegment, VideoExtractionResult, VideoMetadata
+from app.services.transcription_service import (
+    TranscriptionResult,
+    TranscriptionUnavailableError,
+    transcribe_audio_url_with_deepgram,
+)
 
 
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([A-Za-z0-9_]+)")
@@ -19,7 +25,7 @@ YOUTUBE_TRANSCRIPT_AVAILABLE_NOTE = (
     "Transcript extracted from YouTube captions/subtitles when available."
 )
 YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE = (
-    "YouTube captions/subtitles were unavailable for this video."
+    "Transcript unavailable because no captions were found and public media audio could not be extracted."
 )
 
 
@@ -100,7 +106,11 @@ def fetch_youtube_metadata(url: str) -> dict[str, Any]:
 
 
 def fetch_youtube_transcript(video_id: str) -> list[TranscriptSegment]:
-    raw_items = _fetch_transcript_items(video_id)
+    return fetch_youtube_transcript_with_metadata(video_id).segments
+
+
+def fetch_youtube_transcript_with_metadata(video_id: str) -> TranscriptionResult:
+    raw_items, language = _fetch_transcript_items(video_id)
     segments: list[TranscriptSegment] = []
 
     for item in raw_items:
@@ -126,14 +136,33 @@ def fetch_youtube_transcript(video_id: str) -> list[TranscriptSegment]:
             )
         )
 
-    return segments
+    if not segments:
+        return TranscriptionResult(
+            segments=[],
+            transcript_source="unavailable",
+            transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
+        )
+
+    return TranscriptionResult(
+        segments=segments,
+        transcript_language=language,
+        detected_language=language,
+        transcript_source="platform_captions",
+        transcript_source_note=(
+            "Transcript extracted from YouTube captions/subtitles. "
+            f"Language: {language or 'unknown'}."
+        ),
+    )
 
 
 def extract_youtube_video(url: str) -> VideoExtractionResult:
     try:
         video_id = extract_youtube_video_id(url)
         info = fetch_youtube_info(url)
-        transcript_segments = fetch_youtube_transcript(video_id)
+        transcript_result = fetch_youtube_transcript_with_metadata(video_id)
+
+        if not transcript_result.segments:
+            transcript_result = _transcribe_youtube_audio(info)
     except Exception as exc:
         return VideoExtractionResult(
             metadata=VideoMetadata(
@@ -141,12 +170,14 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
                 url=url,
                 extraction_status="failed",
                 error_message=_safe_error_message(exc),
+                transcript_source="unavailable",
                 metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
                 transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
             ),
             transcript_segments=[],
         )
 
+    transcript_segments = transcript_result.segments
     transcript_available = len(transcript_segments) > 0
 
     video_metadata = normalize_metadata(
@@ -155,13 +186,22 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         info=info,
         transcript_available=transcript_available,
         transcript_segment_count=len(transcript_segments),
-        extraction_status="ready",
-        error_message=None,
+        transcript_language=transcript_result.transcript_language,
+        detected_language=transcript_result.detected_language,
+        language_confidence=transcript_result.language_confidence,
+        transcript_source=transcript_result.transcript_source,
+        extraction_status="ready" if transcript_available else "partial",
+        error_message=(
+            None
+            if transcript_available
+            else "YouTube metadata extracted, but transcript was unavailable."
+        ),
         metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
         transcript_source_note=(
-            YOUTUBE_TRANSCRIPT_AVAILABLE_NOTE
+            transcript_result.transcript_source_note
             if transcript_available
-            else YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
+            else transcript_result.transcript_source_note
+            or YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
         ),
     )
 
@@ -171,10 +211,16 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     )
 
 
-def _fetch_transcript_items(video_id: str) -> Iterable[Any]:
+def _fetch_transcript_items(video_id: str) -> tuple[Iterable[Any], str | None]:
+    languages = get_settings().transcript_fallback_language_list or ["en", "hi", "ta"]
+
+    transcript_result = _fetch_transcript_from_list_api(video_id, languages)
+    if transcript_result is not None:
+        return transcript_result
+
     try:
         api = YouTubeTranscriptApi()
-        return api.fetch(video_id, languages=["en"])
+        return api.fetch(video_id, languages=languages), languages[0]
     except Exception:
         pass
 
@@ -183,17 +229,17 @@ def _fetch_transcript_items(video_id: str) -> Iterable[Any]:
         transcript_list = api.list(video_id)
 
         try:
-            transcript = transcript_list.find_transcript(["en"])
+            transcript = transcript_list.find_transcript(languages)
         except Exception:
             transcript = next(iter(transcript_list))
 
-        return transcript.fetch()
+        return transcript.fetch(), _transcript_language(transcript)
     except Exception:
         pass
 
     try:
         get_transcript = getattr(YouTubeTranscriptApi, "get_transcript")
-        return get_transcript(video_id, languages=["en"])
+        return get_transcript(video_id, languages=languages), languages[0]
     except Exception:
         pass
 
@@ -202,13 +248,79 @@ def _fetch_transcript_items(video_id: str) -> Iterable[Any]:
         transcript_list = list_transcripts(video_id)
 
         try:
-            transcript = transcript_list.find_transcript(["en"])
+            transcript = transcript_list.find_transcript(languages)
         except Exception:
             transcript = next(iter(transcript_list))
 
-        return transcript.fetch()
+        return transcript.fetch(), _transcript_language(transcript)
     except Exception:
-        return []
+        return [], None
+
+
+def _fetch_transcript_from_list_api(
+    video_id: str,
+    languages: list[str],
+) -> tuple[Iterable[Any], str | None] | None:
+    try:
+        api = YouTubeTranscriptApi()
+        transcript_list = api.list(video_id)
+    except Exception:
+        try:
+            list_transcripts = getattr(YouTubeTranscriptApi, "list_transcripts")
+            transcript_list = list_transcripts(video_id)
+        except Exception:
+            return None
+
+    for finder_name in (
+        "find_manually_created_transcript",
+        "find_generated_transcript",
+        "find_transcript",
+    ):
+        finder = getattr(transcript_list, finder_name, None)
+        if finder is None:
+            continue
+        try:
+            transcript = finder(languages)
+            return transcript.fetch(), _transcript_language(transcript)
+        except Exception:
+            continue
+
+    try:
+        transcript = next(iter(transcript_list))
+        return transcript.fetch(), _transcript_language(transcript)
+    except Exception:
+        return None
+
+
+def _transcribe_youtube_audio(info: dict[str, Any]) -> TranscriptionResult:
+    audio_url = extract_best_audio_url(info)
+
+    if not audio_url:
+        return TranscriptionResult(
+            segments=[],
+            transcript_source="unavailable",
+            transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
+        )
+
+    try:
+        return transcribe_audio_url_with_deepgram(audio_url)
+    except TranscriptionUnavailableError:
+        return TranscriptionResult(
+            segments=[],
+            transcript_source="unavailable",
+            transcript_source_note=(
+                "Transcript unavailable because audio transcription failed or public media audio could not be extracted."
+            ),
+        )
+
+
+def _transcript_language(transcript: Any) -> str | None:
+    for attribute in ("language_code", "language"):
+        value = getattr(transcript, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return None
 
 
 def _get_transcript_value(item: Any, key: str) -> Any:

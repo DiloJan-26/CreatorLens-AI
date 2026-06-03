@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -13,6 +14,16 @@ DEEPGRAM_WORDS_PER_SEGMENT = 12
 
 class TranscriptionUnavailableError(Exception):
     """Raised when a transcript cannot be produced for a media item."""
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    segments: list[TranscriptSegment]
+    transcript_language: str | None = None
+    detected_language: str | None = None
+    language_confidence: float | None = None
+    transcript_source: str | None = None
+    transcript_source_note: str | None = None
 
 
 def build_empty_transcript() -> list[TranscriptSegment]:
@@ -40,8 +51,9 @@ def transcript_segments_from_plain_text(text: str) -> list[TranscriptSegment]:
     return segments
 
 
-def transcribe_audio_url_with_deepgram(audio_url: str) -> list[TranscriptSegment]:
-    api_key = (get_settings().deepgram_api_key or "").strip()
+def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
+    settings = get_settings()
+    api_key = (settings.deepgram_api_key or "").strip()
 
     if not api_key:
         raise TranscriptionUnavailableError("Deepgram API key is not configured.")
@@ -50,12 +62,19 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> list[TranscriptSegment
         raise TranscriptionUnavailableError("Audio URL is missing.")
 
     params = {
-        "model": "nova-2",
+        "model": settings.deepgram_model,
         "smart_format": "true",
         "punctuate": "true",
         "paragraphs": "true",
         "utterances": "true",
     }
+    configured_language = _configured_deepgram_language(settings.transcript_language)
+
+    if configured_language:
+        params["language"] = configured_language
+    elif settings.deepgram_detect_language:
+        params["detect_language"] = "true"
+
     headers = {"Authorization": f"Token {api_key}"}
     payload = {"url": audio_url}
 
@@ -81,7 +100,26 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> list[TranscriptSegment
             "Deepgram transcription returned no usable data."
         )
 
-    return deepgram_response_to_segments(response_json)
+    segments = deepgram_response_to_segments(response_json)
+
+    if not segments:
+        raise TranscriptionUnavailableError(
+            "Transcript unavailable or incomplete. The audio may be unsupported, mixed-language, noisy, or not publicly extractable."
+        )
+
+    detected_language = _detected_language(response_json) or configured_language
+    if configured_language == "multi" and not detected_language:
+        detected_language = "multi"
+    language_confidence = _language_confidence(response_json)
+
+    return TranscriptionResult(
+        segments=segments,
+        transcript_language=configured_language or detected_language,
+        detected_language=detected_language,
+        language_confidence=language_confidence,
+        transcript_source="deepgram_multilingual",
+        transcript_source_note=_deepgram_source_note(detected_language),
+    )
 
 
 def deepgram_response_to_segments(response_json: dict[str, Any]) -> list[TranscriptSegment]:
@@ -119,9 +157,20 @@ def transcribe_instagram_audio_url(audio_url: str | None) -> list[TranscriptSegm
         return []
 
     try:
-        return transcribe_audio_url_with_deepgram(audio_url)
+        return transcribe_audio_url_with_deepgram(audio_url).segments
     except TranscriptionUnavailableError:
         return []
+
+
+def transcribe_instagram_audio_url_with_metadata(
+    audio_url: str | None,
+) -> TranscriptionResult:
+    if audio_url is None:
+        raise TranscriptionUnavailableError(
+            "Transcript unavailable because no captions were found and public media audio could not be extracted."
+        )
+
+    return transcribe_audio_url_with_deepgram(audio_url)
 
 
 def _segments_from_utterances(
@@ -274,6 +323,98 @@ def _first_alternative(response_json: dict[str, Any]) -> dict[str, Any] | None:
 
     first_alternative = alternatives[0]
     return first_alternative if isinstance(first_alternative, dict) else None
+
+
+def _configured_deepgram_language(value: str) -> str | None:
+    language = value.strip().lower() if isinstance(value, str) else ""
+
+    if not language:
+        return None
+
+    if language in {"multi", "auto", "multilingual"}:
+        return "multi"
+
+    return language
+
+
+def _detected_language(response_json: dict[str, Any]) -> str | None:
+    results = response_json.get("results")
+
+    if not isinstance(results, dict):
+        return None
+
+    for key in ("detected_language", "language"):
+        value = _text_value(results.get(key))
+
+        if value:
+            return value
+
+    channels = results.get("channels")
+
+    if isinstance(channels, list):
+        for channel in channels:
+            if not isinstance(channel, dict):
+                continue
+
+            value = _text_value(channel.get("detected_language")) or _text_value(
+                channel.get("language")
+            )
+
+            if value:
+                return value
+
+            alternatives = channel.get("alternatives")
+            if isinstance(alternatives, list):
+                for alternative in alternatives:
+                    if not isinstance(alternative, dict):
+                        continue
+                    value = _text_value(
+                        alternative.get("detected_language")
+                    ) or _text_value(alternative.get("language"))
+                    if value:
+                        return value
+
+    return None
+
+
+def _language_confidence(response_json: dict[str, Any]) -> float | None:
+    results = response_json.get("results")
+
+    if isinstance(results, dict):
+        value = _float_value(
+            results.get("language_confidence")
+            or results.get("detected_language_confidence")
+        )
+        if value is not None:
+            return value
+
+    alternative = _first_alternative(response_json)
+    if alternative:
+        return _float_value(
+            alternative.get("language_confidence")
+            or alternative.get("detected_language_confidence")
+        )
+
+    return None
+
+
+def _deepgram_source_note(detected_language: str | None) -> str:
+    if detected_language and detected_language != "multi":
+        return (
+            "Transcript generated from public media audio using Deepgram multilingual "
+            f"transcription. Detected language: {detected_language}."
+        )
+
+    if detected_language == "multi":
+        return (
+            "Transcript language could not be confidently detected; multilingual "
+            "transcription was used."
+        )
+
+    return (
+        "Transcript generated from public media audio using Deepgram multilingual "
+        "transcription."
+    )
 
 
 def _word_text(word: dict[str, Any]) -> str | None:

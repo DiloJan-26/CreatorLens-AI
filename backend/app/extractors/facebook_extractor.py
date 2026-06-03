@@ -15,12 +15,10 @@ from app.services.transcription_service import (
 
 
 FACEBOOK_TRANSCRIPT_AVAILABLE_NOTE = (
-    "Facebook transcript generated from public media audio using Deepgram when "
-    "media was available."
+    "Transcript generated from public media audio using Deepgram multilingual transcription."
 )
 FACEBOOK_TRANSCRIPT_UNAVAILABLE_NOTE = (
-    "Facebook transcript unavailable because public media audio could not be "
-    "extracted."
+    "Transcript unavailable because audio transcription failed or public media audio could not be extracted."
 )
 
 
@@ -39,10 +37,12 @@ def extract_facebook_content(
 
     audio_url = extract_best_audio_url(info)
     transcript_segments = []
+    transcript_result = None
 
     if audio_url:
         try:
-            transcript_segments = transcribe_audio_url_with_deepgram(audio_url)
+            transcript_result = transcribe_audio_url_with_deepgram(audio_url)
+            transcript_segments = transcript_result.segments
         except TranscriptionUnavailableError:
             transcript_segments = []
 
@@ -54,6 +54,18 @@ def extract_facebook_content(
         slot=slot,
         transcript_available=transcript_available,
         transcript_segment_count=len(transcript_segments),
+        transcript_language=(
+            transcript_result.transcript_language if transcript_result else None
+        ),
+        detected_language=(
+            transcript_result.detected_language if transcript_result else None
+        ),
+        language_confidence=(
+            transcript_result.language_confidence if transcript_result else None
+        ),
+        transcript_source=(
+            transcript_result.transcript_source if transcript_result else "unavailable"
+        ),
         extraction_status="ready" if transcript_available else "partial",
         error_message=(
             None
@@ -62,7 +74,7 @@ def extract_facebook_content(
         ),
         metric_source_note=PLATFORM_METRIC_NOTES["facebook"],
         transcript_source_note=(
-            FACEBOOK_TRANSCRIPT_AVAILABLE_NOTE
+            transcript_result.transcript_source_note or FACEBOOK_TRANSCRIPT_AVAILABLE_NOTE
             if transcript_available
             else FACEBOOK_TRANSCRIPT_UNAVAILABLE_NOTE
         ),
@@ -111,6 +123,7 @@ def _failed_facebook_metadata(
         error_message=_safe_error_message(message),
         transcript_available=False,
         transcript_segment_count=0,
+        transcript_source="unavailable",
         metric_source_note=PLATFORM_METRIC_NOTES["facebook"],
         transcript_source_note=FACEBOOK_TRANSCRIPT_UNAVAILABLE_NOTE,
         missing_fields=[

@@ -391,8 +391,74 @@ def _chunk_build_response(
         total_chunks=len(chunks),
         youtube_chunks=sum(1 for chunk in chunks if chunk.platform == "youtube"),
         instagram_chunks=sum(1 for chunk in chunks if chunk.platform == "instagram"),
+        facebook_chunks=sum(1 for chunk in chunks if chunk.platform == "facebook"),
+        chunks_by_platform=_chunk_counts_by_field(chunks, "platform"),
+        chunks_by_slot=_chunk_counts_by_field(chunks, "slot"),
+        chunks_by_source_type=_chunk_counts_by_field(chunks, "source_type"),
+        content_chunk_counts=_content_chunk_counts(chunks),
         chunks=chunks,
     )
+
+
+def _chunk_counts_by_field(
+    chunks: list[RagChunk],
+    field_name: str,
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    for chunk in chunks:
+        value = getattr(chunk, field_name, None)
+
+        if value is None:
+            continue
+
+        key = str(value)
+        counts[key] = counts.get(key, 0) + 1
+
+    return dict(sorted(counts.items()))
+
+
+def _content_chunk_counts(chunks: list[RagChunk]) -> list[dict[str, object]]:
+    counts: dict[tuple[str, str], int] = {}
+
+    for chunk in chunks:
+        slot = str(chunk.slot or "content")
+        platform = str(chunk.platform)
+        key = (slot, platform)
+        counts[key] = counts.get(key, 0) + 1
+
+    return [
+        {
+            "slot": slot,
+            "label": _slot_label(slot),
+            "platform": platform,
+            "chunks": count,
+        }
+        for (slot, platform), count in sorted(
+            counts.items(),
+            key=lambda item: (_slot_sort_key(item[0][0]), item[0][1]),
+        )
+    ]
+
+
+def _slot_label(slot: str) -> str:
+    if slot == "content_1":
+        return "Content 1"
+
+    if slot == "content_2":
+        return "Content 2"
+
+    return "Content"
+
+
+def _slot_sort_key(slot: str) -> int:
+    if slot == "content_1":
+        return 0
+
+    if slot == "content_2":
+        return 1
+
+    return 2
 
 
 def _extract_url(
@@ -428,6 +494,10 @@ def _failed_video_metadata(
         error_message=_safe_error_message(message),
         transcript_available=False,
         transcript_segment_count=0,
+        transcript_source="unavailable",
+        transcript_source_note=(
+            "Transcript unavailable because audio transcription failed or public media audio could not be extracted."
+        ),
     )
 
 

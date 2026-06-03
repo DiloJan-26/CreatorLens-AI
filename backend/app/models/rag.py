@@ -42,11 +42,23 @@ class RagChunk(BaseModel):
     qdrant_point_id: str | None = None
 
 
+class ContentChunkCount(BaseModel):
+    slot: str | None = None
+    label: str
+    platform: str
+    chunks: int
+
+
 class ChunkBuildResponse(BaseModel):
     project_id: str
     total_chunks: int
     youtube_chunks: int
     instagram_chunks: int
+    facebook_chunks: int = 0
+    chunks_by_platform: dict[str, int] = Field(default_factory=dict)
+    chunks_by_slot: dict[str, int] = Field(default_factory=dict)
+    chunks_by_source_type: dict[str, int] = Field(default_factory=dict)
+    content_chunk_counts: list[ContentChunkCount] = Field(default_factory=list)
     chunks: list[RagChunk] = Field(default_factory=list)
 
 
@@ -58,6 +70,11 @@ class IndexProjectResponse(BaseModel):
     total_chunks: int
     youtube_chunks: int
     instagram_chunks: int
+    facebook_chunks: int = 0
+    chunks_by_platform: dict[str, int] = Field(default_factory=dict)
+    chunks_by_slot: dict[str, int] = Field(default_factory=dict)
+    chunks_by_source_type: dict[str, int] = Field(default_factory=dict)
+    content_chunk_counts: list[ContentChunkCount] = Field(default_factory=list)
     message: str | None = None
 
 

@@ -93,7 +93,7 @@ export function ContentCard({
         <Metric label="Upload date" value={item.upload_date} />
         <Metric
           label="Transcript"
-          value={item.transcript_available ? "Available" : "Unavailable"}
+          value={transcriptStatus(item)}
         />
         <Metric
           label="Transcript segments"
@@ -176,6 +176,42 @@ function platformLabel(platform: ContentPlatform): string {
   }
 
   return "Facebook";
+}
+
+function transcriptStatus(item: ContentItem): string {
+  if (!item.transcript_available) {
+    return "Unavailable";
+  }
+
+  return `Available · ${languageLabel(
+    item.detected_language ?? item.transcript_language,
+  )}`;
+}
+
+function languageLabel(language: string | null | undefined): string {
+  if (!language) {
+    return "Unknown";
+  }
+
+  const normalized = language.toLowerCase();
+
+  if (normalized.startsWith("en")) {
+    return "English";
+  }
+
+  if (normalized.startsWith("hi")) {
+    return "Hindi";
+  }
+
+  if (normalized.startsWith("ta")) {
+    return "Tamil";
+  }
+
+  if (normalized === "multi" || normalized === "multilingual") {
+    return "Multilingual";
+  }
+
+  return language;
 }
 
 function truncateText(value: string, maxLength: number): string {

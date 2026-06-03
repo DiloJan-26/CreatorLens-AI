@@ -1,5 +1,11 @@
 from typing import Any
 
+from app.insights.insight_models import (
+    ComparisonInsight,
+    ContentInsight,
+    CreatorInsightSummaryResponse,
+)
+from app.insights.insight_service import get_creator_insight_summary
 from app.models.chat import ChatMessage, Citation, RagContext
 from app.models.metrics import MetricSourceRecord, MetricSummaryResponse
 from app.models.rag import RetrieveRequest, RetrievedChunk
@@ -33,8 +39,34 @@ def build_structured_metadata_context(project_id: str) -> str:
         for item in content_items
     ]
     sections.append(build_metric_source_context(project_id))
+    insight_context = build_creator_insight_context(project_id)
+
+    if insight_context:
+        sections.append(insight_context)
 
     return "\n\n".join(sections)
+
+
+def build_creator_insight_context(project_id: str) -> str:
+    try:
+        summary = get_creator_insight_summary(project_id)
+    except Exception:
+        return ""
+
+    lines = ["Creator Insight Summary:"]
+
+    if summary.content_1 is not None:
+        lines.extend(_content_insight_lines(summary.content_1))
+
+    if summary.content_2 is not None:
+        lines.extend(_content_insight_lines(summary.content_2))
+
+    lines.extend(_comparison_insight_lines(summary.comparison))
+
+    for note in summary.notes:
+        lines.append(f"- Missing metadata note: {note}")
+
+    return "\n".join(lines)
 
 
 def build_metric_source_context(project_id: str) -> str:
@@ -157,6 +189,41 @@ def build_direct_answer_if_possible(
 
     content_items = _content_items(project)
 
+    if _is_insight_summary_question(normalized_message):
+        return _creator_insight_summary_answer(
+            project_id=project_id,
+            project=project,
+            rag_context=rag_context,
+        )
+
+    if _is_rewrite_request(normalized_message):
+        return _rewrite_answer(
+            project_id=project_id,
+            project=project,
+            rag_context=rag_context,
+        )
+
+    if _is_improvement_question(normalized_message):
+        return _improvement_answer(
+            project_id=project_id,
+            project=project,
+            rag_context=rag_context,
+        )
+
+    if _is_hook_analysis_question(normalized_message):
+        return _hook_analysis_answer(
+            project_id=project_id,
+            project=project,
+            rag_context=rag_context,
+        )
+
+    if _is_stronger_content_question(normalized_message):
+        return _stronger_content_answer(
+            project_id=project_id,
+            project=project,
+            rag_context=rag_context,
+        )
+
     if _is_missing_metadata_question(normalized_message):
         return _missing_metadata_answer(project, content_items)
 
@@ -179,6 +246,250 @@ def build_direct_answer_if_possible(
         return _generic_engagement_rates_answer(project, content_items)
 
     return None
+
+
+def _content_insight_lines(content: ContentInsight) -> list[str]:
+    lines = [
+        "",
+        f"{content.label} - {_platform_label(content.platform)}:",
+        f"- Hook type: {content.hook_analysis.hook_type}",
+        f"- Hook score: {content.hook_analysis.hook_score}/10",
+        f"- Overall insight score: {content.scores.overall_score}/10",
+        f"- Strengths: {_display_field_list(content.strengths)}",
+        f"- Missing metadata: {_display_field_list(content.missing_metadata)}",
+        f"- Metadata Confidence: {content.metric_confidence_note}",
+    ]
+
+    if content.top_improvement:
+        lines.append(f"- Top improvement: {content.top_improvement}")
+
+    return lines
+
+
+def _comparison_insight_lines(comparison: ComparisonInsight) -> list[str]:
+    lines = [
+        "",
+        "Comparison:",
+        f"- Confirmed metric winner: {_display_value(comparison.confirmed_metric_winner)}",
+        f"- Hook winner: {_display_value(comparison.hook_winner)}",
+        f"- Overall insight winner: {_display_value(comparison.overall_insight_winner)}",
+        f"- Main reason: {comparison.main_reason}",
+        f"- Confidence note: {comparison.confidence_note}",
+        f"- Recommendations: {_display_field_list(comparison.top_recommendations)}",
+    ]
+
+    if comparison.example_rewrite_for_content_2:
+        lines.append(
+            f"- Example rewrite: {comparison.example_rewrite_for_content_2}"
+        )
+
+    return lines
+
+
+def _creator_insight_summary_answer(
+    project_id: str,
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    summary = _safe_creator_insight_summary(project_id)
+
+    if summary is None:
+        return None
+
+    lines = ["Creator Insight Summary:"]
+
+    for content in (summary.content_1, summary.content_2):
+        if content is None:
+            continue
+
+        lines.extend(
+            [
+                f"- {content.label} ({_platform_label(content.platform)}): "
+                f"Creator Insight Score {content.scores.overall_score}/10; "
+                f"Hook Analysis {content.hook_analysis.hook_type} "
+                f"({content.hook_analysis.hook_score}/10).",
+                f"  Strengths: {_display_field_list(content.strengths)}.",
+                f"  Missing metadata: {_display_field_list(content.missing_metadata)}.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "Comparison:",
+            f"- Confirmed metric winner: {_display_value(summary.comparison.confirmed_metric_winner)}.",
+            f"- Hook winner: {_display_value(summary.comparison.hook_winner)}.",
+            f"- Overall insight winner: {_display_value(summary.comparison.overall_insight_winner)}.",
+            f"- Main reason: {summary.comparison.main_reason}",
+            f"- Metadata Confidence: {summary.comparison.confidence_note}",
+            "Scores are heuristic creator-review signals, not guaranteed performance predictions.",
+        ]
+    )
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _direct_citations(project, rag_context),
+    }
+
+
+def _hook_analysis_answer(
+    project_id: str,
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    summary = _safe_creator_insight_summary(project_id)
+
+    if summary is None:
+        return None
+
+    lines = ["Hook Analysis:"]
+
+    for content in (summary.content_1, summary.content_2):
+        if content is None:
+            continue
+
+        hook = content.hook_analysis
+        lines.extend(
+            [
+                f"- {content.label} ({_platform_label(content.platform)}): "
+                f"{hook.hook_type}, {hook.hook_score}/10.",
+                f"  Reason: {hook.clarity_reason}",
+                f"  Hook text: {_display_value(hook.hook_text)}",
+            ]
+        )
+
+    lines.append(
+        f"Stronger opening: {_display_value(summary.comparison.hook_winner)}."
+    )
+
+    if summary.comparison.example_rewrite_for_content_2:
+        lines.append(
+            f"Suggested rewrite: {summary.comparison.example_rewrite_for_content_2}"
+        )
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _direct_citations(project, rag_context),
+    }
+
+
+def _stronger_content_answer(
+    project_id: str,
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    summary = _safe_creator_insight_summary(project_id)
+
+    if summary is None:
+        return None
+
+    lines = [
+        "Stronger content assessment:",
+        f"- Confirmed metric winner: {_display_value(summary.comparison.confirmed_metric_winner)}.",
+        f"- Hook winner: {_display_value(summary.comparison.hook_winner)}.",
+        f"- Overall insight winner: {_display_value(summary.comparison.overall_insight_winner)}.",
+        f"- Reason: {summary.comparison.main_reason}",
+        f"- Metadata Confidence: {summary.comparison.confidence_note}",
+        "This separates confirmed metric performance from heuristic content-quality signals.",
+    ]
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _direct_citations(project, rag_context),
+    }
+
+
+def _rewrite_answer(
+    project_id: str,
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    summary = _safe_creator_insight_summary(project_id)
+
+    if summary is None:
+        return None
+
+    comparison = summary.comparison
+    target = summary.content_2
+    source = summary.content_1
+    lines = ["Improvement direction for Content 2:"]
+
+    if target is not None:
+        lines.append(
+            f"- Diagnosis: Content 2 uses a {target.hook_analysis.hook_type} hook "
+            f"with a {target.hook_analysis.hook_score}/10 hook score."
+        )
+
+    if source is not None:
+        lines.append(
+            f"- What to copy from Content 1: {source.hook_analysis.clarity_reason}"
+        )
+
+    if comparison.top_recommendations:
+        lines.append(
+            f"- What to improve: {_display_field_list(comparison.top_recommendations)}."
+        )
+
+    if comparison.example_rewrite_for_content_2:
+        lines.append(f"- Example rewrite: {comparison.example_rewrite_for_content_2}")
+    else:
+        lines.append("- Example rewrite: Unavailable because the content topic is unavailable.")
+
+    lines.append(
+        "- Why this should help: it makes the opening more specific and easier to judge in the first seconds."
+    )
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _direct_citations(project, rag_context),
+    }
+
+
+def _improvement_answer(
+    project_id: str,
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> dict[str, Any] | None:
+    summary = _safe_creator_insight_summary(project_id)
+
+    if summary is None:
+        return None
+
+    content_1 = summary.content_1
+    content_2 = summary.content_2
+    comparison = summary.comparison
+    lines = ["Improvement plan:"]
+
+    if content_2 is not None:
+        lines.append(
+            f"- Diagnosis: Content 2 ({_platform_label(content_2.platform)}) has "
+            f"a Creator Insight Score of {content_2.scores.overall_score}/10 and "
+            f"a {content_2.hook_analysis.hook_type} hook."
+        )
+
+    if content_1 is not None:
+        lines.append(
+            f"- What worked in Content 1: {_display_field_list(content_1.strengths)}."
+        )
+
+    if comparison.top_recommendations:
+        lines.append(
+            f"- What to improve: {_display_field_list(comparison.top_recommendations)}."
+        )
+
+    if comparison.example_rewrite_for_content_2:
+        lines.append(f"- Example rewrite: {comparison.example_rewrite_for_content_2}")
+
+    lines.append(
+        f"- Metadata Confidence: {comparison.confidence_note}"
+    )
+    lines.append(
+        "- Why this should help: the changes make the hook, payoff, and audience signal easier to understand before viewers decide to scroll."
+    )
+
+    return {
+        "answer": "\n".join(lines),
+        "citations": _direct_citations(project, rag_context),
+    }
 
 
 def _platform_metadata_section(platform_label: str, metadata: Any) -> str:
@@ -207,6 +518,8 @@ def _platform_metadata_section(platform_label: str, metadata: Any) -> str:
         f"Duration seconds: {_display_number(metadata.get('duration_seconds'))}",
         f"Upload date: {_display_value(metadata.get('upload_date'))}",
         f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
+        f"Transcript language: {_language_label(metadata.get('detected_language') or metadata.get('transcript_language'))}",
+        f"Transcript source: {_transcript_source_label(metadata.get('transcript_source'))}",
         f"Available fields: {_display_field_list(_metadata_available_fields(metadata))}",
         f"Missing fields: {_display_field_list(_metadata_missing_fields(metadata))}",
         f"Metric note: {_display_value(metadata.get('metric_source_note'))}",
@@ -356,13 +669,18 @@ def _missing_metadata_answer(
     lines = ["Metadata Availability:"]
 
     for item in content_items:
+        available_fields = _metadata_available_fields(item)
         missing_fields = _metadata_missing_fields(item)
         lines.append(
-            f"- {_content_label(item)} missing fields: "
+            f"- {_content_label(item)} available fields: "
+            f"{_display_field_list(available_fields)}; missing fields: "
             f"{_display_field_list(missing_fields)}."
         )
 
-    lines.append("Missing fields are unavailable and not estimated.")
+    lines.append(
+        "Unavailable fields are usually limited by public platform extraction, "
+        "privacy, or missing transcript evidence. Missing fields are not estimated."
+    )
 
     return {
         "answer": "\n".join(lines),
@@ -535,6 +853,25 @@ def _combined_meta_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
         "answer": answer,
         "citations": _metric_citations(summary),
     }
+
+
+def _safe_creator_insight_summary(
+    project_id: str,
+) -> CreatorInsightSummaryResponse | None:
+    try:
+        return get_creator_insight_summary(project_id)
+    except Exception:
+        return None
+
+
+def _direct_citations(
+    project: dict[str, Any],
+    rag_context: RagContext,
+) -> list[Citation]:
+    if rag_context.citations:
+        return rag_context.citations
+
+    return _metadata_citations(project)
 
 
 def _performance_comparison_answer(summary: MetricSummaryResponse) -> dict[str, Any]:
@@ -798,6 +1135,59 @@ def _is_creator_question(message: str) -> bool:
     )
 
 
+def _is_insight_summary_question(message: str) -> bool:
+    return (
+        "creator insight summary" in message
+        or "insight summary" in message
+        or "creator insight score" in message
+        or "insight score" in message
+        or "what is the score" in message
+        or "scores" in message
+    )
+
+
+def _is_hook_analysis_question(message: str) -> bool:
+    return (
+        "hook" in message
+        or "first seconds" in message
+        or "first few seconds" in message
+        or "opening" in message
+        or "opening line" in message
+    )
+
+
+def _is_rewrite_request(message: str) -> bool:
+    return (
+        "rewrite" in message
+        or "opening line" in message
+        or "caption rewrite" in message
+        or "rewrite the opening" in message
+    )
+
+
+def _is_improvement_question(message: str) -> bool:
+    return (
+        "improve" in message
+        or "improvement" in message
+        or "suggest" in message
+        or "suggestion" in message
+        or "recommendation" in message
+        or "recommendations" in message
+        or "make better" in message
+    )
+
+
+def _is_stronger_content_question(message: str) -> bool:
+    return (
+        "which content is stronger" in message
+        or "which is stronger" in message
+        or "stronger opening" in message
+        or "performed better" in message
+        or "stronger engagement" in message
+        or "why" in message and ("better" in message or "stronger" in message)
+    )
+
+
 def _is_missing_metadata_question(message: str) -> bool:
     return (
         "metadata is missing" in message
@@ -974,6 +1364,43 @@ def _display_hashtags(value: Any) -> str:
     ]
 
     return ", ".join(tags) if tags else "Unavailable"
+
+
+def _language_label(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return "Unavailable"
+
+    normalized = value.strip().lower()
+
+    if normalized.startswith("en"):
+        return "English"
+
+    if normalized.startswith("hi"):
+        return "Hindi"
+
+    if normalized.startswith("ta"):
+        return "Tamil"
+
+    if normalized in {"multi", "multilingual"}:
+        return "Multilingual"
+
+    return value.strip()
+
+
+def _transcript_source_label(value: Any) -> str:
+    if value == "platform_captions":
+        return "Captions"
+
+    if value == "deepgram_multilingual":
+        return "Deepgram multilingual"
+
+    if value == "unavailable":
+        return "Unavailable"
+
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+
+    return "Unavailable"
 
 
 def _compact_text(value: str, max_length: int) -> str:

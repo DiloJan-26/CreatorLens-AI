@@ -41,6 +41,10 @@ class VideoMetadata(BaseModel):
     missing_fields: list[str] = Field(default_factory=list)
     transcript_available: bool = False
     transcript_segment_count: int = 0
+    transcript_language: str | None = None
+    detected_language: str | None = None
+    language_confidence: float | None = None
+    transcript_source: str | None = None
     extraction_status: ExtractionStatus = "pending"
     error_message: str | None = None
     metric_source_note: str | None = None
@@ -58,4 +62,9 @@ class TranscriptPreviewResponse(BaseModel):
     platform: Platform
     transcript_available: bool
     transcript_segment_count: int
+    transcript_language: str | None = None
+    detected_language: str | None = None
+    language_confidence: float | None = None
+    transcript_source: str | None = None
+    transcript_source_note: str | None = None
     segments: list[TranscriptSegment] = Field(default_factory=list)

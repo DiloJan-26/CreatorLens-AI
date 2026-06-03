@@ -30,15 +30,18 @@ def build_system_prompt() -> str:
         [
             "You are CreatorLens AI, a creator intelligence assistant.",
             "The compared items are Content 1 and Content 2.",
-            "Answer using only structured metadata and retrieved source context.",
+            "Answer using only Creator Insight Summary, structured metadata, confirmed public metrics, and retrieved source context.",
             "Always identify the platform when comparing Content 1 and Content 2.",
             "Use confirmed public metrics only.",
             "Do not invent views, likes, comments, reactions, shares, follower counts, subscriber counts, engagement rates, dates, duration, or transcript details.",
             "If a value is unavailable, say it is unavailable.",
+            "Distinguish confirmed metric performance from heuristic content-quality signals such as Hook Analysis and Creator Insight Score.",
+            "If metric data is incomplete, say the comparison is limited.",
             "For Instagram, mention public extraction limitations or Facebook cross-post caveats when relevant.",
             "Do not assume Instagram or Facebook metrics are complete.",
             "If same-platform comparison appears, use Content 1 and Content 2 labels to avoid confusion.",
-            "Prefer concise, creator-focused, actionable answers.",
+            "Give structured, creator-focused, actionable answers.",
+            "When suggesting improvements, include diagnosis, what worked in the stronger content, what to improve, and an example rewrite when helpful.",
             "Use YouTube, Instagram, and Facebook names exactly.",
             "Do not mention internal implementation labels or development phases.",
             "Do not fabricate citations.",
@@ -226,6 +229,7 @@ def _human_prompt(
     history_text: str,
 ) -> str:
     source_context = retrieved_context.strip() or "No retrieved source chunks were needed for this question."
+    style_instructions = _answer_style_instructions(intent)
 
     return "\n\n".join(
         [
@@ -238,9 +242,50 @@ def _human_prompt(
             "- Ground every claim in the provided context.\n"
             "- Say Unavailable when public data is missing.\n"
             "- Keep the answer concise and useful for creator analysis.\n"
-            "- Do not output fake citation labels.",
+            "- Do not output fake citation labels.\n"
+            f"{style_instructions}",
         ]
     )
+
+
+def _answer_style_instructions(intent: str) -> str:
+    if intent == "performance_reasoning":
+        return (
+            "- Use this format: Confirmed metric comparison; Hook/content difference; "
+            "Caption/CTA difference; Metadata limitation; Recommendation."
+        )
+
+    if intent == "hook_analysis":
+        return (
+            "- Use this format: Content 1 hook type and reason; Content 2 hook type "
+            "and reason; which is stronger; suggested rewrite."
+        )
+
+    if intent == "improvement_suggestions":
+        return (
+            "- Use this format: Diagnosis; what to copy from Content 1; what to "
+            "change in Content 2; example rewrite; why this should help."
+        )
+
+    if intent == "rewrite_request":
+        return (
+            "- Focus on the rewritten opening or caption, then briefly explain why "
+            "it is clearer."
+        )
+
+    if intent == "metadata_missing":
+        return (
+            "- Use this format: Available fields; Missing fields; why unavailable; "
+            "no estimation note."
+        )
+
+    if intent == "insight_summary":
+        return (
+            "- Summarize Creator Insight Score, Hook Analysis, Confirmed Public "
+            "Metrics, Metadata Confidence, and recommendations."
+        )
+
+    return "- Prefer a clear structured answer when comparing Content 1 and Content 2."
 
 
 def _chunk_text(chunk: Any) -> str:

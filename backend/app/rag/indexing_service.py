@@ -93,6 +93,11 @@ def index_project(project_id: str) -> IndexProjectResponse:
         total_chunks=len(chunks),
         youtube_chunks=_platform_count(chunks, "youtube"),
         instagram_chunks=_platform_count(chunks, "instagram"),
+        facebook_chunks=_platform_count(chunks, "facebook"),
+        chunks_by_platform=_counts_by_field(chunks, "platform"),
+        chunks_by_slot=_counts_by_field(chunks, "slot"),
+        chunks_by_source_type=_counts_by_field(chunks, "source_type"),
+        content_chunk_counts=_content_chunk_counts(chunks),
         message="Project chunks indexed in Qdrant.",
     )
 
@@ -112,12 +117,75 @@ def _failed_response(
         total_chunks=len(chunks),
         youtube_chunks=_platform_count(chunks, "youtube"),
         instagram_chunks=_platform_count(chunks, "instagram"),
+        facebook_chunks=_platform_count(chunks, "facebook"),
+        chunks_by_platform=_counts_by_field(chunks, "platform"),
+        chunks_by_slot=_counts_by_field(chunks, "slot"),
+        chunks_by_source_type=_counts_by_field(chunks, "source_type"),
+        content_chunk_counts=_content_chunk_counts(chunks),
         message=message,
     )
 
 
 def _platform_count(chunks: list[RagChunk], platform: str) -> int:
     return sum(1 for chunk in chunks if chunk.platform == platform)
+
+
+def _counts_by_field(chunks: list[RagChunk], field_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    for chunk in chunks:
+        value = getattr(chunk, field_name, None)
+
+        if value is None:
+            continue
+
+        key = str(value)
+        counts[key] = counts.get(key, 0) + 1
+
+    return dict(sorted(counts.items()))
+
+
+def _content_chunk_counts(chunks: list[RagChunk]) -> list[dict[str, object]]:
+    counts: dict[tuple[str, str], int] = {}
+
+    for chunk in chunks:
+        slot = str(chunk.slot or "content")
+        platform = str(chunk.platform)
+        key = (slot, platform)
+        counts[key] = counts.get(key, 0) + 1
+
+    return [
+        {
+            "slot": slot,
+            "label": _slot_label(slot),
+            "platform": platform,
+            "chunks": count,
+        }
+        for (slot, platform), count in sorted(
+            counts.items(),
+            key=lambda item: (_slot_sort_key(item[0][0]), item[0][1]),
+        )
+    ]
+
+
+def _slot_label(slot: str) -> str:
+    if slot == "content_1":
+        return "Content 1"
+
+    if slot == "content_2":
+        return "Content 2"
+
+    return "Content"
+
+
+def _slot_sort_key(slot: str) -> int:
+    if slot == "content_1":
+        return 0
+
+    if slot == "content_2":
+        return 1
+
+    return 2
 
 
 def _vector_size(vectors: list[list[float]]) -> int | None:

@@ -7,10 +7,13 @@ ChatRole = Literal["user", "assistant", "system"]
 QuestionIntent = Literal[
     "metrics",
     "creator_info",
-    "hook_comparison",
+    "insight_summary",
+    "hook_analysis",
     "content_summary",
     "performance_reasoning",
     "improvement_suggestions",
+    "rewrite_request",
+    "metadata_missing",
     "general",
 ]
 

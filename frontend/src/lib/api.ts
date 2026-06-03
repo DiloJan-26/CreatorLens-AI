@@ -3,6 +3,7 @@ import type {
   ChatStreamRequest,
   ContentPlatform,
   ContentSlot,
+  CreatorInsightSummaryResponse,
   HealthResponse,
   IndexProjectResponse,
   MetadataAvailabilityResponse,
@@ -78,6 +79,14 @@ export async function getMetadataAvailability(
 ): Promise<MetadataAvailabilityResponse> {
   return request<MetadataAvailabilityResponse>(
     `/api/projects/${projectId}/metadata-availability`,
+  );
+}
+
+export async function getCreatorInsightSummary(
+  projectId: string,
+): Promise<CreatorInsightSummaryResponse> {
+  return request<CreatorInsightSummaryResponse>(
+    `/api/projects/${projectId}/insights/summary`,
   );
 }
 

@@ -80,7 +80,7 @@ def _build_platform_chunks(
     )
     chunk_index += 1
 
-    description = _optional_text(metadata.get("description"))
+    description = _description_source_text(platform, metadata)
 
     if description:
         description_label = _description_label(platform)
@@ -128,6 +128,31 @@ def _build_platform_chunks(
             )
         )
         chunk_index += 1
+    else:
+        fallback_hook = _hook_fallback_text(metadata)
+
+        if fallback_hook:
+            chunks.append(
+                _make_chunk(
+                    project_id=project_id,
+                    content_id=content_id,
+                    slot=slot,
+                    platform=platform,
+                    source_type="hook",
+                    chunk_index=chunk_index,
+                    title=_optional_text(metadata.get("title")),
+                    creator=_optional_text(metadata.get("creator")),
+                    text=fallback_hook,
+                    citation_label=_citation_label(
+                        slot,
+                        platform,
+                        "hook",
+                        None,
+                        None,
+                    ),
+                )
+            )
+            chunk_index += 1
 
     for transcript_chunk_segments in _transcript_chunk_segments(clean_segments):
         start_time, end_time = _segment_time_range(transcript_chunk_segments)
@@ -180,6 +205,8 @@ def _metadata_text(
         f"Duration seconds: {_display_number(metadata.get('duration_seconds'))}",
         f"Upload date: {_display_value(metadata.get('upload_date'))}",
         f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
+        f"Transcript language: {_language_label(metadata.get('detected_language') or metadata.get('transcript_language'))}",
+        f"Transcript source: {_transcript_source_label(metadata.get('transcript_source'))}",
         f"Available fields: {_display_field_list(_available_fields(metadata))}",
         f"Missing fields: {_display_field_list(metadata.get('missing_fields'))}",
         f"Metric source note: {_display_value(metadata.get('metric_source_note'))}",
@@ -204,11 +231,45 @@ def _description_text(
         [
             f"Content slot: {_slot_label(_optional_text(metadata.get('slot')))}",
             f"Platform: {_platform_label(platform)}",
-            f"Title: {_display_value(metadata.get('title'))}",
-            f"{description_name}: {description}",
-            f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
+        f"Title: {_display_value(metadata.get('title'))}",
+        f"{description_name}: {description}",
+        f"Transcript language: {_language_label(metadata.get('detected_language') or metadata.get('transcript_language'))}",
+        f"Hashtags: {_display_hashtags(metadata.get('hashtags'))}",
         ]
     )
+
+
+def _description_source_text(
+    platform: RagPlatform,
+    metadata: dict[str, Any],
+) -> str | None:
+    caption = _optional_text(metadata.get("caption"))
+    description = _optional_text(metadata.get("description"))
+
+    if platform == "instagram":
+        return caption or description
+
+    return description or caption
+
+
+def _hook_fallback_text(metadata: dict[str, Any]) -> str | None:
+    source_text = _optional_text(metadata.get("caption")) or _optional_text(
+        metadata.get("description")
+    )
+
+    if source_text is None:
+        return None
+
+    first_line = source_text.strip().splitlines()[0].strip()
+    sentence_parts = first_line.replace("?", "?.").replace("!", "!.").split(".")
+
+    for part in sentence_parts:
+        text = part.strip()
+
+        if text:
+            return text[:420]
+
+    return first_line[:420] if first_line else None
 
 
 def _hook_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -547,6 +608,44 @@ def _display_hashtags(value: Any) -> str:
     ]
 
     return ", ".join(tags) if tags else "Unavailable"
+
+
+def _language_label(value: Any) -> str:
+    language = _optional_text(value)
+
+    if language is None:
+        return "Unavailable"
+
+    normalized = language.lower()
+
+    if normalized.startswith("en"):
+        return "English"
+
+    if normalized.startswith("hi"):
+        return "Hindi"
+
+    if normalized.startswith("ta"):
+        return "Tamil"
+
+    if normalized in {"multi", "multilingual"}:
+        return "Multilingual"
+
+    return language
+
+
+def _transcript_source_label(value: Any) -> str:
+    source = _optional_text(value)
+
+    if source == "platform_captions":
+        return "Captions"
+
+    if source == "deepgram_multilingual":
+        return "Deepgram multilingual"
+
+    if source == "unavailable":
+        return "Unavailable"
+
+    return source or "Unavailable"
 
 
 def _optional_text(value: Any) -> str | None:

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ContentCard } from "@/components/ContentCard";
 import { CreatorChatPanel } from "@/components/CreatorChatPanel";
+import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
 import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
 import { ProjectStatusCard } from "@/components/ProjectStatusCard";
 import { RagIndexPanel } from "@/components/RagIndexPanel";
@@ -78,7 +79,7 @@ export default function Home() {
 
       setProjectDetail(detail);
       setProgressMessage(
-        "Build the Qdrant search index and test cited source retrieval before adding the final chat layer.",
+        "Build the Qdrant search index to test cited source retrieval and use Creator Chat.",
       );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -146,6 +147,10 @@ export default function Home() {
 
         {projectDetail ? (
           <>
+            <section className="mt-4 grid gap-4">
+              <MetadataAvailabilityPanel projectId={projectDetail.project_id} />
+            </section>
+
             <section className="mt-4 grid gap-4 lg:grid-cols-2">
               <TranscriptPreviewPanel
                 projectId={projectDetail.project_id}
@@ -160,7 +165,10 @@ export default function Home() {
             </section>
 
             <section className="mt-4 grid gap-4">
-              <MetadataAvailabilityPanel projectId={projectDetail.project_id} />
+              <CreatorInsightSummaryPanel
+                projectId={projectDetail.project_id}
+                indexReady={indexReady}
+              />
             </section>
 
             <section className="mt-4 grid gap-4">

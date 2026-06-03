@@ -18,6 +18,80 @@ def classify_question(message: str) -> QuestionIntent:
     if _contains_any(
         normalized_message,
         [
+            "missing",
+            "unavailable",
+            "metadata",
+            "metadata availability",
+        ],
+    ):
+        return "metadata_missing"
+
+    if _contains_any(
+        normalized_message,
+        [
+            "score",
+            "insight summary",
+            "creator insight summary",
+            "creator insight score",
+        ],
+    ):
+        return "insight_summary"
+
+    if _contains_any(
+        normalized_message,
+        [
+            "rewrite",
+            "caption",
+            "opening line",
+        ],
+    ):
+        return "rewrite_request"
+
+    if _contains_any(
+        normalized_message,
+        [
+            "hook",
+            "first seconds",
+            "first 5 seconds",
+            "first five seconds",
+            "opening",
+            "first few seconds",
+        ],
+    ):
+        return "hook_analysis"
+
+    if _contains_any(
+        normalized_message,
+        [
+            "why",
+            "outperform",
+            "performed better",
+            "stronger engagement",
+            "more engagement",
+            "compare performance",
+            "performance",
+        ],
+    ):
+        return "performance_reasoning"
+
+    if _contains_any(
+        normalized_message,
+        [
+            "improve",
+            "improvement",
+            "suggestions",
+            "suggest",
+            "recommendation",
+            "recommendations",
+            "make better",
+            "based on",
+        ],
+    ):
+        return "improvement_suggestions"
+
+    if _contains_any(
+        normalized_message,
+        [
             "facebook",
             "meta",
             "cross-post",
@@ -60,18 +134,6 @@ def classify_question(message: str) -> QuestionIntent:
     if _contains_any(
         normalized_message,
         [
-            "hook",
-            "first 5 seconds",
-            "first five seconds",
-            "opening",
-            "first few seconds",
-        ],
-    ):
-        return "hook_comparison"
-
-    if _contains_any(
-        normalized_message,
-        [
             "story",
             "topic",
             "about",
@@ -80,33 +142,6 @@ def classify_question(message: str) -> QuestionIntent:
         ],
     ):
         return "content_summary"
-
-    if _contains_any(
-        normalized_message,
-        [
-            "why",
-            "outperform",
-            "performed better",
-            "more engagement",
-            "compare performance",
-            "performance",
-        ],
-    ):
-        return "performance_reasoning"
-
-    if _contains_any(
-        normalized_message,
-        [
-            "improve",
-            "improvement",
-            "suggestions",
-            "suggest",
-            "rewrite",
-            "make better",
-            "based on",
-        ],
-    ):
-        return "improvement_suggestions"
 
     return "general"
 
@@ -121,8 +156,14 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
     if intent == "creator_info":
         return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
 
-    if intent == "hook_comparison":
-        return _plan(retrieve=True, source_type="hook", platform=None, top_k=4)
+    if intent == "metadata_missing":
+        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
+
+    if intent == "insight_summary":
+        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
+
+    if intent == "hook_analysis":
+        return _plan(retrieve=False, source_type="hook", platform=None, top_k=4)
 
     if intent == "content_summary":
         return _plan(
@@ -135,7 +176,7 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
     if intent == "performance_reasoning":
         return _plan(
-            retrieve=True,
+            retrieve=False,
             source_type=None,
             platform=inferred_platform,
             slot=inferred_slot,
@@ -144,11 +185,20 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
     if intent == "improvement_suggestions":
         return _plan(
-            retrieve=True,
+            retrieve=False,
             source_type=None,
             platform=inferred_platform,
             slot=None,
             top_k=8,
+        )
+
+    if intent == "rewrite_request":
+        return _plan(
+            retrieve=False,
+            source_type="hook",
+            platform=inferred_platform,
+            slot=inferred_slot,
+            top_k=6,
         )
 
     return _plan(

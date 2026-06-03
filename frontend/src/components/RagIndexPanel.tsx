@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { indexProject } from "@/lib/api";
-import type { IndexProjectResponse } from "@/types/project";
+import type { ContentChunkCount, IndexProjectResponse } from "@/types/project";
 
 type RagIndexPanelProps = {
   projectId: string | null;
@@ -78,14 +78,24 @@ export function RagIndexPanel({ projectId, onIndexed }: RagIndexPanelProps) {
       ) : null}
 
       {result ? (
-        <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          <Metric label="Status" value={result.status} />
-          <Metric label="Total chunks" value={result.total_chunks} />
-          <Metric label="YouTube chunks" value={result.youtube_chunks} />
-          <Metric label="Instagram chunks" value={result.instagram_chunks} />
-          <Metric label="Embedding model" value={result.embedding_model} />
-          <Metric label="Qdrant collection" value={result.qdrant_collection} />
-        </dl>
+        <div className="mt-5 grid gap-5">
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <Metric label="Status" value={result.status} />
+            <Metric label="Total chunks" value={result.total_chunks} />
+            <Metric label="Embedding model" value={result.embedding_model} />
+            <Metric label="Qdrant collection" value={result.qdrant_collection} />
+          </dl>
+
+          <ChunkCountSection
+            title="Content chunks"
+            items={contentChunkCounts(result)}
+          />
+
+          <ChunkCountSection
+            title="Platform chunks"
+            items={platformChunkCounts(result)}
+          />
+        </div>
       ) : null}
     </section>
   );
@@ -98,6 +108,108 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <dd className="mt-1 break-words text-slate-950">{value}</dd>
     </div>
   );
+}
+
+function ChunkCountSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ label: string; chunks: number }>;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+        {title}
+      </h3>
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((item) => (
+          <Metric key={item.label} label={item.label} value={item.chunks} />
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function contentChunkCounts(
+  result: IndexProjectResponse,
+): Array<{ label: string; chunks: number }> {
+  const counts = result.content_chunk_counts ?? [];
+
+  if (counts.length > 0) {
+    return counts.map((item) => ({
+      label: contentChunkLabel(item),
+      chunks: item.chunks,
+    }));
+  }
+
+  if (result.chunks_by_slot && Object.keys(result.chunks_by_slot).length > 0) {
+    return Object.entries(result.chunks_by_slot).map(([slot, chunks]) => ({
+      label: slotLabel(slot),
+      chunks,
+    }));
+  }
+
+  return [];
+}
+
+function platformChunkCounts(
+  result: IndexProjectResponse,
+): Array<{ label: string; chunks: number }> {
+  if (
+    result.chunks_by_platform &&
+    Object.keys(result.chunks_by_platform).length > 0
+  ) {
+    return Object.entries(result.chunks_by_platform).map(
+      ([platform, chunks]) => ({
+        label: platformLabel(platform),
+        chunks,
+      }),
+    );
+  }
+
+  return [
+    { label: "YouTube", chunks: result.youtube_chunks },
+    { label: "Instagram", chunks: result.instagram_chunks },
+    { label: "Facebook", chunks: result.facebook_chunks ?? 0 },
+  ].filter((item) => item.chunks > 0);
+}
+
+function contentChunkLabel(item: ContentChunkCount): string {
+  const label = item.label || slotLabel(item.slot ?? "");
+  return `${label} · ${platformLabel(item.platform)}`;
+}
+
+function slotLabel(slot: string): string {
+  if (slot === "content_1") {
+    return "Content 1";
+  }
+
+  if (slot === "content_2") {
+    return "Content 2";
+  }
+
+  return "Content";
+}
+
+function platformLabel(platform: string): string {
+  if (platform === "youtube") {
+    return "YouTube";
+  }
+
+  if (platform === "instagram") {
+    return "Instagram";
+  }
+
+  if (platform === "facebook") {
+    return "Facebook";
+  }
+
+  return platform;
 }
 
 function getErrorMessage(error: unknown): string {

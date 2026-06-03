@@ -37,6 +37,16 @@ class Settings(BaseSettings):
 
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")
     deepgram_api_key: str | None = Field(default=None, alias="DEEPGRAM_API_KEY")
+    transcript_language: str = Field(default="multi", alias="TRANSCRIPT_LANGUAGE")
+    transcript_fallback_languages: str = Field(
+        default="en,hi,ta",
+        alias="TRANSCRIPT_FALLBACK_LANGUAGES",
+    )
+    deepgram_model: str = Field(default="nova-3", alias="DEEPGRAM_MODEL")
+    deepgram_detect_language: bool = Field(
+        default=True,
+        alias="DEEPGRAM_DETECT_LANGUAGE",
+    )
     assemblyai_api_key: str | None = Field(
         default=None,
         alias="ASSEMBLYAI_API_KEY",
@@ -48,6 +58,14 @@ class Settings(BaseSettings):
             origin.strip()
             for origin in self.cors_origins.split(",")
             if origin.strip()
+        ]
+
+    @property
+    def transcript_fallback_language_list(self) -> list[str]:
+        return [
+            language.strip()
+            for language in self.transcript_fallback_languages.split(",")
+            if language.strip()
         ]
 
 

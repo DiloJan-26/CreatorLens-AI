@@ -51,6 +51,10 @@ export type ContentItem = {
   completeness_score?: number | null;
   transcript_available: boolean;
   transcript_segment_count: number;
+  transcript_language?: string | null;
+  detected_language?: string | null;
+  language_confidence?: number | null;
+  transcript_source?: string | null;
   extraction_status: ExtractionStatus;
   error_message?: string | null;
 };
@@ -70,7 +74,19 @@ export type TranscriptPreviewResponse = {
   platform: ContentPlatform;
   transcript_available: boolean;
   transcript_segment_count: number;
+  transcript_language?: string | null;
+  detected_language?: string | null;
+  language_confidence?: number | null;
+  transcript_source?: string | null;
+  transcript_source_note?: string | null;
   segments: TranscriptSegment[];
+};
+
+export type ContentChunkCount = {
+  slot?: string | null;
+  label: string;
+  platform: ContentPlatform | string;
+  chunks: number;
 };
 
 export type IndexProjectResponse = {
@@ -81,6 +97,11 @@ export type IndexProjectResponse = {
   total_chunks: number;
   youtube_chunks: number;
   instagram_chunks: number;
+  facebook_chunks?: number;
+  chunks_by_platform?: Record<string, number>;
+  chunks_by_slot?: Record<string, number>;
+  chunks_by_source_type?: Record<string, number>;
+  content_chunk_counts?: ContentChunkCount[];
   message?: string | null;
 };
 
@@ -234,6 +255,59 @@ export type MetadataAvailabilityItem = {
 export type MetadataAvailabilityResponse = {
   project_id: string;
   items: MetadataAvailabilityItem[];
+};
+
+export type HookAnalysis = {
+  hook_text?: string | null;
+  hook_type: string;
+  hook_score: number;
+  clarity_reason: string;
+  detected_patterns: string[];
+};
+
+export type InsightScores = {
+  hook_clarity: number;
+  problem_solution_clarity: number;
+  cta_strength: number;
+  caption_strength: number;
+  audience_specificity: number;
+  metadata_completeness: number;
+  engagement_confidence: number;
+  overall_score: number;
+};
+
+export type ContentInsight = {
+  slot: string;
+  label: string;
+  platform: string;
+  title?: string | null;
+  creator?: string | null;
+  hook_analysis: HookAnalysis;
+  scores: InsightScores;
+  strengths: string[];
+  weaknesses: string[];
+  missing_metadata: string[];
+  available_metadata: string[];
+  metric_confidence_note: string;
+  top_improvement?: string | null;
+};
+
+export type ComparisonInsight = {
+  confirmed_metric_winner?: string | null;
+  hook_winner?: string | null;
+  overall_insight_winner?: string | null;
+  main_reason: string;
+  confidence_note: string;
+  top_recommendations: string[];
+  example_rewrite_for_content_2?: string | null;
+};
+
+export type CreatorInsightSummaryResponse = {
+  project_id: string;
+  content_1?: ContentInsight | null;
+  content_2?: ContentInsight | null;
+  comparison: ComparisonInsight;
+  notes: string[];
 };
 
 export type ProjectRecord = {
