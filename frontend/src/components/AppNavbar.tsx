@@ -9,6 +9,7 @@ import {
   subscribeToActiveProject,
 } from "@/lib/app-session";
 
+import { AiReasoningStatus } from "./AiReasoningStatus";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function AppNavbar() {
@@ -54,7 +55,8 @@ export function AppNavbar() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <AiReasoningStatus />
           <ThemeToggle />
           <Link
             href={latestProjectId ? "/analyze" : "/analyze?new=1"}

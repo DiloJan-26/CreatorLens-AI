@@ -118,14 +118,42 @@ async def run_llm_generation_test(prompt: str) -> LLMGenerationTestResponse:
             message=None,
         )
     except Exception:
+        # Try configured fallback model if available — report which was used.
+        fallback_model = (settings.llm_fallback_model or "").strip()
+        if fallback_model and fallback_model != settings.llm_model:
+            try:
+                fallback_llm = _get_gemini_llm(
+                    model=fallback_model,
+                    temperature=0.2,
+                    max_output_tokens=80,
+                    google_api_key=settings.gemini_api_key or "",
+                    streaming=False,
+                )
+                response = await fallback_llm.ainvoke(safe_prompt)
+                generated_text = _message_text(response).strip()
+                if generated_text:
+                    return LLMGenerationTestResponse(
+                        status="ok",
+                        provider=provider,
+                        model=fallback_model,
+                        generated_text=generated_text,
+                        message=(
+                            f"Configured model ({settings.llm_model}) failed. "
+                            f"Using fallback model: {fallback_model}. "
+                            "Check AI Studio access or set LLM_MODEL to an available Gemini model."
+                        ),
+                    )
+            except Exception:
+                pass
+
         return LLMGenerationTestResponse(
             status="error",
             provider=provider,
             model=settings.llm_model,
             generated_text=None,
             message=(
-                "Gemini generation test failed. Check API key, model name, "
-                "quota, or network."
+                "Configured model failed. Check AI Studio access or set LLM_MODEL "
+                "to an available Gemini model."
             ),
         )
 

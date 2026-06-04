@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.config import get_settings
 from app.models.chat import ChatMessage, ChatStreamRequest, Citation
+from app.rag.query_router import parse_target_reference_slots
 from app.rag.context_builder import (
     RagContextProjectNotFoundError,
     RagContextValidationError,
@@ -29,34 +30,32 @@ from app.services.storage_service import save_chat_citations
 def build_system_prompt() -> str:
     return "\n".join(
         [
-            "You are CreatorLens AI, a creator intelligence assistant.",
-            "Use confirmed public metrics, Creator Insight Summary, retrieved transcript/caption/metadata chunks, metadata availability, and conversation memory.",
-            "The compared items are Content 1 and Content 2. Use those labels exactly.",
-            "Always mention platform names: YouTube, Instagram, or Facebook.",
-            "Use confirmed public metrics only and say Unavailable when public data is missing.",
+            "You are CreatorLens AI, a senior short-form content strategist and RAG assistant.",
+            "You combine general creator marketing reasoning with specialist evidence from the provided content sources.",
+            "The compared items are always called Content 1 and Content 2. Never use Video A, Video B, or any other label.",
+            "Always include the platform name: YouTube, Instagram, or Facebook.",
+            "Use confirmed public metrics only. Say Unavailable when public data is missing.",
             "Do not invent views, likes, comments, reactions, shares, follower counts, subscriber counts, engagement rates, dates, duration, or transcript details.",
             "Distinguish confirmed metric performance from heuristic content-quality signals such as Hook Analysis and Creator Insight Score.",
             "Creator Insight Scores are heuristic review signals, not guaranteed performance predictions.",
             "Metadata Availability supports confidence only; it is not a performance score or creator quality score.",
             "If metric data is incomplete, say the comparison is limited.",
-            "For Instagram, mention public extraction limitations or Facebook cross-post caveats when relevant.",
-            "Do not assume Instagram or Facebook metrics are complete.",
-            "If same-platform comparison appears, use Content 1 and Content 2 labels to avoid confusion.",
-            "For strategy, performance, hook, improvement, and rewrite questions, give enough reasoning for a creator or marketer to act on.",
-            "Avoid one-line answers for strategy questions; use clear sections with diagnosis, evidence, limitations, and next steps.",
-            "For normal reasoning questions, aim for 60 to 120 words. For complex strategy or rewrite questions, use up to about 150 words when needed.",
-            "For improvement questions, include diagnosis, what worked, what to change, an example rewrite, and why the change should help.",
-            "For rewrite questions, provide a short diagnosis, a rewritten opening, why it is stronger, and an optional alternative version when context allows.",
-            "For hook questions, identify hook type, first-second clarity, payoff, what to improve, and an example rewritten hook.",
+            "For strategy, performance, hook, improvement, and rewrite questions, always give enough reasoning for a creator or marketer to take action.",
+            "Never give one-line or one-paragraph answers for strategy, improvement, hook, or rewrite questions.",
+            "Use clear numbered sections with diagnosis, evidence, specific changes, and next steps.",
+            "If the user asks for N improvement points, return exactly N numbered points — no more, no fewer.",
+            "Each improvement point must include: the issue, the evidence from retrieved sources, the specific change to make, and why that change should help.",
+            "For improvement questions, identify what the target content currently does, what the reference content does better, and provide concrete actionable points.",
+            "For rewrite questions, provide diagnosis of what is weak, a rewritten opening, why it is stronger, and an optional alternative version.",
+            "For hook questions, identify hook type for both contents, which opening is stronger and exactly why, a specific improvement, and an example rewritten hook.",
+            "For performance reasoning, compare confirmed metrics first, then hook, caption, CTA, and audience angle differences.",
+            "Complete every answer fully before the citations are shown. Do not stop mid-sentence or mid-section.",
             "Use citations only from backend-provided source labels. Do not fabricate citation labels.",
-            "The frontend will display citations separately, so do not invent source labels in the answer.",
-            "If useful, refer to sources naturally, but citations are provided separately.",
-            "Treat the structured Content 1 and Content 2 metadata as the source of truth for content metrics.",
-            "Distinguish YouTube, Instagram, Facebook, and Combined Meta Metrics when those appear.",
+            "The frontend displays citations separately; do not reproduce source labels inside the answer text.",
+            "If evidence is limited, state exactly what is missing and what you are basing your answer on.",
             "Never claim Instagram underperformed solely from missing views.",
-            "Say confirmed public metrics when only public extracted metrics exist.",
             "If Facebook cross-post data is not connected, say combined Meta performance may be incomplete.",
-            "Do not invent missing follower counts, subscriber counts, views, comments, duration, or upload dates.",
+            "Treat the structured Content 1 and Content 2 metadata as the source of truth for confirmed public metrics.",
         ]
     )
 
@@ -171,6 +170,7 @@ async def stream_chat_answer(
             history_message_count=len(recent_messages),
             citation_count=len(citations),
         )
+        target_slot, reference_slot = parse_target_reference_slots(question)
         messages = [
             SystemMessage(content=build_system_prompt()),
             HumanMessage(
@@ -180,6 +180,8 @@ async def stream_chat_answer(
                     structured_context=rag_context.structured_context,
                     retrieved_context=rag_context.retrieved_context,
                     history_text=history_text,
+                    target_slot=target_slot,
+                    reference_slot=reference_slot,
                 )
             ),
         ]
@@ -342,14 +344,25 @@ def _human_prompt(
     structured_context: str,
     retrieved_context: str,
     history_text: str,
+    target_slot: str | None = None,
+    reference_slot: str | None = None,
 ) -> str:
     source_context = retrieved_context.strip() or "No retrieved source chunks were needed for this question."
-    style_instructions = _answer_style_instructions(intent)
+    style_instructions = _answer_style_instructions(intent, target_slot, reference_slot)
+
+    target_line = ""
+    if target_slot or reference_slot:
+        target_label = "Content 1" if target_slot == "content_1" else ("Content 2" if target_slot == "content_2" else "")
+        reference_label = "Content 2" if reference_slot == "content_2" else ("Content 1" if reference_slot == "content_1" else "")
+        if target_label and reference_label:
+            target_line = f"\nImprovement direction: Improve {target_label} using insights from {reference_label}.\n"
+        elif target_label:
+            target_line = f"\nTarget content: {target_label}.\n"
 
     return "\n\n".join(
         [
             f"User question:\n{question}",
-            f"Question intent:\n{intent}",
+            f"Question intent:\n{intent}{target_line}",
             f"Recent conversation:\n{history_text}",
             f"Structured metadata context:\n{structured_context}",
             f"Retrieved source context:\n{source_context}",
@@ -358,71 +371,102 @@ def _human_prompt(
             "- Say Unavailable when public data is missing.\n"
             "- Name Content 1 and Content 2 with their platform names.\n"
             "- Separate confirmed public metrics from heuristic insight scores.\n"
-            "- Use enough depth for a creator or marketer to act on; avoid one-line strategy answers.\n"
-            "- For reasoning answers, usually write 60 to 120 words; use up to about 150 words when the user asks for strategy, diagnosis, or rewrite help.\n"
-            "- Keep deterministic metric facts precise and keep strategic reasoning structured.\n"
             "- Treat Metadata Availability as confidence context, not as a quality or performance score.\n"
             "- Do not output fake citation labels.\n"
+            "- For reasoning, improvement, hook, or rewrite questions: use structured numbered sections. "
+            "Do not give a single-paragraph answer.\n"
+            "- If the user asks for a specific number of points, return exactly that many numbered points.\n"
+            "- Complete the full answer before stopping. Do not truncate mid-section.\n"
             f"{style_instructions}",
         ]
     )
 
 
-def _answer_style_instructions(intent: str) -> str:
+def _answer_style_instructions(
+    intent: str,
+    target_slot: str | None = None,
+    reference_slot: str | None = None,
+) -> str:
+    target_label = (
+        "Content 1" if target_slot == "content_1"
+        else "Content 2" if target_slot == "content_2"
+        else "the target content"
+    )
+    reference_label = (
+        "Content 2" if reference_slot == "content_2"
+        else "Content 1" if reference_slot == "content_1"
+        else "the reference content"
+    )
+
     if intent == "performance_reasoning":
         return (
             "- Use this format:\n"
-            "1. Quick verdict\n"
-            "2. Confirmed public metrics comparison\n"
-            "3. Hook and first-seconds analysis\n"
-            "4. Caption/description/CTA analysis\n"
-            "5. Audience and content angle analysis\n"
+            "1. Quick verdict (1–2 sentences)\n"
+            "2. Confirmed public metrics comparison (cite exact numbers or say Unavailable)\n"
+            "3. Hook and first-seconds analysis for both contents\n"
+            "4. Caption/description/CTA analysis for both contents\n"
+            "5. Audience and content angle difference\n"
             "6. Metadata limitations\n"
-            "7. Actionable next steps"
+            "7. Actionable next step for the creator"
         )
 
     if intent == "hook_analysis":
         return (
             "- Use this format:\n"
-            "1. Content 1 hook type and evidence\n"
-            "2. Content 2 hook type and evidence\n"
-            "3. Which opening is stronger and why\n"
-            "4. What to improve\n"
-            "5. Example rewritten hook"
+            "1. Content 1 hook type, first-second clarity, and evidence (quote from retrieved chunks if available)\n"
+            "2. Content 2 hook type, first-second clarity, and evidence\n"
+            "3. Which opening is stronger and the exact reason why\n"
+            "4. Specific thing to fix in the weaker hook\n"
+            "5. Example rewritten hook for the weaker content"
         )
 
     if intent == "improvement_suggestions":
         return (
+            f"- The user wants to improve {target_label} using insights from {reference_label}.\n"
+            "- If the user asked for a specific number of improvement points, return exactly that many numbered points.\n"
             "- Use this format:\n"
-            "1. Diagnosis\n"
-            "2. What worked in stronger content\n"
-            "3. What Content 2 should change\n"
-            "4. Example rewrite\n"
-            "5. Why this may improve engagement"
+            f"1. Quick verdict (one sentence comparing {target_label} and {reference_label})\n"
+            f"2. What {target_label} currently does (hook type, caption style, CTA, content angle)\n"
+            f"3. What {reference_label} does better or differently\n"
+            "4. Improvement points (exactly the number the user requested — each must include):\n"
+            "   - Issue: the specific weakness\n"
+            "   - Evidence: quote or reference from retrieved source chunks\n"
+            "   - Change: the specific thing to do differently\n"
+            "   - Why: why this change should improve engagement or clarity\n"
+            "5. Optional example rewrite of the hook or caption opening\n"
+            "6. Evidence limitation note if key transcript/caption data was unavailable"
         )
 
     if intent == "rewrite_request":
         return (
             "- Use this format:\n"
-            "1. Diagnosis\n"
-            "2. Rewritten opening or caption\n"
-            "3. Why it is stronger\n"
-            "4. Optional alternative version"
+            "1. Diagnosis (what is weak or generic about the current opening or caption)\n"
+            "2. Rewritten opening or caption (make it specific, hook-driven, and strong)\n"
+            "3. Why this rewrite is stronger (cite hook type, clarity improvement, CTA)\n"
+            "4. Optional alternative version\n"
+            "5. What source evidence or pattern inspired the rewrite"
         )
 
     if intent == "metadata_missing":
         return (
-            "- Use this format: Available fields; Missing fields; why unavailable; "
-            "no estimation note."
+            "- Use this format: Available fields for each content; Missing fields for each content; "
+            "why they are likely unavailable; confirmation that no missing values were estimated."
         )
 
     if intent == "insight_summary":
         return (
-            "- Summarize Creator Insight Score, Hook Analysis, Confirmed Public "
-            "Metrics, Metadata Confidence, and recommendations."
+            "- Summarize in sections:\n"
+            "1. Content 1 Creator Insight Score, Hook Analysis, and top strengths\n"
+            "2. Content 2 Creator Insight Score, Hook Analysis, and top strengths\n"
+            "3. Comparison: confirmed metric winner, hook winner, overall insight winner\n"
+            "4. Top recommendations\n"
+            "5. Metadata confidence note"
         )
 
-    return "- Prefer a clear structured answer when comparing Content 1 and Content 2."
+    return (
+        "- Use a clear structured answer when comparing Content 1 and Content 2.\n"
+        "- Include: diagnosis, evidence from retrieved chunks, specific recommendations, and next steps."
+    )
 
 
 def _chunk_text(chunk: Any) -> str:

@@ -368,3 +368,19 @@ export type HealthResponse = {
   environment?: string;
   message?: string;
 };
+
+export type LlmHealthResponse = {
+  status: string;
+  provider: string;
+  model: string;
+  configured: boolean;
+  message?: string | null;
+};
+
+export type LlmGenerationTestResponse = {
+  status: string;
+  provider: string;
+  model: string;
+  generated_text?: string | null;
+  message?: string | null;
+};

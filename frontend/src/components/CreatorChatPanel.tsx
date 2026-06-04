@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { getChatHistory, streamChatResponse } from "@/lib/api";
 import {
@@ -301,6 +303,87 @@ export function CreatorChatPanel({
   );
 }
 
+function AssistantMarkdown({ content }: { content: string }) {
+  return (
+    <div className="mt-2 text-sm leading-6 text-slate-800 dark:text-slate-100">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Headings
+          h1: ({ children }) => (
+            <h1 className="mt-4 mb-1 text-base font-bold text-slate-950 dark:text-slate-50 first:mt-0">
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="mt-4 mb-1 text-base font-semibold text-slate-950 dark:text-slate-50 first:mt-0">
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="mt-3 mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100 first:mt-0">
+              {children}
+            </h3>
+          ),
+          // Paragraphs
+          p: ({ children }) => (
+            <p className="mb-2 last:mb-0">{children}</p>
+          ),
+          // Unordered lists
+          ul: ({ children }) => (
+            <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">
+              {children}
+            </ul>
+          ),
+          // Ordered lists
+          ol: ({ children }) => (
+            <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">
+              {children}
+            </ol>
+          ),
+          li: ({ children }) => (
+            <li className="leading-6">{children}</li>
+          ),
+          // Bold / italic
+          strong: ({ children }) => (
+            <strong className="font-semibold text-slate-950 dark:text-slate-50">
+              {children}
+            </strong>
+          ),
+          em: ({ children }) => (
+            <em className="italic text-slate-700 dark:text-slate-300">{children}</em>
+          ),
+          // Horizontal rule (--- separators)
+          hr: () => (
+            <hr className="my-3 border-slate-200 dark:border-slate-700" />
+          ),
+          // Inline code
+          code: ({ children, className }) => {
+            const isBlock = Boolean(className);
+            return isBlock ? (
+              <code className="block rounded-md bg-slate-100 px-3 py-2 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                {children}
+              </code>
+            ) : (
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                {children}
+              </code>
+            );
+          },
+          // Block quote
+          blockquote: ({ children }) => (
+            <blockquote className="my-2 border-l-4 border-teal-400 pl-3 text-slate-600 dark:border-teal-600 dark:text-slate-300">
+              {children}
+            </blockquote>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 function ChatMessageBubble({
   message,
   isStreaming,
@@ -321,9 +404,17 @@ function ChatMessageBubble({
       <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
         {isUser ? "You" : "CreatorLens AI"}
       </p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-100">
-        {message.content || (isStreaming ? "Thinking..." : "")}
-      </p>
+      {isUser ? (
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-100">
+          {message.content}
+        </p>
+      ) : message.content ? (
+        <AssistantMarkdown content={message.content} />
+      ) : isStreaming ? (
+        <p className="mt-2 text-sm leading-6 text-slate-400 dark:text-slate-500">
+          Thinking...
+        </p>
+      ) : null}
       {!isUser && message.citations && message.citations.length > 0 ? (
         <CitationList citations={message.citations} />
       ) : null}

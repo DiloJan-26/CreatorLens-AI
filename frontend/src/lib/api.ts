@@ -8,6 +8,8 @@ import type {
   CreatorInsightSummaryResponse,
   HealthResponse,
   IndexProjectResponse,
+  LlmGenerationTestResponse,
+  LlmHealthResponse,
   MetadataAvailabilityResponse,
   MetricSummaryResponse,
   ProjectCreateRequest,
@@ -25,6 +27,20 @@ const API_BASE_URL =
 
 export async function checkBackend(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
+}
+
+export async function checkLlmHealth(): Promise<LlmHealthResponse> {
+  return request<LlmHealthResponse>("/health/llm");
+}
+
+export async function testLlmGeneration(
+  prompt = "Reply with exactly: CreatorLens AI reasoning is active.",
+): Promise<LlmGenerationTestResponse> {
+  return request<LlmGenerationTestResponse>("/health/llm/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
 }
 
 export async function createProject(

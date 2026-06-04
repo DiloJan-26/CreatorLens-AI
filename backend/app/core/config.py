@@ -17,10 +17,11 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
-    llm_model: str = Field(default="gemini-2.5-flash", alias="LLM_MODEL")
-    llm_temperature: float = Field(default=0.2, alias="LLM_TEMPERATURE")
+    llm_model: str = Field(default="gemini-3.5-flash", alias="LLM_MODEL")
+    llm_fallback_model: str | None = Field(default=None, alias="LLM_FALLBACK_MODEL")
+    llm_temperature: float = Field(default=0.35, alias="LLM_TEMPERATURE")
     llm_max_output_tokens: int = Field(
-        default=1800,
+        default=2200,
         alias="LLM_MAX_OUTPUT_TOKENS",
     )
     debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")

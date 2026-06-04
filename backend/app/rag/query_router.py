@@ -2,6 +2,18 @@ from typing import TypedDict
 
 from app.models.chat import QuestionIntent
 
+# Intents that require evidence from both content slots.
+MULTI_SOURCE_INTENTS: frozenset[QuestionIntent] = frozenset(
+    {
+        "performance_reasoning",
+        "hook_analysis",
+        "improvement_suggestions",
+        "rewrite_request",
+        "insight_summary",
+        "general",
+    }
+)
+
 
 class RetrievalPlan(TypedDict):
     use_structured_metadata: bool
@@ -10,6 +22,7 @@ class RetrievalPlan(TypedDict):
     platform: str | None
     slot: str | None
     top_k: int
+    multi_source: bool
 
 
 def classify_question(message: str) -> QuestionIntent:
@@ -160,10 +173,11 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
         return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
 
     if intent == "insight_summary":
-        return _plan(retrieve=True, source_type=None, platform=None, top_k=6)
+        return _plan(retrieve=True, source_type=None, platform=None, top_k=10, multi_source=True)
 
     if intent == "hook_analysis":
-        return _plan(retrieve=True, source_type="hook", platform=None, top_k=6)
+        # Retrieve all source types from BOTH slots — balanced retrieval handles hook priority.
+        return _plan(retrieve=True, source_type=None, platform=None, top_k=10, multi_source=True)
 
     if intent == "content_summary":
         return _plan(
@@ -175,30 +189,35 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
         )
 
     if intent == "performance_reasoning":
+        # Never infer a single slot — reasoning needs both sides.
         return _plan(
             retrieve=True,
             source_type=None,
-            platform=inferred_platform,
-            slot=inferred_slot,
-            top_k=8,
+            platform=None,
+            slot=None,
+            top_k=12,
+            multi_source=True,
         )
 
     if intent == "improvement_suggestions":
         return _plan(
             retrieve=True,
             source_type=None,
-            platform=inferred_platform,
+            platform=None,
             slot=None,
-            top_k=8,
+            top_k=12,
+            multi_source=True,
         )
 
     if intent == "rewrite_request":
+        # Need hook + description/caption from target AND reference — no source_type filter.
         return _plan(
             retrieve=True,
-            source_type="hook",
-            platform=inferred_platform,
-            slot=inferred_slot,
-            top_k=6,
+            source_type=None,
+            platform=None,
+            slot=None,
+            top_k=10,
+            multi_source=True,
         )
 
     return _plan(
@@ -206,8 +225,51 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
         source_type=None,
         platform=inferred_platform,
         slot=inferred_slot,
-        top_k=6,
+        top_k=8,
+        multi_source=intent in MULTI_SOURCE_INTENTS,
     )
+
+
+def parse_target_reference_slots(message: str) -> tuple[str | None, str | None]:
+    """
+    Parse (target_slot, reference_slot) from improvement/rewrite messages.
+    E.g. "improve Content 1 from Content 2" → ("content_1", "content_2").
+    """
+    normalized = _normalize(message)
+    has_c1 = "content 1" in normalized or "content one" in normalized
+    has_c2 = "content 2" in normalized or "content two" in normalized
+
+    if not has_c1 and not has_c2:
+        return None, None
+
+    # "... from/based on/using Content X" → X is the reference.
+    reference_markers = [
+        "from content 1",
+        "based on content 1",
+        "using content 1",
+        "like content 1",
+        "from content 2",
+        "based on content 2",
+        "using content 2",
+        "like content 2",
+    ]
+    for marker in reference_markers:
+        if marker in normalized:
+            if marker.endswith("1"):
+                return ("content_2" if has_c2 else None), "content_1"
+            else:
+                return ("content_1" if has_c1 else None), "content_2"
+
+    # "improve/rewrite/fix Content X" without explicit reference — first mention is target.
+    if _contains_any(normalized, ["improve", "rewrite", "fix", "for", "of"]):
+        c1_idx = normalized.find("content 1") if has_c1 else 9999
+        c2_idx = normalized.find("content 2") if has_c2 else 9999
+        if c1_idx < c2_idx:
+            return "content_1", ("content_2" if has_c2 else None)
+        if c2_idx < c1_idx:
+            return "content_2", ("content_1" if has_c1 else None)
+
+    return None, None
 
 
 def _plan(
@@ -216,6 +278,7 @@ def _plan(
     platform: str | None,
     top_k: int,
     slot: str | None = None,
+    multi_source: bool = False,
 ) -> RetrievalPlan:
     return {
         "use_structured_metadata": True,
@@ -224,6 +287,7 @@ def _plan(
         "platform": platform,
         "slot": slot,
         "top_k": top_k,
+        "multi_source": multi_source,
     }
 
 
