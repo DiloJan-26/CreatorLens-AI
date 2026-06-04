@@ -37,6 +37,7 @@ class Settings(BaseSettings):
         alias="EMBEDDING_MODEL_NAME",
     )
 
+    youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")
     deepgram_api_key: str | None = Field(default=None, alias="DEEPGRAM_API_KEY")
     transcript_language: str = Field(default="multi", alias="TRANSCRIPT_LANGUAGE")

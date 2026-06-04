@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 from youtube_transcript_api import YouTubeTranscriptApi
 from yt_dlp import YoutubeDL
 
@@ -17,6 +18,8 @@ from app.services.transcription_service import (
 
 
 HASHTAG_PATTERN = re.compile(r"(?<!\w)#([A-Za-z0-9_]+)")
+_YT_API_BASE = "https://www.googleapis.com/youtube/v3"
+
 YOUTUBE_METRIC_SOURCE_NOTE = (
     "YouTube counts are extracted from public metadata and may differ slightly "
     "from the live UI because of rounding, caching, timezone, or updates."
@@ -93,6 +96,113 @@ def fetch_youtube_info(url: str) -> dict[str, Any]:
         raise ValueError("Could not read YouTube metadata.")
 
     return info
+
+
+def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
+    """Fetch YouTube metadata via the official Data API v3.
+
+    Returns a dict with the same keys normalize_metadata expects from yt-dlp,
+    so the rest of the pipeline works unchanged.
+    """
+    with httpx.Client(timeout=15.0) as client:
+        video_resp = client.get(
+            f"{_YT_API_BASE}/videos",
+            params={
+                "id": video_id,
+                "key": api_key,
+                "part": "snippet,statistics,contentDetails",
+            },
+        )
+        video_resp.raise_for_status()
+        video_data = video_resp.json()
+
+    items = video_data.get("items", [])
+    if not items:
+        raise ValueError(f"YouTube Data API returned no item for video ID {video_id!r}.")
+
+    item = items[0]
+    snippet = item.get("snippet", {})
+    statistics = item.get("statistics", {})
+    content_details = item.get("contentDetails", {})
+
+    thumbnails = snippet.get("thumbnails", {})
+    thumbnail_url = (
+        thumbnails.get("maxres", {}).get("url")
+        or thumbnails.get("high", {}).get("url")
+        or thumbnails.get("medium", {}).get("url")
+        or thumbnails.get("default", {}).get("url")
+    )
+
+    channel_id = snippet.get("channelId")
+    subscriber_count = _fetch_subscriber_count(channel_id, api_key) if channel_id else None
+
+    return {
+        "title": snippet.get("title"),
+        "description": snippet.get("description"),
+        "uploader": snippet.get("channelTitle"),
+        "channel": snippet.get("channelTitle"),
+        "channel_id": channel_id,
+        "uploader_id": channel_id,
+        "view_count": _safe_int(statistics.get("viewCount")),
+        "like_count": _safe_int(statistics.get("likeCount")),
+        "comment_count": _safe_int(statistics.get("commentCount")),
+        "channel_follower_count": subscriber_count,
+        "subscriber_count": subscriber_count,
+        "duration": _parse_iso_duration(content_details.get("duration", "")),
+        "upload_date": _parse_publish_date(snippet.get("publishedAt", "")),
+        "thumbnail": thumbnail_url,
+        "tags": snippet.get("tags") or [],
+        "webpage_url": f"https://www.youtube.com/watch?v={video_id}",
+    }
+
+
+def _fetch_subscriber_count(channel_id: str, api_key: str) -> int | None:
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(
+                f"{_YT_API_BASE}/channels",
+                params={"id": channel_id, "key": api_key, "part": "statistics"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        items = data.get("items", [])
+        if items:
+            return _safe_int(items[0].get("statistics", {}).get("subscriberCount"))
+    except Exception:
+        pass
+    return None
+
+
+def _parse_iso_duration(duration: str) -> int | None:
+    """Convert ISO 8601 duration (PT#H#M#S) to total seconds."""
+    if not duration:
+        return None
+    match = re.match(
+        r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?",
+        duration,
+    )
+    if not match:
+        return None
+    days = int(match.group(1) or 0)
+    hours = int(match.group(2) or 0)
+    minutes = int(match.group(3) or 0)
+    seconds = int(float(match.group(4) or 0))
+    total = days * 86400 + hours * 3600 + minutes * 60 + seconds
+    return total if total > 0 else None
+
+
+def _parse_publish_date(published_at: str) -> str | None:
+    """Convert ISO 8601 datetime to YYYYMMDD (yt-dlp upload_date format)."""
+    if not published_at or len(published_at) < 10:
+        return None
+    return published_at[:10].replace("-", "")
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
 
 
 def fetch_youtube_metadata(url: str) -> dict[str, Any]:
@@ -173,21 +283,32 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
             transcript_segments=[],
         )
 
-    # Step 2: Fetch full metadata via yt-dlp.
-    # On cloud servers YouTube may block datacenter IPs — treat as non-fatal
-    # so caption-based transcript extraction can still succeed.
+    # Step 2: Fetch metadata.
+    # Priority: YouTube Data API v3 (works on cloud, needs YOUTUBE_API_KEY)
+    #           → yt-dlp (works locally, blocked on cloud datacenter IPs)
+    settings = get_settings()
+    youtube_api_key = (settings.youtube_api_key or "").strip()
     info: dict[str, Any] | None = None
     yt_dlp_error: str | None = None
-    try:
-        info = fetch_youtube_info(url)
-    except Exception as exc:
-        yt_dlp_error = _safe_error_message(exc)
+
+    if youtube_api_key:
+        try:
+            info = fetch_youtube_info_from_api(video_id, youtube_api_key)
+        except Exception:
+            pass  # Fall through to yt-dlp
+
+    if info is None:
+        try:
+            info = fetch_youtube_info(url)
+        except Exception as exc:
+            yt_dlp_error = _safe_error_message(exc)
 
     # Step 3: Always attempt captions via youtube-transcript-api (works on cloud).
     transcript_result = fetch_youtube_transcript_with_metadata(video_id)
 
-    # Step 4: If captions are absent and yt-dlp succeeded, try audio transcription.
-    if not transcript_result.segments and info is not None:
+    # Step 4: Audio transcription fallback — only when yt-dlp provided the info
+    # (audio format URLs are yt-dlp specific; YouTube Data API v3 doesn't supply them).
+    if not transcript_result.segments and info is not None and not youtube_api_key:
         transcript_result = _transcribe_youtube_audio(info)
 
     transcript_segments = transcript_result.segments
