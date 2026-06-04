@@ -1,33 +1,33 @@
 const FEATURES = [
   {
-    title: "Compare any two platforms",
-    text: "YouTube vs Instagram, Instagram vs Facebook, YouTube vs YouTube, and more.",
+    title: "Cross-platform comparison",
+    text: "Compare YouTube vs Instagram, Instagram vs Facebook, YouTube vs YouTube, and more.",
   },
   {
-    title: "Understand the first seconds",
-    text: "Classify hook style, clarity, and payoff using transcript and caption evidence.",
+    title: "Hook intelligence",
+    text: "Analyze the first seconds, hook type, clarity, and payoff.",
   },
   {
-    title: "Trust the metrics",
-    text: "CreatorLens AI separates confirmed public metrics from unavailable fields instead of estimating.",
+    title: "Confirmed public metrics",
+    text: "Separate extracted metrics from unavailable fields instead of estimating.",
   },
   {
-    title: "Ask follow-up questions",
-    text: "Use streaming chat with citations and memory to explore why one post worked better.",
+    title: "Multilingual transcripts",
+    text: "Use captions and multilingual transcription for global creator content.",
   },
   {
-    title: "Go beyond transcripts",
-    text: "Analyze captions, descriptions, hashtags, upload date, duration, engagement, and missing metadata.",
+    title: "Cited AI chat",
+    text: "Ask follow-up questions with streaming answers grounded in retrieved evidence.",
   },
   {
-    title: "Built for real workflows",
-    text: "Designed for creators, marketers, agencies, and growth teams reviewing short-form content.",
+    title: "Creator insight summary",
+    text: "Get heuristic scores, recommendations, and rewrite ideas for the next post.",
   },
 ];
 
 export function FeatureGrid() {
   return (
-    <section id="insights" className="border-b border-slate-200 bg-white py-16">
+    <section id="insights" className="border-b border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -46,7 +46,7 @@ export function FeatureGrid() {
           {FEATURES.map((feature) => (
             <article
               key={feature.title}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm"
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <h3 className="text-base font-semibold text-slate-950">
                 {feature.title}

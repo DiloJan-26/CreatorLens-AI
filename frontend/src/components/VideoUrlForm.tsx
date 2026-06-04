@@ -21,6 +21,7 @@ export function VideoUrlForm({
   const [validationMessage, setValidationMessage] = useState<string | null>(
     null,
   );
+  const canAnalyze = Boolean(content1Url.trim() && content2Url.trim());
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,17 +62,30 @@ export function VideoUrlForm({
       </div>
 
       {validationMessage ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           {validationMessage}
         </p>
       ) : null}
 
       <button
         type="submit"
-        disabled={isSubmitting || !content1Url.trim() || !content2Url.trim()}
-        className="inline-flex h-12 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        disabled={isSubmitting || !canAnalyze}
+        className={`inline-flex h-12 items-center justify-center gap-2 rounded-md border px-5 text-sm font-semibold transition-all ${
+          isSubmitting
+            ? "cursor-wait border-emerald-300/60 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-300/50 dark:border-emerald-400/40 dark:shadow-emerald-400/15"
+            : canAnalyze
+            ? "border-emerald-300/70 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-300/60 hover:scale-[1.01] hover:shadow-emerald-500/40 dark:border-emerald-400/50 dark:shadow-emerald-400/20"
+            : "cursor-not-allowed border-slate-300 bg-slate-200 text-slate-500 shadow-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
+        }`}
       >
-        {isSubmitting ? "Analyzing Content..." : "Analyze Content"}
+        {isSubmitting ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            Analyzing...
+          </>
+        ) : (
+          "Analyze Content"
+        )}
       </button>
     </form>
   );
@@ -93,13 +107,13 @@ function UrlCard({
   onChange,
 }: UrlCardProps) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
         {label}
       </p>
-      <label className="mt-3 block text-sm font-medium text-slate-900">
+      <label className="mt-3 block text-sm font-medium text-slate-900 dark:text-slate-100">
         {title}
-        <span className="mt-1 block text-sm font-normal leading-6 text-slate-600">
+        <span className="mt-1 block text-sm font-normal leading-6 text-slate-600 dark:text-slate-300">
           Paste any supported short-form URL from YouTube, Instagram, or
           Facebook.
         </span>
@@ -108,7 +122,7 @@ function UrlCard({
           placeholder={placeholder}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="mt-3 h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+          className="mt-3 h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-400/60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500 dark:focus:border-emerald-400"
         />
       </label>
     </section>

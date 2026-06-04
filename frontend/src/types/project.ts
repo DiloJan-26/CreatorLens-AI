@@ -170,6 +170,21 @@ export type ChatMessage = {
   trace?: ChatTrace | null;
 };
 
+export type StoredChatMessage = {
+  message_id: string;
+  session_id: string;
+  project_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+};
+
+export type ChatHistoryResponse = {
+  project_id: string;
+  session_id: string;
+  messages: StoredChatMessage[];
+};
+
 export type ChatStreamRequest = {
   message: string;
   session_id?: string | null;

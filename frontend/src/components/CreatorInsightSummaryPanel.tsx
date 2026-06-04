@@ -80,7 +80,9 @@ export function CreatorInsightSummaryPanel({
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             CreatorLens AI compares hooks, captions, confirmed public metrics,
-            and metadata completeness to explain what may improve the next post.
+            CTA strength, and audience specificity to explain what may improve
+            the next post. Metadata Availability is shown separately as
+            confidence context.
           </p>
         </div>
         <button
@@ -94,8 +96,9 @@ export function CreatorInsightSummaryPanel({
       </div>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
-        Scores are heuristic review signals, not guaranteed performance
-        predictions.
+        Hook Score and Creator Insight Score are heuristic review signals, not
+        guaranteed performance predictions. Metadata Availability is
+        informational and is not a performance score.
         {!indexReady ? " Vector search is not required for this summary." : ""}
       </p>
 
@@ -187,10 +190,7 @@ function OverallComparisonCard({
           value={comparison.confirmed_metric_winner}
         />
         <Metric label="Hook winner" value={comparison.hook_winner} />
-        <Metric
-          label="Overall insight winner"
-          value={comparison.overall_insight_winner}
-        />
+        <Metric label="Creator Insight Score winner" value={comparison.overall_insight_winner} />
       </dl>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700">

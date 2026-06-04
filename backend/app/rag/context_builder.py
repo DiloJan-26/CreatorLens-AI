@@ -723,10 +723,11 @@ def _generic_metric_comparison_answer(
 ) -> dict[str, Any]:
     metric_name = _comparison_metric_name(message)
     values = [
-        (item, _numeric_value(item.get(metric_name)))
+        (item, _comparison_metric_value(item, metric_name))
         for item in content_items
     ]
-    lines = [f"Confirmed public {metric_name.replace('_', ' ')} comparison:"]
+    metric_label = _metric_display_label(metric_name)
+    lines = [f"Confirmed public {metric_label} comparison:"]
 
     for item, value in values:
         lines.append(f"- {_content_label(item)}: {_display_metric_value(metric_name, value)}.")
@@ -734,7 +735,15 @@ def _generic_metric_comparison_answer(
     available_values = [(item, value) for item, value in values if value is not None]
 
     if len(available_values) < len(values):
-        lines.append("Comparison is incomplete because one or more values are unavailable.")
+        missing_labels = [
+            _content_label(item)
+            for item, value in values
+            if value is None
+        ]
+        lines.append(
+            "Comparison is limited because "
+            f"{metric_label} is unavailable for {', '.join(missing_labels)}."
+        )
     elif len(available_values) >= 2:
         winner, winner_value = max(available_values, key=lambda pair: pair[1])
         tied_items = [
@@ -746,7 +755,7 @@ def _generic_metric_comparison_answer(
         else:
             lines.append(
                 f"{_content_label(winner)} has the higher confirmed public "
-                f"{metric_name.replace('_', ' ')}."
+                f"{metric_label}."
             )
 
     lines.append("Unavailable metrics are not estimated.")
@@ -1110,7 +1119,63 @@ def _display_metric_value(metric_name: str, value: float | None) -> str:
     return _display_number(value)
 
 
+def _comparison_metric_value(
+    item: dict[str, Any],
+    metric_name: str,
+) -> float | None:
+    if metric_name == "follower_or_subscriber_count":
+        follower_count = _numeric_value(item.get("follower_count"))
+
+        if follower_count is not None:
+            return follower_count
+
+        return _numeric_value(item.get("subscriber_count"))
+
+    if metric_name == "interactions":
+        return _interaction_count(item)
+
+    return _numeric_value(item.get(metric_name))
+
+
+def _interaction_count(item: dict[str, Any]) -> float | None:
+    platform = str(item.get("platform") or "")
+    values = (
+        (
+            _numeric_value(item.get("reactions")),
+            _numeric_value(item.get("comments")),
+            _numeric_value(item.get("shares")),
+        )
+        if platform == "facebook"
+        else (
+            _numeric_value(item.get("likes")),
+            _numeric_value(item.get("comments")),
+        )
+    )
+    available_values = [value for value in values if value is not None]
+
+    if not available_values:
+        return None
+
+    return float(sum(available_values))
+
+
+def _metric_display_label(metric_name: str) -> str:
+    if metric_name == "engagement_rate":
+        return "engagement rate"
+
+    if metric_name == "follower_or_subscriber_count":
+        return "follower/subscriber count"
+
+    return metric_name.replace("_", " ")
+
+
 def _comparison_metric_name(message: str) -> str:
+    if "follower" in message or "subscriber" in message:
+        return "follower_or_subscriber_count"
+
+    if "interaction" in message:
+        return "interactions"
+
     if "like" in message:
         return "likes"
 
@@ -1246,6 +1311,11 @@ def _is_metric_comparison_question(message: str) -> bool:
         "comments",
         "reactions",
         "shares",
+        "followers",
+        "follower count",
+        "subscriber",
+        "subscriber count",
+        "interactions",
         "engagement",
         "performance",
     )

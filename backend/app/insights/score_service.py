@@ -268,13 +268,11 @@ def calculate_problem_solution_score(
 
 def calculate_overall_score(scores: InsightScores) -> int:
     weighted_score = (
-        scores.hook_clarity * 0.25
-        + scores.problem_solution_clarity * 0.20
-        + scores.caption_strength * 0.15
-        + scores.cta_strength * 0.10
+        scores.hook_clarity * 0.30
+        + scores.problem_solution_clarity * 0.25
+        + scores.caption_strength * 0.20
+        + scores.cta_strength * 0.15
         + scores.audience_specificity * 0.10
-        + scores.metadata_completeness * 0.10
-        + scores.engagement_confidence * 0.10
     )
 
     return max(0, min(round(weighted_score), 10))

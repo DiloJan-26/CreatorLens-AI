@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="gemini-2.5-flash", alias="LLM_MODEL")
     llm_temperature: float = Field(default=0.2, alias="LLM_TEMPERATURE")
     llm_max_output_tokens: int = Field(
-        default=1200,
+        default=1800,
         alias="LLM_MAX_OUTPUT_TOKENS",
     )
     debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")

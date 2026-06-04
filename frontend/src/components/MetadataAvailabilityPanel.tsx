@@ -106,18 +106,14 @@ function AvailabilityCard({ item }: { item: MetadataAvailabilityItem }) {
           <p className="mt-1 break-all text-xs text-slate-500">{item.url}</p>
         </div>
         <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
-          {item.completeness_score.toFixed(0)}%
+          {metadataStatus(item)}
         </span>
       </div>
 
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-        <div
-          className="h-full rounded-full bg-teal-500"
-          style={{
-            width: `${Math.max(0, Math.min(100, item.completeness_score))}%`,
-          }}
-        />
-      </div>
+      <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
+        {item.available_fields.length} available and {item.missing_fields.length} missing
+        across checked public metadata fields.
+      </p>
 
       <FieldList
         title="Available fields"
@@ -175,6 +171,18 @@ function fieldClass(tone: "available" | "missing"): string {
   }
 
   return "border-amber-200 bg-amber-50 text-amber-900";
+}
+
+function metadataStatus(item: MetadataAvailabilityItem): string {
+  if (item.completeness_score >= 85) {
+    return "Complete";
+  }
+
+  if (item.completeness_score >= 50) {
+    return "Partial";
+  }
+
+  return "Limited";
 }
 
 function slotLabel(slot: string): string {

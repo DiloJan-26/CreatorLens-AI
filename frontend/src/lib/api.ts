@@ -1,5 +1,6 @@
 import type {
   ChatCitation,
+  ChatHistoryResponse,
   ChatStreamRequest,
   ChatTrace,
   ContentPlatform,
@@ -136,6 +137,15 @@ export async function saveVerifiedMetrics(
   );
 }
 
+export async function getChatHistory(
+  projectId: string,
+  sessionId: string,
+): Promise<ChatHistoryResponse> {
+  return request<ChatHistoryResponse>(
+    `/api/projects/${projectId}/chat/sessions/${sessionId}`,
+  );
+}
+
 type StreamChatHandlers = {
   onSession?: (sessionId: string) => void;
   onToken?: (text: string) => void;
@@ -229,7 +239,7 @@ async function getErrorMessage(response: Response): Promise<string> {
     // Fall through to a generic HTTP message.
   }
 
-  return `API returned HTTP ${response.status}`;
+  return `Service returned HTTP ${response.status}`;
 }
 
 function extractDetail(data: unknown): string | null {

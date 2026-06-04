@@ -1,5 +1,5 @@
 const STEPS = [
-  "Paste URLs",
+  "Paste two URLs",
   "Extract metadata and transcripts",
   "Build cited evidence",
   "Get creator insights",
@@ -8,7 +8,7 @@ const STEPS = [
 
 export function WorkflowStrip() {
   return (
-    <section id="how-it-works" className="border-b border-slate-200 bg-slate-950 py-10 text-white">
+    <section id="how-it-works" className="border-b border-slate-200 bg-slate-950 py-10 text-white dark:border-slate-800">
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -21,7 +21,7 @@ export function WorkflowStrip() {
           </div>
           <p className="max-w-xl text-sm leading-6 text-slate-300">
             The workspace turns two URLs into cited insights without exposing
-            backend or retrieval controls in the normal user flow.
+            technical retrieval controls in the normal user flow.
           </p>
         </div>
 

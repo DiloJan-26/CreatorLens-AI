@@ -37,13 +37,17 @@ def build_system_prompt() -> str:
             "Do not invent views, likes, comments, reactions, shares, follower counts, subscriber counts, engagement rates, dates, duration, or transcript details.",
             "Distinguish confirmed metric performance from heuristic content-quality signals such as Hook Analysis and Creator Insight Score.",
             "Creator Insight Scores are heuristic review signals, not guaranteed performance predictions.",
+            "Metadata Availability supports confidence only; it is not a performance score or creator quality score.",
             "If metric data is incomplete, say the comparison is limited.",
             "For Instagram, mention public extraction limitations or Facebook cross-post caveats when relevant.",
             "Do not assume Instagram or Facebook metrics are complete.",
             "If same-platform comparison appears, use Content 1 and Content 2 labels to avoid confusion.",
-            "For reasoning questions, give structured insight, not a generic paragraph.",
-            "For improvement questions, include diagnosis, what worked, what to change, and an example rewrite.",
-            "For hook questions, identify hook type, first-second clarity, payoff, and recommendation.",
+            "For strategy, performance, hook, improvement, and rewrite questions, give enough reasoning for a creator or marketer to act on.",
+            "Avoid one-line answers for strategy questions; use clear sections with diagnosis, evidence, limitations, and next steps.",
+            "For normal reasoning questions, aim for 60 to 120 words. For complex strategy or rewrite questions, use up to about 150 words when needed.",
+            "For improvement questions, include diagnosis, what worked, what to change, an example rewrite, and why the change should help.",
+            "For rewrite questions, provide a short diagnosis, a rewritten opening, why it is stronger, and an optional alternative version when context allows.",
+            "For hook questions, identify hook type, first-second clarity, payoff, what to improve, and an example rewritten hook.",
             "Use citations only from backend-provided source labels. Do not fabricate citation labels.",
             "The frontend will display citations separately, so do not invent source labels in the answer.",
             "If useful, refer to sources naturally, but citations are provided separately.",
@@ -354,7 +358,10 @@ def _human_prompt(
             "- Say Unavailable when public data is missing.\n"
             "- Name Content 1 and Content 2 with their platform names.\n"
             "- Separate confirmed public metrics from heuristic insight scores.\n"
-            "- Keep the answer concise and useful for creator analysis.\n"
+            "- Use enough depth for a creator or marketer to act on; avoid one-line strategy answers.\n"
+            "- For reasoning answers, usually write 60 to 120 words; use up to about 150 words when the user asks for strategy, diagnosis, or rewrite help.\n"
+            "- Keep deterministic metric facts precise and keep strategic reasoning structured.\n"
+            "- Treat Metadata Availability as confidence context, not as a quality or performance score.\n"
             "- Do not output fake citation labels.\n"
             f"{style_instructions}",
         ]
@@ -365,11 +372,13 @@ def _answer_style_instructions(intent: str) -> str:
     if intent == "performance_reasoning":
         return (
             "- Use this format:\n"
-            "1. Confirmed metric comparison\n"
-            "2. Hook/content difference\n"
-            "3. Caption/CTA difference\n"
-            "4. Metadata limitations\n"
-            "5. Actionable recommendation"
+            "1. Quick verdict\n"
+            "2. Confirmed public metrics comparison\n"
+            "3. Hook and first-seconds analysis\n"
+            "4. Caption/description/CTA analysis\n"
+            "5. Audience and content angle analysis\n"
+            "6. Metadata limitations\n"
+            "7. Actionable next steps"
         )
 
     if intent == "hook_analysis":
@@ -378,7 +387,8 @@ def _answer_style_instructions(intent: str) -> str:
             "1. Content 1 hook type and evidence\n"
             "2. Content 2 hook type and evidence\n"
             "3. Which opening is stronger and why\n"
-            "4. Rewrite suggestion"
+            "4. What to improve\n"
+            "5. Example rewritten hook"
         )
 
     if intent == "improvement_suggestions":
@@ -393,8 +403,11 @@ def _answer_style_instructions(intent: str) -> str:
 
     if intent == "rewrite_request":
         return (
-            "- Focus on the rewritten opening or caption, then briefly explain why "
-            "it is clearer."
+            "- Use this format:\n"
+            "1. Diagnosis\n"
+            "2. Rewritten opening or caption\n"
+            "3. Why it is stronger\n"
+            "4. Optional alternative version"
         )
 
     if intent == "metadata_missing":

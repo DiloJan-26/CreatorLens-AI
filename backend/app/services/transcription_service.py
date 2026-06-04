@@ -108,8 +108,6 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
         )
 
     detected_language = _detected_language(response_json) or configured_language
-    if configured_language == "multi" and not detected_language:
-        detected_language = "multi"
     language_confidence = _language_confidence(response_json)
 
     return TranscriptionResult(
@@ -332,7 +330,7 @@ def _configured_deepgram_language(value: str) -> str | None:
         return None
 
     if language in {"multi", "auto", "multilingual"}:
-        return "multi"
+        return None
 
     return language
 

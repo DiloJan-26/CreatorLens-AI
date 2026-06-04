@@ -90,10 +90,8 @@ export function TranscriptPreviewPanel({
               value={transcriptSourceLabel(preview.transcript_source)}
             />
             <PreviewMetric
-              label="Transcript Language"
-              value={languageLabel(
-                preview.detected_language ?? preview.transcript_language,
-              )}
+              label="Detected language"
+              value={detectedLanguageLabel(preview)}
             />
             <PreviewMetric
               label="Confidence"
@@ -197,6 +195,23 @@ function languageLabel(language: string | null | undefined): string {
   }
 
   return language;
+}
+
+function detectedLanguageLabel(preview: TranscriptPreviewResponse): string {
+  const detectedLanguage = preview.detected_language;
+
+  if (
+    detectedLanguage &&
+    !["multi", "multilingual", "auto"].includes(detectedLanguage.toLowerCase())
+  ) {
+    return languageLabel(detectedLanguage);
+  }
+
+  if (preview.transcript_language) {
+    return `${languageLabel(preview.transcript_language)} captions`;
+  }
+
+  return "Not confidently detected";
 }
 
 function confidenceLabel(confidence: number | null | undefined): string {

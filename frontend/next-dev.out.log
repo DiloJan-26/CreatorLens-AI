@@ -6,13 +6,13 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.1.100:3000
 - Environments: .env.local
-✓ Ready in 959ms
+✓ Ready in 824ms
 Creating turbopack project {
   dir: 'C:\\ZPROJECTS\\PROJECTS\\CreatorLens-AI\\frontend',
   testMode: true
 }
 
- GET / 200 in 517ms (next.js: 298ms, application-code: 218ms)
- GET / 200 in 81ms (next.js: 10ms, application-code: 70ms)
- GET / 200 in 93ms (next.js: 14ms, application-code: 79ms)
+ GET / 200 in 575ms (next.js: 282ms, application-code: 293ms)
+ GET /chat 200 in 212ms (next.js: 64ms, application-code: 148ms)
+ GET /analyze 200 in 111ms (next.js: 48ms, application-code: 63ms)
 [?25h

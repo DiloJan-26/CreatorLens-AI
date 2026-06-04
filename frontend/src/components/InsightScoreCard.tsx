@@ -36,11 +36,11 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
           value={`${content.hook_analysis.hook_score}/10`}
         />
         <Metric
-          label="Metadata completeness"
-          value={`${content.scores.metadata_completeness}/10`}
+          label="Metadata availability"
+          value={metadataStatus(content.scores.metadata_completeness)}
         />
         <Metric
-          label="Engagement confidence"
+          label="Metric confidence"
           value={`${content.scores.engagement_confidence}/10`}
         />
         <Metric
@@ -62,6 +62,12 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
         <FieldList title="Strengths" fields={content.strengths} />
         <FieldList title="Weaknesses" fields={content.weaknesses} />
       </div>
+
+      <FieldList
+        title="Available fields"
+        fields={content.available_metadata}
+        emptyLabel="No available metadata in checked fields"
+      />
 
       <FieldList
         title="Missing metadata"
@@ -138,6 +144,18 @@ function platformLabel(platform: string): string {
 
 function hookTypeLabel(value: string): string {
   return fieldLabel(value);
+}
+
+function metadataStatus(score: number): string {
+  if (score >= 9) {
+    return "Complete";
+  }
+
+  if (score >= 5) {
+    return "Partial";
+  }
+
+  return "Limited";
 }
 
 function fieldLabel(value: string): string {

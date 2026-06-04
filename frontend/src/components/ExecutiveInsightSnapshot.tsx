@@ -56,8 +56,8 @@ export function ExecutiveInsightSnapshot({
               label="Hook winner"
               value={summary.comparison.hook_winner}
             />
-            <SnapshotMetric
-              label="Overall insight winner"
+          <SnapshotMetric
+              label="Creator Insight Score winner"
               value={summary.comparison.overall_insight_winner}
             />
             <SnapshotMetric
@@ -67,7 +67,7 @@ export function ExecutiveInsightSnapshot({
           </dl>
 
           <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm leading-6 text-amber-900">
-            <span className="font-semibold">Metric confidence: </span>
+            <span className="font-semibold">Metadata Confidence: </span>
             {summary.comparison.confidence_note ||
               "Comparison limited by unavailable public metrics."}
           </p>

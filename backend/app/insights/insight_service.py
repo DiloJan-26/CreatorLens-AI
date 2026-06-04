@@ -220,11 +220,63 @@ def _confirmed_metric_winner(
             "confirmed public interactions",
         )
 
+    missing_detail = _missing_comparable_metric_detail(content_1, content_2)
+
     return (
         None,
-        "Confirmed public metric winner is unavailable because comparable key metrics are incomplete.",
-        "Metric comparison is limited because one or both content items are missing comparable confirmed public metrics.",
+        "Confirmed public metric winner is unavailable because comparable key metrics are incomplete. "
+        f"{missing_detail}",
+        f"Metric comparison is limited because {missing_detail.lower()}",
     )
+
+
+def _missing_comparable_metric_detail(
+    content_1: dict[str, Any],
+    content_2: dict[str, Any],
+) -> str:
+    checks = (
+        (
+            "engagement rate",
+            (
+                _numeric_value(content_1.get("engagement_rate")),
+                _numeric_value(content_2.get("engagement_rate")),
+            ),
+        ),
+        (
+            "views",
+            (
+                _numeric_value(content_1.get("views")),
+                _numeric_value(content_2.get("views")),
+            ),
+        ),
+        (
+            "interactions",
+            (
+                _interaction_count(content_1),
+                _interaction_count(content_2),
+            ),
+        ),
+    )
+    details: list[str] = []
+
+    for metric_label, (content_1_value, content_2_value) in checks:
+        missing_labels = []
+
+        if content_1_value is None:
+            missing_labels.append(_slot_label(str(content_1.get("slot") or "")))
+
+        if content_2_value is None:
+            missing_labels.append(_slot_label(str(content_2.get("slot") or "")))
+
+        if missing_labels:
+            details.append(
+                f"{metric_label} unavailable for {', '.join(missing_labels)}"
+            )
+
+    if not details:
+        return "Comparable confirmed public metrics are unavailable."
+
+    return f"{'; '.join(details)}."
 
 
 def _winner_from_values(
@@ -272,8 +324,10 @@ def _main_reason(
     return (
         f"{metric_reason} Hook Analysis favors {hook_winner}. "
         f"Creator Insight Score favors {overall_winner}. "
-        f"Content 1 score: {content_1_insight.scores.overall_score}/10; "
-        f"Content 2 score: {content_2_insight.scores.overall_score}/10."
+        "Content quality comparison is based on hook, caption, CTA, "
+        "problem-solution clarity, and audience specificity. "
+        f"Content 1 Creator Insight Score: {content_1_insight.scores.overall_score}/10; "
+        f"Content 2 Creator Insight Score: {content_2_insight.scores.overall_score}/10."
     )
 
 
@@ -294,7 +348,9 @@ def _comparison_confidence_note(
 
     return (
         f"{metric_confidence} This comparison is based on confirmed public metrics "
-        f"and rule-based creator heuristics. {missing_note} Missing metrics are not estimated."
+        f"and rule-based creator heuristics. {missing_note} Metadata Availability "
+        "supports confidence only and is not treated as a performance score. "
+        "Missing metrics are not estimated."
     )
 
 

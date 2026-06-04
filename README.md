@@ -2,7 +2,7 @@
 
 CreatorLens AI is a full-stack creator intelligence product for comparing any two supported short-form content URLs with confirmed public metadata, multilingual transcript evidence, cited insights, and streaming AI chat.
 
-The UI is a polished one-page SaaS landing and app workspace. Users paste Content URL 1 and Content URL 2, click **Analyze Content**, and CreatorLens AI runs the normal workflow automatically:
+Users paste Content URL 1 and Content URL 2, click **Analyze Content**, and CreatorLens AI runs the normal workflow automatically:
 
 ```text
 URLs -> platform detection -> public extraction -> transcripts -> evidence index -> Creator Insight Summary -> cited chat
@@ -25,14 +25,6 @@ Supported URL types:
 - Instagram Reels, posts, and TV URLs
 - Facebook Reels, public watch URLs, and public post video URLs
 
-## Product Flow
-
-1. Paste Content URL 1 and Content URL 2.
-2. Click **Analyze Content**.
-3. The app creates the comparison, detects platforms, extracts best-effort public metadata, pulls or transcribes audio when available, builds the evidence index, and loads creator insights.
-4. Results show content overview cards, Metadata Availability, Executive Insight Snapshot, Creator Insight Summary, recommendations, streaming chat, citations, and advanced evidence controls.
-5. The **Evidence & System Details** section is collapsed by default and includes Evidence Index status, **Rebuild Evidence Index**, and the Evidence Explorer.
-
 ## Key Features
 
 - Universal Content URL 1 and Content URL 2 comparison
@@ -48,6 +40,9 @@ Supported URL types:
 - Qdrant vector storage for cited evidence
 - Streaming Creator Chat using Gemini 2.5 Flash through LangChain
 - Backend-derived citations and memory-aware chat sessions
+- Dedicated chat page with project context
+- Dark/light theme toggle persisted as `creatorlens_theme`
+- No signup, authentication, payment, or account setup required for the demo
 
 ## Metadata Availability
 
@@ -112,25 +107,6 @@ It includes:
 
 Scores are heuristic review signals, not guaranteed performance predictions.
 
-## Streaming Creator Chat
-
-Creator Chat answers follow-up questions using:
-
-- Creator Insight Summary
-- structured metadata
-- confirmed public metrics
-- retrieved evidence chunks
-- recent chat memory
-
-Suggested demo questions:
-
-- What is the engagement rate of each content item?
-- Compare the hooks in the first 5 seconds.
-- Give me the Creator Insight Summary.
-- Which content has stronger confirmed public engagement?
-- What metadata is missing?
-- Suggest improvements for Content 2 based on Content 1.
-- Rewrite the opening for Content 2.
 
 ## Local Setup
 
@@ -159,5 +135,7 @@ Local URLs:
 - http://localhost:8000/api/projects
 - http://localhost:8000/api/projects/{project_id}/insights/summary
 - http://localhost:3000
+- http://localhost:3000/analyze
+- http://localhost:3000/chat
 
 Use `.env.example` and `backend/.env.example` as references.

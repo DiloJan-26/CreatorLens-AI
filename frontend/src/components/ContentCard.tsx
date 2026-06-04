@@ -201,7 +201,7 @@ function transcriptStatus(item: ContentItem): string {
   }
 
   const source = item.transcript_source ? sourceLabel(item.transcript_source) : "Unknown";
-  return `${languageLabel(item.detected_language ?? item.transcript_language)} / ${source}`;
+  return `${transcriptLanguageStatus(item)} / ${source}`;
 }
 
 function sourceLabel(source: string): string {
@@ -244,6 +244,23 @@ function languageLabel(language: string | null | undefined): string {
   }
 
   return language;
+}
+
+function transcriptLanguageStatus(item: ContentItem): string {
+  const detectedLanguage = item.detected_language;
+
+  if (
+    detectedLanguage &&
+    !["multi", "multilingual", "auto"].includes(detectedLanguage.toLowerCase())
+  ) {
+    return `Detected ${languageLabel(detectedLanguage)}`;
+  }
+
+  if (item.transcript_language) {
+    return `${languageLabel(item.transcript_language)} captions`;
+  }
+
+  return "Language not confidently detected";
 }
 
 function fieldLabel(value: string): string {
