@@ -156,13 +156,9 @@ def fetch_youtube_transcript_with_metadata(video_id: str) -> TranscriptionResult
 
 
 def extract_youtube_video(url: str) -> VideoExtractionResult:
+    # Step 1: Extract video ID — if this fails, nothing else can proceed.
     try:
         video_id = extract_youtube_video_id(url)
-        info = fetch_youtube_info(url)
-        transcript_result = fetch_youtube_transcript_with_metadata(video_id)
-
-        if not transcript_result.segments:
-            transcript_result = _transcribe_youtube_audio(info)
     except Exception as exc:
         return VideoExtractionResult(
             metadata=VideoMetadata(
@@ -177,32 +173,68 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
             transcript_segments=[],
         )
 
+    # Step 2: Fetch full metadata via yt-dlp.
+    # On cloud servers YouTube may block datacenter IPs — treat as non-fatal
+    # so caption-based transcript extraction can still succeed.
+    info: dict[str, Any] | None = None
+    yt_dlp_error: str | None = None
+    try:
+        info = fetch_youtube_info(url)
+    except Exception as exc:
+        yt_dlp_error = _safe_error_message(exc)
+
+    # Step 3: Always attempt captions via youtube-transcript-api (works on cloud).
+    transcript_result = fetch_youtube_transcript_with_metadata(video_id)
+
+    # Step 4: If captions are absent and yt-dlp succeeded, try audio transcription.
+    if not transcript_result.segments and info is not None:
+        transcript_result = _transcribe_youtube_audio(info)
+
     transcript_segments = transcript_result.segments
     transcript_available = len(transcript_segments) > 0
+
+    if info is None:
+        # yt-dlp was blocked — partial extraction with captions only.
+        extraction_status = "partial" if transcript_available else "failed"
+        error_message = (
+            None
+            if transcript_available
+            else (
+                "YouTube public metadata could not be extracted "
+                f"({yt_dlp_error or 'yt-dlp blocked'}). "
+                "No captions were available either."
+            )
+        )
+        transcript_source_note = (
+            transcript_result.transcript_source_note
+            or YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
+        )
+    else:
+        extraction_status = "ready" if transcript_available else "partial"
+        error_message = (
+            None
+            if transcript_available
+            else "YouTube metadata extracted, but transcript was unavailable."
+        )
+        transcript_source_note = (
+            transcript_result.transcript_source_note
+            or YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
+        )
 
     video_metadata = normalize_metadata(
         platform="youtube",
         url=url,
-        info=info,
+        info=info or {},
         transcript_available=transcript_available,
         transcript_segment_count=len(transcript_segments),
         transcript_language=transcript_result.transcript_language,
         detected_language=transcript_result.detected_language,
         language_confidence=transcript_result.language_confidence,
         transcript_source=transcript_result.transcript_source,
-        extraction_status="ready" if transcript_available else "partial",
-        error_message=(
-            None
-            if transcript_available
-            else "YouTube metadata extracted, but transcript was unavailable."
-        ),
+        extraction_status=extraction_status,
+        error_message=error_message,
         metric_source_note=YOUTUBE_METRIC_SOURCE_NOTE,
-        transcript_source_note=(
-            transcript_result.transcript_source_note
-            if transcript_available
-            else transcript_result.transcript_source_note
-            or YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE
-        ),
+        transcript_source_note=transcript_source_note,
     )
 
     return VideoExtractionResult(
