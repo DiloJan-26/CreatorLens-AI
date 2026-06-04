@@ -1,0 +1,28 @@
+# Virtual environment — never copy into image
+.venv/
+
+# Compiled Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local secrets — set as Render environment variables instead
+.env
+.env.local
+.env.*.local
+
+# SQLite database — starts fresh in production
+storage/
+*.db
+
+# Development / editor noise
+.git/
+.gitignore
+*.md
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
