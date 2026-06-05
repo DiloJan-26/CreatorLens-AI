@@ -39,6 +39,18 @@ class Settings(BaseSettings):
 
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")
+    apify_youtube_transcript_actor: str = Field(
+        default="abotapi/youtube-transcript-scraper",
+        alias="APIFY_YOUTUBE_TRANSCRIPT_ACTOR",
+    )
+    apify_youtube_transcript_input_style: str = Field(
+        default="videoUrls",
+        alias="APIFY_YOUTUBE_TRANSCRIPT_INPUT_STYLE",
+    )
+    apify_youtube_transcript_timeout_seconds: int = Field(
+        default=120,
+        alias="APIFY_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS",
+    )
     deepgram_api_key: str | None = Field(default=None, alias="DEEPGRAM_API_KEY")
     transcript_language: str = Field(default="multi", alias="TRANSCRIPT_LANGUAGE")
     transcript_fallback_languages: str = Field(

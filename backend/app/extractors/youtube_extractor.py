@@ -10,6 +10,10 @@ from yt_dlp import YoutubeDL
 from app.core.config import get_settings
 from app.extractors.metadata_normalizer import extract_best_audio_url, normalize_metadata
 from app.models.video import TranscriptSegment, VideoExtractionResult, VideoMetadata
+from app.services.apify_transcript_service import (
+    ApifyTranscriptUnavailableError,
+    transcribe_youtube_url_with_apify,
+)
 from app.services.transcription_service import (
     TranscriptionResult,
     TranscriptionUnavailableError,
@@ -290,6 +294,7 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     youtube_api_key = (settings.youtube_api_key or "").strip()
     info: dict[str, Any] | None = None
     yt_dlp_error: str | None = None
+    info_from_ytdlp = False
 
     if youtube_api_key:
         try:
@@ -300,16 +305,29 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     if info is None:
         try:
             info = fetch_youtube_info(url)
+            info_from_ytdlp = True
         except Exception as exc:
             yt_dlp_error = _safe_error_message(exc)
 
     # Step 3: Always attempt captions via youtube-transcript-api (works on cloud).
     transcript_result = fetch_youtube_transcript_with_metadata(video_id)
 
+    # Step 4: Apify transcript fallback for Render/cloud IP blocking.
+    if not transcript_result.segments:
+        try:
+            transcript_result = transcribe_youtube_url_with_apify(url)
+        except ApifyTranscriptUnavailableError:
+            pass
+
     # Step 4: Audio transcription fallback — only when yt-dlp provided the info
     # (audio format URLs are yt-dlp specific; YouTube Data API v3 doesn't supply them).
-    if not transcript_result.segments and info is not None and not youtube_api_key:
-        transcript_result = _transcribe_youtube_audio(info)
+    # If metadata came from the Data API, make a separate best-effort yt-dlp
+    # request just for audio before giving up on transcript evidence.
+    if not transcript_result.segments:
+        audio_info = info if info_from_ytdlp else _fetch_youtube_audio_info(url)
+
+        if audio_info is not None:
+            transcript_result = _transcribe_youtube_audio(audio_info)
 
     transcript_segments = transcript_result.segments
     transcript_available = len(transcript_segments) > 0
@@ -465,6 +483,13 @@ def _transcribe_youtube_audio(info: dict[str, Any]) -> TranscriptionResult:
                 "Transcript unavailable because audio transcription failed or public media audio could not be extracted."
             ),
         )
+
+
+def _fetch_youtube_audio_info(url: str) -> dict[str, Any] | None:
+    try:
+        return fetch_youtube_info(url)
+    except Exception:
+        return None
 
 
 def _transcript_language(transcript: Any) -> str | None:
