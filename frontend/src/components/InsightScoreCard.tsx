@@ -36,6 +36,18 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
           value={`${content.hook_analysis.hook_score}/10`}
         />
         <Metric
+          label="Creative structure"
+          value={`${content.scores.creative_structure_score}/10`}
+        />
+        <Metric
+          label="Public performance"
+          value={`${content.scores.public_performance_score}/10`}
+        />
+        <Metric
+          label="Creator efficiency"
+          value={`${content.scores.creator_efficiency_score}/10`}
+        />
+        <Metric
           label="Metadata availability"
           value={metadataStatus(content.scores.metadata_completeness)}
         />
@@ -54,7 +66,7 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
       </dl>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        <span className="font-medium text-slate-700">Metadata Confidence: </span>
+        <span className="font-medium text-slate-700">Evidence confidence: </span>
         {content.metric_confidence_note}
       </p>
 
@@ -64,13 +76,13 @@ export function InsightScoreCard({ content }: InsightScoreCardProps) {
       </div>
 
       <FieldList
-        title="Available fields"
+        title="Evidence available"
         fields={content.available_metadata}
         emptyLabel="No available metadata in checked fields"
       />
 
       <FieldList
-        title="Missing metadata"
+        title="Evidence gaps"
         fields={content.missing_metadata}
         emptyLabel="No missing metadata in checked fields"
       />

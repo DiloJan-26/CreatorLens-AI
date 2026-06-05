@@ -1498,6 +1498,9 @@ def _transcript_source_label(value: Any) -> str:
     if value == "deepgram_multilingual":
         return "Deepgram multilingual"
 
+    if value == "apify_youtube_transcript":
+        return "Apify YouTube transcript"
+
     if value == "unavailable":
         return "Unavailable"
 

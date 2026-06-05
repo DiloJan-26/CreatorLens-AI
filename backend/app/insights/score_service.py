@@ -266,7 +266,7 @@ def calculate_problem_solution_score(
     return max(0, min(score, 10))
 
 
-def calculate_overall_score(scores: InsightScores) -> int:
+def calculate_creative_structure_score(scores: InsightScores) -> int:
     weighted_score = (
         scores.hook_clarity * 0.30
         + scores.problem_solution_clarity * 0.25
@@ -276,6 +276,173 @@ def calculate_overall_score(scores: InsightScores) -> int:
     )
 
     return max(0, min(round(weighted_score), 10))
+
+
+def calculate_public_performance_score(content_item: dict[str, Any]) -> int:
+    views = _numeric_value(content_item.get("views"))
+    interactions = _interaction_count(content_item)
+    engagement_rate = _numeric_value(content_item.get("engagement_rate"))
+
+    score = 0
+
+    if views is not None:
+        score += _views_score(views)
+
+    if interactions is not None:
+        score += _interactions_score(interactions)
+
+    if engagement_rate is not None:
+        score += _engagement_rate_score(engagement_rate)
+
+    if views is None and interactions is None and engagement_rate is None:
+        return 0
+
+    return max(0, min(round(score / 3), 10))
+
+
+def calculate_creator_efficiency_score(content_item: dict[str, Any]) -> int:
+    creator_size = _creator_size(content_item)
+    views = _numeric_value(content_item.get("views"))
+    interactions = _interaction_count(content_item)
+
+    if creator_size is None or creator_size <= 0:
+        return 0
+
+    score_parts: list[int] = []
+
+    if views is not None:
+        score_parts.append(_views_per_creator_score(views / creator_size))
+
+    if interactions is not None:
+        score_parts.append(_interactions_per_creator_score(interactions / creator_size))
+
+    if not score_parts:
+        return 0
+
+    return max(0, min(round(sum(score_parts) / len(score_parts)), 10))
+
+
+def calculate_overall_score(scores: InsightScores) -> int:
+    weighted_score = (
+        scores.public_performance_score * 0.35
+        + scores.creator_efficiency_score * 0.30
+        + scores.creative_structure_score * 0.25
+        + scores.engagement_confidence * 0.10
+    )
+
+    return max(0, min(round(weighted_score), 10))
+
+
+def _views_score(views: float) -> int:
+    if views >= 10_000_000:
+        return 10
+    if views >= 3_000_000:
+        return 9
+    if views >= 1_000_000:
+        return 8
+    if views >= 300_000:
+        return 7
+    if views >= 100_000:
+        return 6
+    if views >= 30_000:
+        return 5
+    if views >= 10_000:
+        return 4
+    if views >= 3_000:
+        return 3
+    if views >= 1_000:
+        return 2
+    return 1
+
+
+def _interactions_score(interactions: int) -> int:
+    if interactions >= 500_000:
+        return 10
+    if interactions >= 150_000:
+        return 9
+    if interactions >= 50_000:
+        return 8
+    if interactions >= 15_000:
+        return 7
+    if interactions >= 5_000:
+        return 6
+    if interactions >= 1_500:
+        return 5
+    if interactions >= 500:
+        return 4
+    if interactions >= 150:
+        return 3
+    if interactions >= 50:
+        return 2
+    return 1
+
+
+def _engagement_rate_score(engagement_rate: float) -> int:
+    if engagement_rate >= 8:
+        return 10
+    if engagement_rate >= 5:
+        return 9
+    if engagement_rate >= 3:
+        return 8
+    if engagement_rate >= 2:
+        return 7
+    if engagement_rate >= 1:
+        return 6
+    if engagement_rate >= 0.5:
+        return 4
+    if engagement_rate > 0:
+        return 2
+    return 0
+
+
+def _views_per_creator_score(value: float) -> int:
+    if value >= 50:
+        return 10
+    if value >= 20:
+        return 9
+    if value >= 10:
+        return 8
+    if value >= 5:
+        return 7
+    if value >= 2:
+        return 6
+    if value >= 1:
+        return 5
+    if value >= 0.5:
+        return 4
+    if value >= 0.2:
+        return 3
+    if value > 0:
+        return 2
+    return 0
+
+
+def _interactions_per_creator_score(value: float) -> int:
+    if value >= 2:
+        return 10
+    if value >= 1:
+        return 9
+    if value >= 0.5:
+        return 8
+    if value >= 0.2:
+        return 7
+    if value >= 0.1:
+        return 6
+    if value >= 0.05:
+        return 5
+    if value >= 0.02:
+        return 4
+    if value >= 0.01:
+        return 3
+    if value > 0:
+        return 2
+    return 0
+
+
+def _creator_size(content_item: dict[str, Any]) -> float | None:
+    return _numeric_value(content_item.get("subscriber_count")) or _numeric_value(
+        content_item.get("follower_count")
+    )
 
 
 def _interaction_count(content_item: dict[str, Any]) -> int | None:

@@ -79,10 +79,9 @@ export function CreatorInsightSummaryPanel({
             Creator Insight Summary
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            CreatorLens AI compares hooks, captions, confirmed public metrics,
-            CTA strength, and audience specificity to explain what may improve
-            the next post. Metadata Availability is shown separately as
-            confidence context.
+            CreatorLens AI separates confirmed public performance, creator-size
+            efficiency, and creative structure so the comparison does not mistake
+            data availability for content strength.
           </p>
         </div>
         <button
@@ -96,9 +95,10 @@ export function CreatorInsightSummaryPanel({
       </div>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
-        Hook Score and Creator Insight Score are heuristic review signals, not
-        guaranteed performance predictions. Metadata Availability is
-        informational and is not a performance score.
+        Creator Insight Score is a deterministic review signal combining public
+        performance, creator efficiency, creative structure, and metric
+        confidence. Metadata Availability is informational and is not a creative
+        strength or performance score.
         {!indexReady ? " Vector search is not required for this summary." : ""}
       </p>
 
@@ -178,26 +178,33 @@ function OverallComparisonCard({
   return (
     <section className="rounded-md border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-        Confirmed Public Metrics
+        Trustworthy Comparison
       </p>
       <h3 className="mt-2 text-base font-semibold text-slate-950">
         Overall comparison
       </h3>
 
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Metric
-          label="Confirmed metric winner"
+          label="Performance winner"
           value={comparison.confirmed_metric_winner}
         />
-        <Metric label="Hook winner" value={comparison.hook_winner} />
-        <Metric label="Creator Insight Score winner" value={comparison.overall_insight_winner} />
+        <Metric
+          label="Creator efficiency winner"
+          value={comparison.creator_efficiency_winner}
+        />
+        <Metric
+          label="Creative structure winner"
+          value={comparison.creative_structure_winner}
+        />
+        <Metric label="Overall signal winner" value={comparison.overall_insight_winner} />
       </dl>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700">
         {comparison.main_reason}
       </p>
       <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        <span className="font-medium text-slate-700">Metadata Confidence: </span>
+        <span className="font-medium text-slate-700">Evidence confidence: </span>
         {comparison.confidence_note}
       </p>
     </section>

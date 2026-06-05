@@ -304,6 +304,9 @@ export type InsightScores = {
   cta_strength: number;
   caption_strength: number;
   audience_specificity: number;
+  creative_structure_score: number;
+  public_performance_score: number;
+  creator_efficiency_score: number;
   metadata_completeness: number;
   engagement_confidence: number;
   overall_score: number;
@@ -327,6 +330,8 @@ export type ContentInsight = {
 
 export type ComparisonInsight = {
   confirmed_metric_winner?: string | null;
+  creator_efficiency_winner?: string | null;
+  creative_structure_winner?: string | null;
   hook_winner?: string | null;
   overall_insight_winner?: string | null;
   main_reason: string;

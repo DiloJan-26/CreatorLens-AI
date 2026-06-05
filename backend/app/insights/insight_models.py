@@ -15,6 +15,9 @@ class InsightScores(BaseModel):
     cta_strength: int = Field(ge=0, le=10)
     caption_strength: int = Field(ge=0, le=10)
     audience_specificity: int = Field(ge=0, le=10)
+    creative_structure_score: int = Field(default=0, ge=0, le=10)
+    public_performance_score: int = Field(default=0, ge=0, le=10)
+    creator_efficiency_score: int = Field(default=0, ge=0, le=10)
     metadata_completeness: int = Field(ge=0, le=10)
     engagement_confidence: int = Field(ge=0, le=10)
     overall_score: int = Field(ge=0, le=10)
@@ -38,6 +41,8 @@ class ContentInsight(BaseModel):
 
 class ComparisonInsight(BaseModel):
     confirmed_metric_winner: str | None = None
+    creator_efficiency_winner: str | None = None
+    creative_structure_winner: str | None = None
     hook_winner: str | None = None
     overall_insight_winner: str | None = None
     main_reason: str

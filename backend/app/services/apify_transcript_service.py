@@ -106,13 +106,23 @@ def _actor_input(url: str, input_style: str) -> dict[str, Any]:
 
 
 def _segments_from_items(items: list[Any]) -> list[TranscriptSegment]:
+    aggregated_segments = _segments_from_list(items)
+
+    if aggregated_segments:
+        return _reindex_segments(aggregated_segments)
+
+    candidates: list[list[TranscriptSegment]] = []
+
     for item in items:
         segments = _segments_from_item(item)
 
         if segments:
-            return segments
+            candidates.append(segments)
 
-    return []
+    if not candidates:
+        return []
+
+    return _reindex_segments(max(candidates, key=_segments_score))
 
 
 def _segments_from_item(item: Any) -> list[TranscriptSegment]:
@@ -271,3 +281,27 @@ def _time_value(value: Any) -> float | None:
         seconds = seconds * 60 + float(part)
 
     return seconds
+
+
+def _reindex_segments(segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
+    return [
+        TranscriptSegment(
+            segment_index=index,
+            start_time=segment.start_time,
+            end_time=segment.end_time,
+            text=segment.text,
+        )
+        for index, segment in enumerate(segments)
+    ]
+
+
+def _segments_score(segments: list[TranscriptSegment]) -> tuple[float, int, int]:
+    end_times = [
+        segment.end_time
+        for segment in segments
+        if isinstance(segment.end_time, int | float)
+    ]
+    coverage = max(end_times) if end_times else 0.0
+    text_length = sum(len(segment.text.strip()) for segment in segments)
+
+    return float(coverage), text_length, len(segments)

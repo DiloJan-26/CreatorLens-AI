@@ -34,6 +34,8 @@ YOUTUBE_TRANSCRIPT_AVAILABLE_NOTE = (
 YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE = (
     "Transcript unavailable because no captions were found and public media audio could not be extracted."
 )
+TRANSCRIPT_COMPLETENESS_RATIO = 0.92
+TRANSCRIPT_COMPLETENESS_GAP_SECONDS = 1.5
 
 
 def extract_youtube_video_id(url: str) -> str:
@@ -309,13 +311,19 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         except Exception as exc:
             yt_dlp_error = _safe_error_message(exc)
 
+    expected_duration = _expected_duration_seconds(info)
+
     # Step 3: Always attempt captions via youtube-transcript-api (works on cloud).
     transcript_result = fetch_youtube_transcript_with_metadata(video_id)
 
-    # Step 4: Apify transcript fallback for Render/cloud IP blocking.
-    if not transcript_result.segments:
+    # Step 4: Apify transcript fallback for Render/cloud IP blocking or partial captions.
+    if _should_try_transcript_fallback(transcript_result, expected_duration):
         try:
-            transcript_result = transcribe_youtube_url_with_apify(url)
+            transcript_result = _better_transcript_result(
+                current=transcript_result,
+                candidate=transcribe_youtube_url_with_apify(url),
+                expected_duration=expected_duration,
+            )
         except ApifyTranscriptUnavailableError:
             pass
 
@@ -323,11 +331,15 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     # (audio format URLs are yt-dlp specific; YouTube Data API v3 doesn't supply them).
     # If metadata came from the Data API, make a separate best-effort yt-dlp
     # request just for audio before giving up on transcript evidence.
-    if not transcript_result.segments:
+    if _should_try_transcript_fallback(transcript_result, expected_duration):
         audio_info = info if info_from_ytdlp else _fetch_youtube_audio_info(url)
 
         if audio_info is not None:
-            transcript_result = _transcribe_youtube_audio(audio_info)
+            transcript_result = _better_transcript_result(
+                current=transcript_result,
+                candidate=_transcribe_youtube_audio(audio_info),
+                expected_duration=expected_duration,
+            )
 
     transcript_segments = transcript_result.segments
     transcript_available = len(transcript_segments) > 0
@@ -490,6 +502,98 @@ def _fetch_youtube_audio_info(url: str) -> dict[str, Any] | None:
         return fetch_youtube_info(url)
     except Exception:
         return None
+
+
+def _expected_duration_seconds(info: dict[str, Any] | None) -> float | None:
+    if not info:
+        return None
+
+    duration = info.get("duration")
+
+    if isinstance(duration, bool):
+        return None
+
+    if isinstance(duration, int | float) and duration > 0:
+        return float(duration)
+
+    return None
+
+
+def _should_try_transcript_fallback(
+    transcript_result: TranscriptionResult,
+    expected_duration: float | None,
+) -> bool:
+    if not transcript_result.segments:
+        return True
+
+    if expected_duration is None or expected_duration <= 0:
+        return False
+
+    coverage = _transcript_coverage_seconds(transcript_result.segments)
+
+    if coverage is None:
+        return False
+
+    remaining_gap = expected_duration - coverage
+
+    return (
+        remaining_gap > TRANSCRIPT_COMPLETENESS_GAP_SECONDS
+        and coverage / expected_duration < TRANSCRIPT_COMPLETENESS_RATIO
+    )
+
+
+def _better_transcript_result(
+    *,
+    current: TranscriptionResult,
+    candidate: TranscriptionResult,
+    expected_duration: float | None,
+) -> TranscriptionResult:
+    if not candidate.segments:
+        return current
+
+    if not current.segments:
+        return candidate
+
+    current_score = _transcript_completeness_score(current.segments, expected_duration)
+    candidate_score = _transcript_completeness_score(candidate.segments, expected_duration)
+
+    if candidate_score > current_score:
+        return candidate
+
+    return current
+
+
+def _transcript_completeness_score(
+    segments: list[TranscriptSegment],
+    expected_duration: float | None,
+) -> tuple[float, int, int]:
+    coverage = _transcript_coverage_seconds(segments)
+    coverage_ratio = 0.0
+
+    if coverage is not None:
+        if expected_duration and expected_duration > 0:
+            coverage_ratio = min(coverage / expected_duration, 1.0)
+        else:
+            coverage_ratio = coverage
+
+    text_length = sum(len(segment.text.strip()) for segment in segments)
+
+    return coverage_ratio, text_length, len(segments)
+
+
+def _transcript_coverage_seconds(
+    segments: list[TranscriptSegment],
+) -> float | None:
+    end_times = [
+        segment.end_time
+        for segment in segments
+        if isinstance(segment.end_time, int | float)
+    ]
+
+    if not end_times:
+        return None
+
+    return max(float(end_time) for end_time in end_times)
 
 
 def _transcript_language(transcript: Any) -> str | None:

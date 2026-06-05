@@ -10,10 +10,13 @@ from app.insights.insight_models import (
 from app.insights.score_service import (
     calculate_audience_specificity,
     calculate_caption_strength,
+    calculate_creative_structure_score,
     calculate_cta_strength,
     calculate_engagement_confidence,
+    calculate_creator_efficiency_score,
     calculate_metadata_completeness,
     calculate_overall_score,
+    calculate_public_performance_score,
     calculate_problem_solution_score,
 )
 from app.services.storage_service import (
@@ -88,12 +91,19 @@ def _build_content_insight(
         cta_strength=calculate_cta_strength(content_item),
         caption_strength=calculate_caption_strength(content_item),
         audience_specificity=calculate_audience_specificity(content_item),
+        creative_structure_score=0,
+        public_performance_score=calculate_public_performance_score(content_item),
+        creator_efficiency_score=calculate_creator_efficiency_score(content_item),
         metadata_completeness=metadata_score,
         engagement_confidence=engagement_confidence,
         overall_score=0,
     )
-    scores = base_scores.model_copy(
-        update={"overall_score": calculate_overall_score(base_scores)}
+    creative_structure_score = calculate_creative_structure_score(base_scores)
+    scores_with_creative = base_scores.model_copy(
+        update={"creative_structure_score": creative_structure_score}
+    )
+    scores = scores_with_creative.model_copy(
+        update={"overall_score": calculate_overall_score(scores_with_creative)}
     )
     strengths = _content_strengths(
         content_item=content_item,
@@ -147,9 +157,18 @@ def _build_comparison(
         content_1,
         content_2,
     )
+    efficiency_winner, efficiency_reason = _creator_efficiency_winner(
+        content_1,
+        content_2,
+    )
     hook_winner = _score_winner(
         content_1_insight.scores.hook_clarity,
         content_2_insight.scores.hook_clarity,
+        close_threshold=1,
+    )
+    creative_structure_winner = _score_winner(
+        content_1_insight.scores.creative_structure_score,
+        content_2_insight.scores.creative_structure_score,
         close_threshold=1,
     )
     overall_winner = _score_winner(
@@ -160,11 +179,15 @@ def _build_comparison(
 
     return ComparisonInsight(
         confirmed_metric_winner=metric_winner,
+        creator_efficiency_winner=efficiency_winner,
+        creative_structure_winner=creative_structure_winner,
         hook_winner=hook_winner,
         overall_insight_winner=overall_winner,
         main_reason=_main_reason(
             metric_reason=metric_reason,
+            efficiency_reason=efficiency_reason,
             hook_winner=hook_winner,
+            creative_structure_winner=creative_structure_winner,
             overall_winner=overall_winner,
             content_1_insight=content_1_insight,
             content_2_insight=content_2_insight,
@@ -227,6 +250,33 @@ def _confirmed_metric_winner(
         "Confirmed public metric winner is unavailable because comparable key metrics are incomplete. "
         f"{missing_detail}",
         f"Metric comparison is limited because {missing_detail.lower()}",
+    )
+
+
+def _creator_efficiency_winner(
+    content_1: dict[str, Any],
+    content_2: dict[str, Any],
+) -> tuple[str | None, str]:
+    score_1 = _creator_efficiency_value(content_1)
+    score_2 = _creator_efficiency_value(content_2)
+
+    if score_1 is None or score_2 is None:
+        return (
+            None,
+            "Creator efficiency winner is unavailable because subscriber/follower-adjusted metrics are incomplete.",
+        )
+
+    if abs(score_1 - score_2) < 0.05:
+        return (
+            "Tie",
+            "Content 1 and Content 2 are close on creator-size-adjusted performance.",
+        )
+
+    winner = "Content 1" if score_1 > score_2 else "Content 2"
+
+    return (
+        winner,
+        f"{winner} leads on creator efficiency after adjusting views and interactions by creator size.",
     )
 
 
@@ -316,18 +366,21 @@ def _score_winner(
 def _main_reason(
     *,
     metric_reason: str,
+    efficiency_reason: str,
     hook_winner: str,
+    creative_structure_winner: str,
     overall_winner: str,
     content_1_insight: ContentInsight,
     content_2_insight: ContentInsight,
 ) -> str:
     return (
-        f"{metric_reason} Hook Analysis favors {hook_winner}. "
-        f"Creator Insight Score favors {overall_winner}. "
-        "Content quality comparison is based on hook, caption, CTA, "
-        "problem-solution clarity, and audience specificity. "
-        f"Content 1 Creator Insight Score: {content_1_insight.scores.overall_score}/10; "
-        f"Content 2 Creator Insight Score: {content_2_insight.scores.overall_score}/10."
+        f"{metric_reason} {efficiency_reason} Hook Analysis favors {hook_winner}. "
+        f"Creative structure favors {creative_structure_winner}. "
+        f"Creator Insight Score favors {overall_winner}. The score combines confirmed "
+        "public performance, creator-size efficiency, creative structure, and metric "
+        "confidence. Metadata Availability supports confidence only. "
+        f"Content 1 score: {content_1_insight.scores.overall_score}/10; "
+        f"Content 2 score: {content_2_insight.scores.overall_score}/10."
     )
 
 
@@ -348,8 +401,8 @@ def _comparison_confidence_note(
 
     return (
         f"{metric_confidence} This comparison is based on confirmed public metrics "
-        f"and rule-based creator heuristics. {missing_note} Metadata Availability "
-        "supports confidence only and is not treated as a performance score. "
+        f"and deterministic creator heuristics. {missing_note} Metadata Availability "
+        "supports confidence only and is not treated as a creative or performance strength. "
         "Missing metrics are not estimated."
     )
 
@@ -453,11 +506,11 @@ def _content_strengths(
     if scores.audience_specificity >= 7:
         strengths.append("Audience or niche is specific enough to guide the message.")
 
-    if scores.engagement_confidence >= 7:
-        strengths.append("Confirmed Public Metrics are strong enough for engagement confidence.")
+    if scores.public_performance_score >= 8:
+        strengths.append("Confirmed public performance is strong for this content.")
 
-    if _numeric_value(content_item.get("engagement_rate")) is not None:
-        strengths.append("Engagement rate is available from confirmed public metrics.")
+    if scores.creator_efficiency_score >= 8:
+        strengths.append("Content strongly overperforms relative to creator size.")
 
     transcript_language = _language_label(
         content_item.get("detected_language")
@@ -492,11 +545,11 @@ def _content_weaknesses(
     if scores.audience_specificity < 5:
         weaknesses.append("Audience specificity could be stronger.")
 
-    if missing_metadata:
-        weaknesses.append(
-            "Metadata Availability is incomplete: "
-            f"{', '.join(missing_metadata)}."
-        )
+    if scores.public_performance_score < 5:
+        weaknesses.append("Confirmed public performance is modest compared with stronger benchmark content.")
+
+    if scores.creator_efficiency_score < 5:
+        weaknesses.append("Creator-size-adjusted performance could be stronger.")
 
     return weaknesses or ["No major rule-based weakness detected from available evidence."]
 
@@ -514,7 +567,7 @@ def _top_improvement(
     }
     weakest = min(score_map.items(), key=lambda item: item[1])
 
-    if weakest[1] >= 7 and not missing_metadata:
+    if weakest[1] >= 7:
         return None
 
     if weakest[0] == "hook":
@@ -590,6 +643,30 @@ def _interaction_count(content_item: dict[str, Any]) -> int | None:
         return None
 
     return sum(available_values)
+
+
+def _creator_efficiency_value(content_item: dict[str, Any]) -> float | None:
+    creator_size = _numeric_value(content_item.get("subscriber_count")) or _numeric_value(
+        content_item.get("follower_count")
+    )
+    views = _numeric_value(content_item.get("views"))
+    interactions = _interaction_count(content_item)
+
+    if creator_size is None or creator_size <= 0:
+        return None
+
+    efficiency_parts = []
+
+    if views is not None:
+        efficiency_parts.append(views / creator_size)
+
+    if interactions is not None:
+        efficiency_parts.append((interactions / creator_size) * 10)
+
+    if not efficiency_parts:
+        return None
+
+    return sum(efficiency_parts) / len(efficiency_parts)
 
 
 def _topic_label(content_item: dict[str, Any]) -> str | None:

@@ -329,7 +329,10 @@ def _is_successful_video(record: dict | None) -> bool:
     if record is None:
         return False
 
-    return str(record.get("extraction_status")) in SUCCESSFUL_VIDEO_STATUSES
+    if str(record.get("extraction_status")) != "ready":
+        return False
+
+    return bool(record.get("transcript_available"))
 
 
 def _project_status_from_video_statuses(video_statuses: list[str]) -> str:
