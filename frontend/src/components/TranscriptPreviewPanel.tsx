@@ -72,7 +72,7 @@ export function TranscriptPreviewPanel({
           disabled={isLoading || !projectId || !item}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Loading..." : "View transcript preview"}
+          {isLoading ? "Loading..." : "transcript"}
         </button>
       </div>
 
