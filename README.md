@@ -19,7 +19,7 @@ Content URL 1 + Content URL 2
 
 | Surface | URL |
 | --- | --- |
-| Frontend | Add deployed Vercel URL here |
+| Frontend | https://creator-lens-ai.vercel.app/ |
 | Backend | https://creatorlens-ai.onrender.com |
 | API docs | https://creatorlens-ai.onrender.com/docs |
 | Health | https://creatorlens-ai.onrender.com/health |
@@ -389,7 +389,7 @@ Render production reminders:
 
 ```text
 ENVIRONMENT=production
-CORS_ORIGINS=https://your-vercel-url.vercel.app,http://localhost:3000
+CORS_ORIGINS=https://creator-lens-ai.vercel.app/,http://localhost:3000
 NEXT_PUBLIC_API_BASE_URL=https://creatorlens-ai.onrender.com
 ```
 
