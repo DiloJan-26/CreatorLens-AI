@@ -15,5 +15,8 @@ frontend/.env.local
 .DS_Store
 .vscode/
 
+# Local Codex working instructions
+/AGENTS.md
+
 # docs
 docs/
