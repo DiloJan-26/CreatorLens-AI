@@ -70,7 +70,7 @@ Supported comparisons:
 | Vector DB | Qdrant Cloud | Payload filtering by project, slot, platform, and source type |
 | Storage | SQLite | Lightweight demo persistence; production path is Postgres |
 | Transcript fallback | `youtube-transcript-api`, Apify, yt-dlp, Deepgram | Layered extraction because social platforms are unreliable from cloud IPs |
-| Deployment | Vercel + Render Docker + UptimeRobot | Simple free-tier deployment with external backend keep-alive monitoring |
+| Deployment | Vercel frontend + Render Docker backend | Public demo deployment; external monitors, if used, are configured outside this repository |
 
 ## High-Level Architecture
 
@@ -282,6 +282,8 @@ CreatorLens AI follows strict evidence rules:
 | API client | `frontend/src/lib/api.ts` |
 | Types | `frontend/src/types/project.ts` |
 
+Current V1 browser state is intentionally lightweight: the active project ID, chat session IDs, and drafts are held in module memory by `frontend/src/lib/app-session.ts`. They survive client-side navigation but not a full browser refresh. The `/chat` page uses the active in-memory project and does not currently consume a `projectId` query parameter. Chat trace SSE events are parsed by the API client but are not displayed, and restored chat history currently reloads message text without stored citations.
+
 ## API Surface
 
 | Endpoint | Purpose |
@@ -291,15 +293,25 @@ CreatorLens AI follows strict evidence rules:
 | `GET /health/embeddings` | Embedding model readiness |
 | `GET /health/llm` | LLM config check without generation |
 | `POST /health/llm/test` | Real LLM generation test |
+| `POST /health/llm/stream-test` | Stream a small LLM connectivity test over SSE |
 | `POST /api/projects` | Create comparison project |
+| `GET /api/projects` | List recent projects |
 | `POST /api/projects/{project_id}/extract` | Extract metadata and transcripts |
 | `GET /api/projects/{project_id}` | Load project detail |
 | `GET /api/projects/{project_id}/transcripts` | Transcript preview |
 | `GET /api/projects/{project_id}/metadata-availability` | Availability report |
+| `GET /api/projects/{project_id}/chunks` | List stored evidence chunks |
 | `POST /api/projects/{project_id}/chunks/build` | Build local evidence chunks |
 | `POST /api/projects/{project_id}/index` | Embed and index chunks in Qdrant |
 | `POST /api/projects/{project_id}/retrieve` | Inspect retrieval results |
+| `GET /api/projects/{project_id}/metrics/sources` | Load public and manually verified metric sources |
+| `POST /api/projects/{project_id}/metrics/verify` | Save manually verified public metrics |
+| `DELETE /api/projects/{project_id}/metrics/sources/{record_id}` | Delete a manually verified metric-source record |
 | `GET /api/projects/{project_id}/insights/summary` | Deterministic creator insight summary |
+| `POST /api/projects/{project_id}/chat/sessions` | Create or reuse a chat session |
+| `GET /api/projects/{project_id}/chat/sessions/{session_id}` | Load stored chat messages |
+| `DELETE /api/projects/{project_id}/chat/sessions/{session_id}` | Delete a chat session |
+| `POST /api/projects/{project_id}/chat/context-preview` | Inspect the RAG context for a question |
 | `POST /api/projects/{project_id}/chat/stream` | Streaming RAG chat |
 
 ## Local Setup
@@ -345,6 +357,10 @@ Local URLs:
 | `LLM_PROVIDER` | yes | `gemini` |
 | `LLM_MODEL` | yes | Primary Gemini model |
 | `LLM_FALLBACK_MODEL` | optional | Fallback Gemini model |
+| `LLM_TEMPERATURE` | yes | Default Gemini sampling temperature |
+| `LLM_MAX_OUTPUT_TOKENS` | yes | Default generation output limit |
+| `DEBUG_RAG_PROMPT` | optional | Prints non-secret RAG context-size diagnostics when enabled |
+| `GROQ_API_KEY` | unused/reserved | Present in settings but not used by the current Gemini-only LLM service |
 | `QDRANT_URL` | yes | Qdrant Cloud endpoint |
 | `QDRANT_API_KEY` | yes | Qdrant API key |
 | `QDRANT_COLLECTION` | yes | Vector collection name |
@@ -352,9 +368,14 @@ Local URLs:
 | `YOUTUBE_API_KEY` | recommended | YouTube Data API metadata |
 | `APIFY_API_TOKEN` | recommended | YouTube transcript fallback |
 | `APIFY_YOUTUBE_TRANSCRIPT_ACTOR` | recommended | Configurable Apify transcript actor |
+| `APIFY_YOUTUBE_TRANSCRIPT_INPUT_STYLE` | recommended | Input shape expected by the configured Apify actor |
+| `APIFY_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS` | recommended | Apify transcript request timeout |
 | `DEEPGRAM_API_KEY` | recommended | Audio transcription fallback |
 | `TRANSCRIPT_LANGUAGE` | yes | `multi` for language detection |
 | `TRANSCRIPT_FALLBACK_LANGUAGES` | yes | Caption language priority |
+| `DEEPGRAM_MODEL` | yes | Deepgram transcription model |
+| `DEEPGRAM_DETECT_LANGUAGE` | yes | Enables automatic language detection |
+| `ASSEMBLYAI_API_KEY` | unused/reserved | Present in settings but not used by the current transcription path |
 
 ### Frontend
 
@@ -373,14 +394,14 @@ flowchart LR
     RENDER --> APIFY[Apify]
     RENDER --> DEEPGRAM[Deepgram]
     VERCEL --> RENDER
-    UPTIME[UptimeRobot] --> RENDER
+    MONITOR[Optional external health monitor] --> RENDER
 ```
 
 | Component | Platform | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | Root directory: `frontend` |
 | Backend | Render | Docker build from `backend/Dockerfile` |
-| Keep-alive monitor | UptimeRobot | Polls backend health endpoint to reduce Render free-tier cold starts |
+| Keep-alive monitor | Optional external service | Not configured or verifiable from repository files |
 | Vector DB | Qdrant Cloud | Stores evidence chunks and payload metadata |
 | LLM | Gemini API | Streaming RAG responses |
 | Transcript fallback | Apify + Deepgram | Used only when cheaper/free paths are insufficient |
@@ -389,11 +410,11 @@ Render production reminders:
 
 ```text
 ENVIRONMENT=production
-CORS_ORIGINS=https://creator-lens-ai.vercel.app/,http://localhost:3000
+CORS_ORIGINS=https://creator-lens-ai.vercel.app,http://localhost:3000
 NEXT_PUBLIC_API_BASE_URL=https://creatorlens-ai.onrender.com
 ```
 
-UptimeRobot monitor:
+Optional external health monitor:
 
 | Setting | Value |
 | --- | --- |
@@ -401,9 +422,9 @@ UptimeRobot monitor:
 | URL | `https://creatorlens-ai.onrender.com/health` |
 | Expected method/result | `GET` request returning HTTP `200` with `{"status":"ok"}` |
 | Interval | 5 minutes |
-| Purpose | Keep the Render backend warm for demos and alert if the public API becomes unavailable |
+| Purpose | Check public availability; free-tier behavior and monitoring policy remain platform/user controlled |
 
-If UptimeRobot reports `405`, verify the monitor uses the full HTTPS URL above and targets `/health`, not a POST-only API route. The backend health endpoint is intentionally cheap and does not call Gemini, Qdrant, Apify, or Deepgram.
+If a monitor reports `405`, verify it uses the full HTTPS URL above and targets `/health`, not a POST-only API route. The backend health endpoint is intentionally cheap and does not call Gemini, Qdrant, Apify, or Deepgram.
 
 ## Cost and Scale Strategy
 
@@ -417,7 +438,7 @@ The lowest-cost architecture is to avoid unnecessary LLM and paid transcription 
 | Vector storage | Qdrant payload filters per project/slot | Payload indexes, collection sharding if needed |
 | Database | SQLite for demo | Postgres with project/session tables |
 | Backend work | Synchronous demo flow | Background jobs with Redis/RQ/Celery |
-| Cold starts | UptimeRobot health monitor for Render | Paid always-on instance or autoscaled worker/API split |
+| Cold starts | Optional external health monitoring for the Render demo | Paid always-on instance or autoscaled worker/API split |
 
 For 1000 creators/day:
 
@@ -427,7 +448,7 @@ For 1000 creators/day:
 - Keep deterministic metric and scoring logic outside the LLM.
 - Use paid transcript fallback only when direct captions are blocked or incomplete.
 - Add observability around extraction failures, transcript coverage, Qdrant indexing, and LLM latency.
-- Keep the public backend warm during demos with UptimeRobot, while using a paid always-on backend for serious production traffic.
+- If desired, use an external health monitor for demo availability while recognizing that free-tier hosting is not a paid production SLA.
 
 ## Quality Trade-Offs
 
