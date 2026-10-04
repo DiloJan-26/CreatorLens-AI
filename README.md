@@ -502,3 +502,15 @@ POST /health/llm/test
 ## Engineering Principle
 
 CreatorLens AI is designed around one rule: do not pretend unavailable evidence exists. The system can be creative in its recommendations, but the factual base must come from confirmed public metadata, transcript chunks, and cited retrieval evidence.
+
+## 🔒 License & Usage
+
+Copyright © 2026 Dilojan Ravindrarasa. All Rights Reserved.
+
+CreatorLens AI is publicly available primarily for **portfolio review, technical evaluation, educational inspection, and demonstration purposes**.
+
+This project is **not released under an open-source license**. No permission is granted to reproduce or redistribute substantial portions of the source code, create derivative products based substantially on it, or use it commercially without prior written permission from the copyright holder.
+
+Public availability of this repository does not waive the author's copyright or grant unrestricted reuse rights.
+
+For complete terms, see the [`LICENSE`](./LICENSE) file.
