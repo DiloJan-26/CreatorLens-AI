@@ -3,7 +3,7 @@ from app.models.chat import (
     ChatMessage,
     ChatSession,
 )
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     create_chat_session,
     delete_chat_session,
     get_chat_messages,

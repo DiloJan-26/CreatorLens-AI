@@ -68,7 +68,7 @@ Supported comparisons:
 | LLM | Gemini Flash through `langchain-google-genai` | Low-cost streaming reasoning for demo scale |
 | Embeddings | FastEmbed `BAAI/bge-small-en-v1.5` | Open-source, local embedding generation, avoids per-token embedding cost |
 | Vector DB | Qdrant Cloud | Payload filtering by project, slot, platform, and source type |
-| Storage | SQLite | Lightweight demo persistence; production path is Postgres |
+| Storage | PostgreSQL, SQLAlchemy, Alembic | Durable relational persistence with versioned migrations; SQLite remains an explicit no-`DATABASE_URL` compatibility fallback |
 | Transcript fallback | `youtube-transcript-api`, Apify, yt-dlp, Deepgram | Layered extraction because social platforms are unreliable from cloud IPs |
 | Deployment | Vercel frontend + Render Docker backend | Public demo deployment; external monitors, if used, are configured outside this repository |
 
@@ -92,7 +92,7 @@ flowchart LR
     IG --> TRANS
     FB --> TRANS
 
-    META --> STORE[(SQLite Project Store)]
+    META --> STORE[(PostgreSQL Project Store)]
     TRANS --> STORE
 
     STORE --> CHUNK[Chunk Builder]
@@ -113,7 +113,7 @@ sequenceDiagram
     participant UI as Next.js UI
     participant API as FastAPI
     participant EX as Extractors
-    participant DB as SQLite
+    participant DB as PostgreSQL
     participant CB as Chunk Builder
     participant EMB as FastEmbed
     participant VDB as Qdrant
@@ -353,6 +353,12 @@ Local URLs:
 | --- | --- | --- |
 | `ENVIRONMENT` | yes | `local` or `production` |
 | `CORS_ORIGINS` | yes | Allowed frontend origins |
+| `DATABASE_URL` | yes | PostgreSQL connection for application and Alembic migrations |
+| `TEST_DATABASE_URL` | local tests only | Isolated PostgreSQL connection selected with `alembic -x database=test` |
+| `DB_POOL_SIZE` | optional | SQLAlchemy persistent connection-pool size; defaults to `5` |
+| `DB_MAX_OVERFLOW` | optional | Additional temporary SQLAlchemy connections; defaults to `5` |
+| `DB_POOL_RECYCLE_SECONDS` | optional | Recycles pooled connections; defaults to `300` seconds |
+| `DB_CONNECT_TIMEOUT_SECONDS` | optional | Bounds PostgreSQL connection attempts; defaults to `10` seconds |
 | `GEMINI_API_KEY` | yes | Gemini chat and reasoning |
 | `LLM_PROVIDER` | yes | `gemini` |
 | `LLM_MODEL` | yes | Primary Gemini model |
@@ -436,7 +442,7 @@ The lowest-cost architecture is to avoid unnecessary LLM and paid transcription 
 | LLM calls | Only chat/reasoning uses Gemini | Cache common questions and summaries |
 | Transcript extraction | Free captions first, Apify/Deepgram only as fallback | URL-level transcript cache and retry queue |
 | Vector storage | Qdrant payload filters per project/slot | Payload indexes, collection sharding if needed |
-| Database | SQLite for demo | Postgres with project/session tables |
+| Database | PostgreSQL on isolated Neon branches | Add caching, background jobs, and production-scale operational controls |
 | Backend work | Synchronous demo flow | Background jobs with Redis/RQ/Celery |
 | Cold starts | Optional external health monitoring for the Render demo | Paid always-on instance or autoscaled worker/API split |
 
@@ -459,7 +465,7 @@ For 1000 creators/day:
 | Gemini Flash instead of heavier model by default | Good reasoning/cost balance for streamed creator chat |
 | Deterministic insight scoring | Fast, explainable, and does not hallucinate metrics |
 | Layered transcript fallback | Social transcript extraction is unreliable from cloud IPs |
-| SQLite for demo | Keeps deployment simple; Postgres is the production path |
+| PostgreSQL with Alembic | Durable deployed state and reviewable schema evolution; SQLite is fallback-only during migration |
 
 ## Validation Commands
 

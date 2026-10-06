@@ -10,7 +10,7 @@ from app.api.insights import router as insights_router
 from app.api.metrics import router as metrics_router
 from app.api.projects import router as projects_router
 from app.core.config import get_settings
-from app.services.storage_service import init_db
+from app.services.storage_compat_service import init_db
 
 
 settings = get_settings()

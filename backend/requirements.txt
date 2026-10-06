@@ -1,6 +1,10 @@
 fastapi[standard]
 pydantic-settings
 python-dotenv
+SQLAlchemy
+alembic
+psycopg[binary]
+pytest
 httpx
 sse-starlette
 qdrant-client

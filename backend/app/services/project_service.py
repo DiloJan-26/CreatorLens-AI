@@ -23,7 +23,7 @@ from app.models.video import (
 )
 from app.rag.chunk_builder import build_project_chunks
 from app.services.metric_source_service import ensure_public_metric_records
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     create_project_record,
     get_project_detail_record,
     get_project_record,

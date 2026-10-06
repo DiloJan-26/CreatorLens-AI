@@ -4,7 +4,7 @@ from typing import Any
 
 from app.models.rag import RagChunk, RagPlatform, RagSourceType
 from app.services.metric_source_service import get_metric_summary
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     get_project_detail_record,
     get_transcript_segments,
 )

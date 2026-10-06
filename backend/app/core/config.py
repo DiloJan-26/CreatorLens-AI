@@ -14,6 +14,22 @@ class Settings(BaseSettings):
     environment: str = Field(default="local", alias="ENVIRONMENT")
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    test_database_url: str | None = Field(default=None, alias="TEST_DATABASE_URL")
+    db_pool_size: int = Field(default=5, alias="DB_POOL_SIZE", ge=1, le=20)
+    db_max_overflow: int = Field(default=5, alias="DB_MAX_OVERFLOW", ge=0, le=20)
+    db_pool_recycle_seconds: int = Field(
+        default=300,
+        alias="DB_POOL_RECYCLE_SECONDS",
+        ge=30,
+    )
+    db_connect_timeout_seconds: int = Field(
+        default=10,
+        alias="DB_CONNECT_TIMEOUT_SECONDS",
+        ge=1,
+        le=60,
+    )
+
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
@@ -82,6 +98,20 @@ class Settings(BaseSettings):
             for language in self.transcript_fallback_languages.split(",")
             if language.strip()
         ]
+
+    def sqlalchemy_database_url(self, *, test: bool = False) -> str | None:
+        value = self.test_database_url if test else self.database_url
+
+        if value is None or not value.strip():
+            return None
+
+        url = value.strip()
+        if url.startswith("postgres://"):
+            return f"postgresql+psycopg://{url.removeprefix('postgres://')}"
+        if url.startswith("postgresql://"):
+            return f"postgresql+psycopg://{url.removeprefix('postgresql://')}"
+
+        return url
 
 
 @lru_cache

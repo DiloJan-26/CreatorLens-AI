@@ -10,7 +10,7 @@ from app.services.qdrant_service import (
     is_qdrant_configured,
     upsert_chunk_vectors,
 )
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     get_project_record,
     replace_rag_chunks,
     update_rag_chunk_qdrant_point_id,

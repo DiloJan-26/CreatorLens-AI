@@ -34,6 +34,8 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 
 # Copy application source
 COPY app/ app/
+COPY alembic.ini .
+COPY alembic/ alembic/
 
 # Pre-download the embedding model so the first request is instant.
 # The model (~130 MB) is baked into this layer; no network call at runtime.

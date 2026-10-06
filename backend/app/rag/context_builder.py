@@ -17,7 +17,7 @@ from app.rag.query_router import (
 )
 from app.rag.retrieval_service import retrieve_balanced_evidence, retrieve_project_chunks
 from app.services.metric_source_service import get_metric_summary
-from app.services.storage_service import get_project_detail_record
+from app.services.storage_compat_service import get_project_detail_record
 
 
 class RagContextProjectNotFoundError(Exception):
