@@ -9,11 +9,19 @@ from app.insights.insight_service import (
 
 router = APIRouter(
     prefix="/api/projects/{project_id}/insights",
-    tags=["insights"],
+    tags=["6. Creator Insights"],
 )
 
 
-@router.get("/summary", response_model=CreatorInsightSummaryResponse)
+@router.get(
+    "/summary",
+    response_model=CreatorInsightSummaryResponse,
+    summary="Build the Creator Insight Summary",
+    description=(
+        "Returns deterministic comparison scores and findings used by the Insights UI. "
+        "Run extraction first; verified metrics improve metric completeness."
+    ),
+)
 def get_creator_insight_summary_endpoint(
     project_id: str,
 ) -> CreatorInsightSummaryResponse:

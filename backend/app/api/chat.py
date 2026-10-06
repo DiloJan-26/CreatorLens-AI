@@ -28,7 +28,7 @@ from app.services.chat_memory_service import (
 )
 
 
-router = APIRouter(prefix="/api/projects/{project_id}/chat", tags=["chat"])
+router = APIRouter(prefix="/api/projects/{project_id}/chat")
 
 
 class CreateChatSessionRequest(BaseModel):
@@ -39,6 +39,9 @@ class CreateChatSessionRequest(BaseModel):
     "/sessions",
     response_model=CreateChatSessionResponse,
     status_code=status.HTTP_201_CREATED,
+    tags=["7. Chat Sessions"],
+    summary="1. Create or reuse a chat session",
+    description="Creates a persisted session for this project before streaming chat.",
 )
 def create_chat_session_endpoint(
     project_id: str,
@@ -70,6 +73,9 @@ def create_chat_session_endpoint(
 @router.get(
     "/sessions/{session_id}",
     response_model=ChatHistoryResponse,
+    tags=["7. Chat Sessions"],
+    summary="Load chat history",
+    description="Returns persisted messages for one project chat session.",
 )
 def get_chat_history_endpoint(
     project_id: str,
@@ -84,7 +90,12 @@ def get_chat_history_endpoint(
         ) from None
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete(
+    "/sessions/{session_id}",
+    tags=["7. Chat Sessions"],
+    summary="Delete a chat session",
+    description="Deletes the selected session and its persisted messages and citations.",
+)
 def delete_chat_session_endpoint(project_id: str, session_id: str) -> dict[str, str]:
     try:
         clear_chat_session(project_id=project_id, session_id=session_id)
@@ -100,7 +111,16 @@ def delete_chat_session_endpoint(project_id: str, session_id: str) -> dict[str, 
     }
 
 
-@router.post("/context-preview", response_model=RagContext)
+@router.post(
+    "/context-preview",
+    response_model=RagContext,
+    tags=["4. Retrieval & Context"],
+    summary="8. Preview assembled RAG context",
+    description=(
+        "Combines retrieved evidence, deterministic insight context, and optional "
+        "recent chat history without generating the final LLM answer."
+    ),
+)
 def preview_chat_context_endpoint(
     project_id: str,
     payload: ChatRequest,
@@ -147,7 +167,15 @@ def preview_chat_context_endpoint(
         ) from None
 
 
-@router.post("/stream")
+@router.post(
+    "/stream",
+    tags=["8. AI Chat"],
+    summary="2. Stream a cited AI answer",
+    description=(
+        "Streams trace, citation, token, completion, or error events using "
+        "`text/event-stream`. Requires indexed evidence and a valid session."
+    ),
+)
 def stream_chat_endpoint(
     project_id: str,
     payload: ChatStreamRequest,

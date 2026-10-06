@@ -15,10 +15,18 @@ from app.services.metric_source_service import (
 )
 
 
-router = APIRouter(prefix="/api/projects/{project_id}/metrics", tags=["metrics"])
+router = APIRouter(
+    prefix="/api/projects/{project_id}/metrics",
+    tags=["5. Verified Metrics"],
+)
 
 
-@router.get("/sources", response_model=MetricSummaryResponse)
+@router.get(
+    "/sources",
+    response_model=MetricSummaryResponse,
+    summary="Review metric sources and completeness",
+    description="Shows public and user-verified metrics with provenance and missing fields.",
+)
 def get_metric_sources_endpoint(project_id: str) -> MetricSummaryResponse:
     try:
         return get_metric_summary(project_id)
@@ -29,7 +37,12 @@ def get_metric_sources_endpoint(project_id: str) -> MetricSummaryResponse:
         ) from None
 
 
-@router.post("/verify", response_model=SaveVerifiedMetricsResponse)
+@router.post(
+    "/verify",
+    response_model=SaveVerifiedMetricsResponse,
+    summary="Save user-verified metrics",
+    description="Stores explicitly verified values without estimating unavailable metrics.",
+)
 def verify_metrics_endpoint(
     project_id: str,
     payload: VerifiedMetricInput,
@@ -48,7 +61,11 @@ def verify_metrics_endpoint(
         ) from None
 
 
-@router.delete("/sources/{record_id}")
+@router.delete(
+    "/sources/{record_id}",
+    summary="Delete a verified metric source",
+    description="Removes one persisted metric-source record from the project.",
+)
 def delete_metric_source_endpoint(
     project_id: str,
     record_id: str,
