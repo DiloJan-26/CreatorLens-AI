@@ -5,6 +5,7 @@ SQLAlchemy
 alembic
 psycopg[binary]
 pytest
+celery[redis]
 httpx
 sse-starlette
 qdrant-client

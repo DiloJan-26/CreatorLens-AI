@@ -30,6 +30,16 @@ class Settings(BaseSettings):
         le=60,
     )
 
+    redis_url: str | None = Field(default=None, alias="REDIS_URL")
+    celery_broker_url_override: str | None = Field(
+        default=None,
+        alias="CELERY_BROKER_URL",
+    )
+    celery_result_backend_override: str | None = Field(
+        default=None,
+        alias="CELERY_RESULT_BACKEND",
+    )
+
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
@@ -112,6 +122,28 @@ class Settings(BaseSettings):
             return f"postgresql+psycopg://{url.removeprefix('postgresql://')}"
 
         return url
+
+    @property
+    def celery_broker_url(self) -> str | None:
+        return self._first_configured_url(
+            self.celery_broker_url_override,
+            self.redis_url,
+        )
+
+    @property
+    def celery_result_backend(self) -> str | None:
+        return self._first_configured_url(
+            self.celery_result_backend_override,
+            self.redis_url,
+        )
+
+    @staticmethod
+    def _first_configured_url(*values: str | None) -> str | None:
+        for value in values:
+            if value is not None and value.strip():
+                return value.strip()
+
+        return None
 
 
 @lru_cache
