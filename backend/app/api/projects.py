@@ -84,7 +84,7 @@ def get_project_endpoint(project_id: str) -> ProjectDetailResponse:
 @router.post(
     "/{project_id}/extract",
     response_model=ProjectDetailResponse,
-    tags=["2. Content Extraction"],
+    tags=["3. Content Extraction"],
     summary="1. Extract project content",
     description=(
         "Extracts metadata and transcript evidence for both project URLs and persists "
@@ -98,7 +98,7 @@ def extract_project_endpoint(project_id: str) -> ProjectDetailResponse:
 @router.get(
     "/{project_id}/metadata-availability",
     response_model=MetadataAvailabilityResponse,
-    tags=["2. Content Extraction"],
+    tags=["3. Content Extraction"],
     summary="2. Inspect metadata availability",
     description=(
         "Shows which public fields are available or missing after extraction. "
@@ -114,7 +114,7 @@ def get_project_metadata_availability_endpoint(
 @router.get(
     "/{project_id}/transcripts",
     response_model=TranscriptPreviewResponse,
-    tags=["2. Content Extraction"],
+    tags=["3. Content Extraction"],
     summary="3. Preview extracted transcript evidence",
     description="Inspect transcript segments by content slot or platform after extraction.",
 )
@@ -135,7 +135,7 @@ def get_project_transcript_endpoint(
 @router.post(
     "/{project_id}/chunks/build",
     response_model=ChunkBuildResponse,
-    tags=["3. Evidence Preparation"],
+    tags=["4. Evidence Preparation"],
     summary="4. Build evidence chunks",
     description=(
         "Builds and persists metadata, description, hook, and transcript chunks. "
@@ -149,7 +149,7 @@ def build_project_chunks_endpoint(project_id: str) -> ChunkBuildResponse:
 @router.get(
     "/{project_id}/chunks",
     response_model=RagChunkListResponse,
-    tags=["3. Evidence Preparation"],
+    tags=["4. Evidence Preparation"],
     summary="5. Inspect stored evidence chunks",
     description="Review the chunks produced by the build step before or after indexing.",
 )
@@ -166,7 +166,7 @@ def get_project_chunks_endpoint(project_id: str) -> RagChunkListResponse:
 @router.post(
     "/{project_id}/index",
     response_model=IndexProjectResponse,
-    tags=["3. Evidence Preparation"],
+    tags=["4. Evidence Preparation"],
     summary="6. Index evidence in Qdrant",
     description="Embeds stored chunks and writes their vectors to Qdrant for retrieval.",
 )
@@ -183,7 +183,7 @@ def index_project_endpoint(project_id: str) -> IndexProjectResponse:
 @router.post(
     "/{project_id}/retrieve",
     response_model=RetrieveResponse,
-    tags=["4. Retrieval & Context"],
+    tags=["5. Retrieval & Context"],
     summary="7. Test evidence retrieval",
     description=(
         "Runs semantic retrieval over indexed evidence. Use this to validate results "

@@ -17,7 +17,7 @@ from app.services.metric_source_service import (
 
 router = APIRouter(
     prefix="/api/projects/{project_id}/metrics",
-    tags=["5. Verified Metrics"],
+    tags=["6. Verified Metrics"],
 )
 
 

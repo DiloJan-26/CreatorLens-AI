@@ -11,6 +11,7 @@ from app.services.qdrant_service import (
     upsert_chunk_vectors,
 )
 from app.services.storage_compat_service import (
+    get_rag_chunks,
     get_project_record,
     replace_rag_chunks,
     update_rag_chunk_qdrant_point_id,
@@ -21,14 +22,24 @@ class ProjectIndexingNotFoundError(Exception):
     """Raised when a project cannot be found for indexing."""
 
 
-def index_project(project_id: str) -> IndexProjectResponse:
+def index_project(
+    project_id: str,
+    *,
+    rebuild_chunks: bool = True,
+) -> IndexProjectResponse:
     settings = get_settings()
 
     if get_project_record(project_id) is None:
         raise ProjectIndexingNotFoundError("Project not found.")
 
-    chunks = build_project_chunks(project_id)
-    replace_rag_chunks(project_id=project_id, chunks=chunks)
+    if rebuild_chunks:
+        chunks = build_project_chunks(project_id)
+        replace_rag_chunks(project_id=project_id, chunks=chunks)
+    else:
+        chunks = [
+            RagChunk(**record)
+            for record in get_rag_chunks(project_id=project_id)
+        ]
 
     if not chunks:
         return _failed_response(

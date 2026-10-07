@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
 from app.api.health import router as health_router
+from app.api.ingestion import router as ingestion_router
 from app.api.insights import router as insights_router
 from app.api.metrics import router as metrics_router
 from app.api.projects import router as projects_router
@@ -23,11 +24,12 @@ creator insights through metadata extraction, retrieval, and AI-assisted analysi
 
 1. Confirm service dependencies under **0. System Readiness**.
 2. Create or load a comparison under **1. Projects**.
-3. Extract metadata and transcripts under **2. Content Extraction**.
-4. Build chunks and index evidence under **3. Evidence Preparation**.
-5. Inspect retrieval/context under **4. Retrieval & Context**.
-6. Review verified metrics and deterministic insights under sections **5–6**.
-7. Create a session and ask cited questions under sections **7–8**.
+3. Queue the complete pipeline under **2. Async Ingestion** and poll its status.
+4. Use **3. Content Extraction** and **4. Evidence Preparation** only for
+   stepwise diagnostics or backward-compatible V1 testing.
+5. Inspect retrieval/context under **5. Retrieval & Context**.
+6. Review verified metrics and deterministic insights under sections **6–7**.
+7. Create a session and ask cited questions under sections **8–9**.
 
 Use the `project_id` returned when creating a project in all subsequent project
 routes. Evidence must be built and indexed before retrieval-backed chat can
@@ -70,50 +72,56 @@ OPENAPI_TAGS = [
         ),
     },
     {
-        "name": "2. Content Extraction",
+        "name": "2. Async Ingestion",
         "description": (
-            "Extract public metadata and transcript evidence, then inspect field "
-            "availability and transcript previews. Run extraction before evidence "
-            "preparation."
+            "Recommended analysis path. Queue the complete extraction, chunking, "
+            "embedding, and indexing pipeline, then poll its persisted job status."
         ),
     },
     {
-        "name": "3. Evidence Preparation",
+        "name": "3. Content Extraction",
+        "description": (
+            "Backward-compatible stepwise extraction diagnostics. Normal UI flows "
+            "should use Async Ingestion; these routes remain available for inspection."
+        ),
+    },
+    {
+        "name": "4. Evidence Preparation",
         "description": (
             "Convert extracted content into evidence chunks, inspect those chunks, "
             "and index them in Qdrant. Recommended order: build → inspect → index."
         ),
     },
     {
-        "name": "4. Retrieval & Context",
+        "name": "5. Retrieval & Context",
         "description": (
             "Test semantic retrieval and preview the complete context that cited "
             "chat will send to the language model. Requires indexed evidence."
         ),
     },
     {
-        "name": "5. Verified Metrics",
+        "name": "6. Verified Metrics",
         "description": (
             "Review metric provenance and optionally store or remove user-verified "
             "metrics. Missing public metrics remain unavailable rather than inferred."
         ),
     },
     {
-        "name": "6. Creator Insights",
+        "name": "7. Creator Insights",
         "description": (
             "Generate the deterministic comparison summary used by the Insights UI "
             "from persisted metadata, transcripts, and verified metrics."
         ),
     },
     {
-        "name": "7. Chat Sessions",
+        "name": "8. Chat Sessions",
         "description": (
             "Create, reload, or delete persisted project chat sessions before using "
             "the streaming AI chat endpoint."
         ),
     },
     {
-        "name": "8. AI Chat",
+        "name": "9. AI Chat",
         "description": (
             "Stream an evidence-backed answer with citations. Create a chat session "
             "and index project evidence first. The stream uses Server-Sent Events."
@@ -151,6 +159,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(projects_router)
+app.include_router(ingestion_router)
 app.include_router(chat_router)
 app.include_router(metrics_router)
 app.include_router(insights_router)

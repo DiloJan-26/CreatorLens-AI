@@ -39,6 +39,36 @@ class Settings(BaseSettings):
         default=None,
         alias="CELERY_RESULT_BACKEND",
     )
+    celery_result_expires_seconds: int = Field(
+        default=3600,
+        alias="CELERY_RESULT_EXPIRES_SECONDS",
+        ge=60,
+        le=86400,
+    )
+    celery_visibility_timeout_seconds: int = Field(
+        default=3600,
+        alias="CELERY_VISIBILITY_TIMEOUT_SECONDS",
+        ge=300,
+        le=86400,
+    )
+    celery_max_retries: int = Field(
+        default=2,
+        alias="CELERY_MAX_RETRIES",
+        ge=0,
+        le=5,
+    )
+    celery_retry_backoff_seconds: int = Field(
+        default=15,
+        alias="CELERY_RETRY_BACKOFF_SECONDS",
+        ge=1,
+        le=300,
+    )
+    celery_broker_connection_timeout_seconds: int = Field(
+        default=5,
+        alias="CELERY_BROKER_CONNECTION_TIMEOUT_SECONDS",
+        ge=1,
+        le=30,
+    )
 
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")

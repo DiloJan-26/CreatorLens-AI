@@ -9,7 +9,7 @@ from app.insights.insight_service import (
 
 router = APIRouter(
     prefix="/api/projects/{project_id}/insights",
-    tags=["6. Creator Insights"],
+    tags=["7. Creator Insights"],
 )
 
 

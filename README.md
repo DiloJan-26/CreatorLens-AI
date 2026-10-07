@@ -69,8 +69,9 @@ Supported comparisons:
 | Embeddings | FastEmbed `BAAI/bge-small-en-v1.5` | Open-source, local embedding generation, avoids per-token embedding cost |
 | Vector DB | Qdrant Cloud | Payload filtering by project, slot, platform, and source type |
 | Storage | PostgreSQL, SQLAlchemy, Alembic | Durable relational persistence with versioned migrations; SQLite remains an explicit no-`DATABASE_URL` compatibility fallback |
+| Async processing | Celery + Upstash Redis | Durable background ingestion with persisted PostgreSQL job status |
 | Transcript fallback | `youtube-transcript-api`, Apify, yt-dlp, Deepgram | Layered extraction because social platforms are unreliable from cloud IPs |
-| Deployment | Vercel frontend + Render Docker backend | Public demo deployment; external monitors, if used, are configured outside this repository |
+| Deployment | Vercel frontend + Render API + Azure Container Apps worker | Separates HTTP traffic from long-running extraction and indexing work |
 
 ## High-Level Architecture
 
@@ -79,7 +80,10 @@ flowchart LR
     U[Creator / Interviewer] --> FE[Next.js Frontend]
     FE --> API[FastAPI Backend]
 
-    API --> DETECT[Platform Detection]
+    API --> JOB[(PostgreSQL Ingestion Job)]
+    API --> REDIS[(Upstash Redis Queue)]
+    REDIS --> WORKER[Azure Celery Worker]
+    WORKER --> DETECT[Platform Detection]
     DETECT --> YT[YouTube Extractor]
     DETECT --> IG[Instagram Extractor]
     DETECT --> FB[Facebook Extractor]
@@ -262,12 +266,13 @@ CreatorLens AI follows strict evidence rules:
 
 | Area | Files |
 | --- | --- |
-| API routes | `backend/app/api/projects.py`, `chat.py`, `insights.py`, `metrics.py`, `health.py` |
+| API routes | `backend/app/api/projects.py`, `ingestion.py`, `chat.py`, `insights.py`, `metrics.py`, `health.py` |
 | Extraction | `backend/app/extractors/youtube_extractor.py`, `instagram_extractor.py`, `facebook_extractor.py` |
 | Transcript fallbacks | `backend/app/services/apify_transcript_service.py`, `transcription_service.py` |
 | RAG | `backend/app/rag/chunk_builder.py`, `indexing_service.py`, `retrieval_service.py`, `context_builder.py`, `query_router.py`, `chat_service.py` |
 | Insight scoring | `backend/app/insights/insight_service.py`, `score_service.py`, `hook_analyzer.py` |
-| Persistence | `backend/app/services/storage_service.py`, `chat_memory_service.py` |
+| Persistence | `backend/app/db/models/`, `backend/app/db/repositories/`, Alembic migrations |
+| Background workers | `backend/app/workers/celery_app.py`, `ingestion_tasks.py`, `indexing_tasks.py` |
 | Config | `backend/app/core/config.py`, `paths.py` |
 
 ## Frontend Modules
@@ -296,6 +301,8 @@ Current V1 browser state is intentionally lightweight: the active project ID, ch
 | `POST /health/llm/stream-test` | Stream a small LLM connectivity test over SSE |
 | `POST /api/projects` | Create comparison project |
 | `GET /api/projects` | List recent projects |
+| `POST /api/projects/{project_id}/ingest` | Queue the complete background ingestion pipeline |
+| `GET /api/projects/{project_id}/status` | Poll persisted ingestion progress and failures |
 | `POST /api/projects/{project_id}/extract` | Extract metadata and transcripts |
 | `GET /api/projects/{project_id}` | Load project detail |
 | `GET /api/projects/{project_id}/transcripts` | Transcript preview |
@@ -352,6 +359,7 @@ Local URLs:
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `ENVIRONMENT` | yes | `local` or `production` |
+| `SERVICE_ROLE` | deployment | `web` (default) for Render or `worker` for the Azure Celery container |
 | `CORS_ORIGINS` | yes | Allowed frontend origins |
 | `DATABASE_URL` | yes | PostgreSQL connection for application and Alembic migrations |
 | `TEST_DATABASE_URL` | local tests only | Isolated PostgreSQL connection selected with `alembic -x database=test` |
@@ -359,6 +367,16 @@ Local URLs:
 | `DB_MAX_OVERFLOW` | optional | Additional temporary SQLAlchemy connections; defaults to `5` |
 | `DB_POOL_RECYCLE_SECONDS` | optional | Recycles pooled connections; defaults to `300` seconds |
 | `DB_CONNECT_TIMEOUT_SECONDS` | optional | Bounds PostgreSQL connection attempts; defaults to `10` seconds |
+| `REDIS_URL` | Phase 2 deployment | TLS Redis URL used by default for both the Celery broker and result backend |
+| `CELERY_BROKER_URL` | optional | Overrides `REDIS_URL` for the Celery broker |
+| `CELERY_RESULT_BACKEND` | optional | Overrides `REDIS_URL` for temporary Celery task results |
+| `CELERY_RESULT_EXPIRES_SECONDS` | optional | Removes temporary Celery results after `3600` seconds by default |
+| `CELERY_VISIBILITY_TIMEOUT_SECONDS` | optional | Broker redelivery window for long tasks; defaults to `3600` seconds |
+| `CELERY_MAX_RETRIES` | optional | Maximum background-task retries; defaults to `2` |
+| `CELERY_RETRY_BACKOFF_SECONDS` | optional | Initial exponential retry delay; defaults to `15` seconds |
+| `CELERY_BROKER_CONNECTION_TIMEOUT_SECONDS` | optional | Bounds queue connection attempts; defaults to `5` seconds |
+| `CELERY_WORKER_CONCURRENCY` | optional | Worker process count; keep `1` for the Azure student deployment |
+| `CELERY_LOG_LEVEL` | optional | Celery worker log level; defaults to `INFO` |
 | `GEMINI_API_KEY` | yes | Gemini chat and reasoning |
 | `LLM_PROVIDER` | yes | `gemini` |
 | `LLM_MODEL` | yes | Primary Gemini model |
