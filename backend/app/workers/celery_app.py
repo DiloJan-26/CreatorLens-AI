@@ -2,8 +2,10 @@ import logging
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from celery import Celery
+from celery.signals import after_setup_logger, after_setup_task_logger
 
 from app.core.config import get_settings
+from app.core.logging import configure_secret_safe_worker_logging
 
 
 logger = logging.getLogger(__name__)
@@ -78,4 +80,10 @@ celery_app.conf.update(
     },
     result_expires=settings.celery_result_expires_seconds,
 )
+
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def _configure_worker_logging(logger: logging.Logger, **_: object) -> None:
+    configure_secret_safe_worker_logging(logger)
 

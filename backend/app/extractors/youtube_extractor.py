@@ -115,9 +115,9 @@ def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
             f"{_YT_API_BASE}/videos",
             params={
                 "id": video_id,
-                "key": api_key,
                 "part": "snippet,statistics,contentDetails",
             },
+            headers={"X-Goog-Api-Key": api_key},
         )
         video_resp.raise_for_status()
         video_data = video_resp.json()
@@ -167,7 +167,8 @@ def _fetch_subscriber_count(channel_id: str, api_key: str) -> int | None:
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(
                 f"{_YT_API_BASE}/channels",
-                params={"id": channel_id, "key": api_key, "part": "statistics"},
+                params={"id": channel_id, "part": "statistics"},
+                headers={"X-Goog-Api-Key": api_key},
             )
             resp.raise_for_status()
             data = resp.json()
