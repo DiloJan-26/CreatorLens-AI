@@ -68,12 +68,6 @@ export function IngestionProgressPanel({
         />
       </div>
 
-      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-3">
-        <Timestamp label="Started" value={status.started_at ?? status.created_at} />
-        <Timestamp label="Last update" value={status.updated_at} />
-        <Timestamp label="Completed" value={status.completed_at} />
-      </dl>
-
       {status.retry_count > 0 ? (
         <p className="mt-3 text-xs opacity-80">
           Worker retries: {status.retry_count}
@@ -95,36 +89,6 @@ export function IngestionProgressPanel({
       ) : null}
     </section>
   );
-}
-
-function Timestamp({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div>
-      <dt className="font-medium opacity-70">{label}</dt>
-      <dd className="mt-1 font-medium">{formatLocalTime(value)}</dd>
-    </div>
-  );
-}
-
-function formatLocalTime(value?: string | null): string {
-  if (!value) {
-    return "Not yet";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
 }
 
 function terminalMessage(status: IngestionJobStatus): string {
