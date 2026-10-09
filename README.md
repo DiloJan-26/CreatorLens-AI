@@ -116,6 +116,8 @@ flowchart LR
 sequenceDiagram
     participant UI as Next.js UI
     participant API as FastAPI
+    participant Q as Upstash Redis
+    participant W as Azure Celery Worker
     participant EX as Extractors
     participant DB as PostgreSQL
     participant CB as Chunk Builder
@@ -125,15 +127,21 @@ sequenceDiagram
 
     UI->>API: POST /api/projects
     API->>DB: create project
-    UI->>API: POST /api/projects/{id}/extract
-    API->>EX: detect platform + extract evidence
-    EX-->>API: metadata + transcript segments
-    API->>DB: persist metadata and transcript
-    UI->>API: POST /api/projects/{id}/index
-    API->>CB: build metadata, hook, description, transcript chunks
+    UI->>API: POST /api/projects/{id}/ingest
+    API->>DB: create durable ingestion job
+    API->>Q: queue job
+    Q->>W: deliver job
+    W->>EX: detect platform + extract evidence
+    EX-->>W: metadata + transcript segments
+    W->>DB: persist metadata, transcript, and job progress
+    W->>CB: build metadata, hook, description, transcript chunks
     CB->>EMB: embed chunk text
-    EMB-->>API: vectors
-    API->>VDB: upsert vectors with payloads
+    EMB-->>W: vectors
+    W->>VDB: upsert vectors with payloads
+    loop until terminal status
+        UI->>API: GET /api/projects/{id}/status
+        API-->>UI: stage + progress percentage
+    end
     UI->>API: POST /api/projects/{id}/chat/stream
     API->>VDB: retrieve relevant chunks
     API->>DB: load structured metadata and memory
@@ -281,13 +289,14 @@ CreatorLens AI follows strict evidence rules:
 | --- | --- |
 | App routes | `frontend/src/app/page.tsx`, `analyze/page.tsx`, `chat/page.tsx` |
 | Main workflow | `frontend/src/components/ComparisonWorkspace.tsx` |
+| Background progress | `frontend/src/components/IngestionProgressPanel.tsx` |
 | Chat | `frontend/src/components/CreatorChatPanel.tsx`, `CreatorChatPage.tsx` |
 | Insights | `CreatorInsightSummaryPanel.tsx`, `InsightScoreCard.tsx`, `HookComparisonCard.tsx` |
 | Evidence tools | `RagIndexPanel.tsx`, `RetrievalTestPanel.tsx`, `TranscriptPreviewPanel.tsx` |
 | API client | `frontend/src/lib/api.ts` |
 | Types | `frontend/src/types/project.ts` |
 
-Current V1 browser state is intentionally lightweight: the active project ID, chat session IDs, and drafts are held in module memory by `frontend/src/lib/app-session.ts`. They survive client-side navigation but not a full browser refresh. The `/chat` page uses the active in-memory project and does not currently consume a `projectId` query parameter. Chat trace SSE events are parsed by the API client but are not displayed, and restored chat history currently reloads message text without stored citations.
+Browser state remains lightweight: the active project ID is stored in local storage so analysis polling can recover after a refresh, while chat session IDs and drafts remain in module memory. The `/chat` page uses the active project and does not currently consume a `projectId` query parameter. Chat trace SSE events are parsed by the API client but are not displayed, and restored chat history currently reloads message text without stored citations.
 
 ## API Surface
 
@@ -461,7 +470,7 @@ The lowest-cost architecture is to avoid unnecessary LLM and paid transcription 
 | Transcript extraction | Free captions first, Apify/Deepgram only as fallback | URL-level transcript cache and retry queue |
 | Vector storage | Qdrant payload filters per project/slot | Payload indexes, collection sharding if needed |
 | Database | PostgreSQL on isolated Neon branches | Add caching, background jobs, and production-scale operational controls |
-| Backend work | Synchronous demo flow | Background jobs with Redis/RQ/Celery |
+| Backend work | Celery jobs through Upstash Redis with persisted status | Add queue-depth autoscaling and workload-specific worker pools |
 | Cold starts | Optional external health monitoring for the Render demo | Paid always-on instance or autoscaled worker/API split |
 
 For 1000 creators/day:
@@ -513,7 +522,7 @@ POST /health/llm/test
 2. Paste Content 1 and Content 2 URLs.
 3. Run analysis.
 4. Verify metadata, engagement rate, missing fields, transcript source, and transcript segment count.
-5. Build/index evidence.
+5. Watch background ingestion reach `READY` or `PARTIAL_READY` and verify evidence is indexed.
 6. Show Creator Insight Summary.
 7. Ask the RAG chat:
    - What is the engagement rate of each content item?
