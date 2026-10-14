@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 from uuid import uuid4
 
@@ -62,6 +64,14 @@ class TranscriptRepository:
         if limit is not None:
             statement = statement.limit(max(1, min(limit, 100)))
         segments = self.session.scalars(statement).all()
+        return [self.to_record(segment) for segment in segments]
+
+    def list_for_content_item(self, content_item_id: str) -> list[dict[str, Any]]:
+        segments = self.session.scalars(
+            select(TranscriptSegmentModel)
+            .where(TranscriptSegmentModel.content_item_id == content_item_id)
+            .order_by(TranscriptSegmentModel.segment_index)
+        ).all()
         return [self.to_record(segment) for segment in segments]
 
     @staticmethod

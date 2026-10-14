@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-User-executed Phase 0 validation:
+User-executed frontend validation:
 
 ```powershell
 npm run build

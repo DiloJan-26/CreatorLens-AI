@@ -167,6 +167,42 @@ def upsert_chunk_vectors(
     return point_ids
 
 
+def qdrant_points_exist(point_ids: list[str]) -> bool:
+    """Return whether every persisted point ID still exists in Qdrant."""
+    if not point_ids:
+        return False
+    settings = get_settings()
+    if settings.qdrant_collection not in list_qdrant_collections():
+        return False
+    points = get_qdrant_client().retrieve(
+        collection_name=settings.qdrant_collection,
+        ids=point_ids,
+        with_payload=False,
+        with_vectors=False,
+    )
+    found_ids = {str(point.id) for point in points}
+    return all(str(point_id) in found_ids for point_id in point_ids)
+
+
+def get_point_vectors(point_ids: list[str]) -> dict[str, list[float]]:
+    """Load existing vectors by point ID for cross-project embedding reuse."""
+    if not point_ids:
+        return {}
+    settings = get_settings()
+    points = get_qdrant_client().retrieve(
+        collection_name=settings.qdrant_collection,
+        ids=point_ids,
+        with_payload=False,
+        with_vectors=True,
+    )
+    vectors: dict[str, list[float]] = {}
+    for point in points:
+        vector = getattr(point, "vector", None)
+        if isinstance(vector, list) and all(isinstance(value, int | float) for value in vector):
+            vectors[str(point.id)] = [float(value) for value in vector]
+    return vectors
+
+
 def search_project_chunks(
     project_id: str,
     query_vector: list[float],
@@ -243,6 +279,10 @@ def _chunk_payload(chunk: RagChunk) -> dict[str, Any]:
         "text": _payload_text(chunk.text),
         "citation_label": _payload_value(chunk.citation_label),
         "content_hash": _payload_value(chunk.content_hash),
+        "chunk_hash": _payload_value(chunk.chunk_hash),
+        "embedding_hash": _payload_value(chunk.embedding_hash),
+        "embedding_model_name": _payload_value(chunk.embedding_model_name),
+        "embedding_model_version": _payload_value(chunk.embedding_model_version),
     }
 
 

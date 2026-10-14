@@ -1,4 +1,4 @@
-"""Create the Phase 1 PostgreSQL persistence schema.
+"""Create the initial PostgreSQL persistence schema.
 
 Revision ID: 20261005_0001
 Revises: None

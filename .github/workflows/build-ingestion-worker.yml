@@ -1,4 +1,4 @@
-name: Build Phase 2 Worker Image
+name: Build Ingestion Worker Image
 
 on:
   workflow_dispatch:
@@ -38,4 +38,4 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:phase2-0ec931c
+          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:ingestion-0ec931c

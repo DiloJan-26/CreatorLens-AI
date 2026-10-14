@@ -7,7 +7,7 @@ from app.db.base import Base
 
 
 class MetricSource(Base):
-    """Existing V1 verified-metrics persistence retained during Phase 1."""
+    """Verified-metrics persistence retained for backward compatibility."""
 
     __tablename__ = "metric_sources"
 

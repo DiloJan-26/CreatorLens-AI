@@ -33,6 +33,10 @@ def test_evidence_chunk_repository_replaces_and_updates_chunks(
         chunk_index=0,
         text="Evidence",
         content_hash="a" * 64,
+        chunk_hash="b" * 64,
+        embedding_hash="c" * 64,
+        embedding_model_name="BAAI/bge-small-en-v1.5",
+        embedding_model_version="1",
         citation_label="Content 1 · YouTube · Transcript",
     )
 
@@ -40,7 +44,15 @@ def test_evidence_chunk_repository_replaces_and_updates_chunks(
     records = repository.list(project_id)
     assert len(records) == 1
     assert records[0]["chunk_id"] == chunk_id
+    assert records[0]["embedding_model_name"] == "BAAI/bge-small-en-v1.5"
+    assert records[0]["embedding_model_version"] == "1"
+    assert records[0]["chunk_hash"] == "b" * 64
+    assert records[0]["embedding_hash"] == "c" * 64
 
     point_id = str(uuid4())
     assert repository.update_qdrant_point_id(chunk_id, point_id) is True
+    assert repository.list(project_id)[0]["qdrant_point_id"] == point_id
+
+    repository.replace(project_id, [chunk])
+
     assert repository.list(project_id)[0]["qdrant_point_id"] == point_id

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 from sqlalchemy import case, delete, select
@@ -13,6 +15,19 @@ class EvidenceChunkRepository:
         self.session = session
 
     def replace(self, project_id: str, chunks: list[RagChunk]) -> None:
+        reusable_point_ids = {
+            (
+                chunk.slot,
+                chunk.platform,
+                chunk.source_type,
+                chunk.chunk_index,
+                chunk.embedding_hash,
+            ): chunk.qdrant_point_id
+            for chunk in self.session.scalars(
+                select(EvidenceChunk).where(EvidenceChunk.project_id == project_id)
+            ).all()
+            if chunk.embedding_hash and chunk.qdrant_point_id
+        }
         self.session.execute(
             delete(EvidenceChunk).where(EvidenceChunk.project_id == project_id)
         )
@@ -33,8 +48,23 @@ class EvidenceChunkRepository:
                     creator=chunk.creator,
                     text=chunk.text,
                     content_hash=chunk.content_hash,
+                    chunk_hash=chunk.chunk_hash,
+                    embedding_hash=chunk.embedding_hash,
+                    embedding_model_name=chunk.embedding_model_name,
+                    embedding_model_version=chunk.embedding_model_version,
                     citation_label=chunk.citation_label,
-                    qdrant_point_id=chunk.qdrant_point_id,
+                    qdrant_point_id=(
+                        chunk.qdrant_point_id
+                        or reusable_point_ids.get(
+                            (
+                                chunk.slot,
+                                chunk.platform,
+                                chunk.source_type,
+                                chunk.chunk_index,
+                                chunk.embedding_hash,
+                            )
+                        )
+                    ),
                     created_at=timestamp,
                 )
                 for chunk in chunks
@@ -73,6 +103,23 @@ class EvidenceChunkRepository:
         self.session.flush()
         return True
 
+    def reusable_point_ids(
+        self, embedding_hashes: list[str]
+    ) -> dict[str, str]:
+        if not embedding_hashes:
+            return {}
+        chunks = self.session.scalars(
+            select(EvidenceChunk).where(
+                EvidenceChunk.embedding_hash.in_(embedding_hashes),
+                EvidenceChunk.qdrant_point_id.is_not(None),
+            )
+        ).all()
+        return {
+            str(chunk.embedding_hash): str(chunk.qdrant_point_id)
+            for chunk in chunks
+            if chunk.embedding_hash and chunk.qdrant_point_id
+        }
+
     @staticmethod
     def to_record(chunk: EvidenceChunk) -> dict[str, Any]:
         return {
@@ -89,6 +136,10 @@ class EvidenceChunkRepository:
             "creator": chunk.creator,
             "text": chunk.text,
             "content_hash": chunk.content_hash,
+            "chunk_hash": chunk.chunk_hash,
+            "embedding_hash": chunk.embedding_hash,
+            "embedding_model_name": chunk.embedding_model_name,
+            "embedding_model_version": chunk.embedding_model_version,
             "citation_label": chunk.citation_label,
             "qdrant_point_id": chunk.qdrant_point_id,
         }

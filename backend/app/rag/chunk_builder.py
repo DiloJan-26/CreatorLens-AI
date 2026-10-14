@@ -2,7 +2,9 @@ import hashlib
 import uuid
 from typing import Any
 
+from app.core.config import get_settings
 from app.models.rag import RagChunk, RagPlatform, RagSourceType
+from app.services.hash_service import hash_chunk, hash_embedding
 from app.services.metric_source_service import get_metric_summary
 from app.services.storage_compat_service import (
     get_project_detail_record,
@@ -328,7 +330,14 @@ def _make_chunk(
     title: str | None = None,
     creator: str | None = None,
 ) -> RagChunk:
+    settings = get_settings()
     content_hash = _content_hash(project_id, slot, platform, source_type, text)
+    chunk_hash = hash_chunk(text)
+    embedding_hash = hash_embedding(
+        chunk_hash=chunk_hash,
+        model_name=settings.embedding_model_name,
+        model_version=settings.embedding_model_version,
+    )
     chunk_id = str(
         uuid.uuid5(
             uuid.NAMESPACE_URL,
@@ -350,8 +359,12 @@ def _make_chunk(
         creator=creator,
         text=text,
         content_hash=content_hash,
+        chunk_hash=chunk_hash,
+        embedding_hash=embedding_hash,
         citation_label=citation_label,
         qdrant_point_id=None,
+        embedding_model_name=settings.embedding_model_name,
+        embedding_model_version=settings.embedding_model_version,
     )
 
 

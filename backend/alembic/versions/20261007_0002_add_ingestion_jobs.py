@@ -1,4 +1,4 @@
-"""Add persisted Phase 2 ingestion jobs.
+"""Add persisted background ingestion jobs.
 
 Revision ID: 20261007_0002
 Revises: 20261005_0001

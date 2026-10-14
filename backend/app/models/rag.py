@@ -38,8 +38,12 @@ class RagChunk(BaseModel):
     creator: str | None = None
     text: str
     content_hash: str
+    chunk_hash: str | None = None
+    embedding_hash: str | None = None
     citation_label: str
     qdrant_point_id: str | None = None
+    embedding_model_name: str | None = None
+    embedding_model_version: str | None = None
 
 
 class ContentChunkCount(BaseModel):

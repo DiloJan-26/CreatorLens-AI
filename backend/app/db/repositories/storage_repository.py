@@ -62,6 +62,7 @@ def upsert_video_metadata(
     project_id: str,
     metadata: VideoMetadata,
     slot: str | None = None,
+    normalized_url: str | None = None,
 ) -> dict[str, Any]:
     content_slot = _content_slot(slot or metadata.slot or metadata.platform)
     with database_session() as session:
@@ -75,12 +76,50 @@ def upsert_video_metadata(
             extraction_status=metadata.extraction_status,
             transcript_available=metadata.transcript_available,
             transcript_segment_count=metadata.transcript_segment_count,
+            normalized_url=normalized_url,
         )
         snapshot = metadata_repo.create_snapshot(
             content_item=item,
             metadata=metadata,
         )
         return metadata_repo.merge_record(content_repo.base_record(item), snapshot)
+
+
+def get_cached_extraction(normalized_url: str) -> dict[str, Any] | None:
+    with database_session() as session:
+        content_repo = ContentItemRepository(session)
+        item = content_repo.find_reusable_by_normalized_url(normalized_url)
+        if item is None:
+            return None
+        snapshot = MetadataRepository(session).latest_for_item(item.id)
+        if snapshot is None or not isinstance(snapshot.raw_payload, dict):
+            return None
+        return {
+            "source_project_id": item.project_id,
+            "content_item_id": item.id,
+            "normalized_url": item.normalized_url,
+            "content_hash": item.content_hash,
+            "metadata_hash": item.metadata_hash,
+            "transcript_hash": item.transcript_hash,
+            "metadata": dict(snapshot.raw_payload),
+            "segments": TranscriptRepository(session).list_for_content_item(item.id),
+        }
+
+
+def update_content_cache_identity(
+    content_item_id: str,
+    *,
+    content_hash: str,
+    metadata_hash: str,
+    transcript_hash: str,
+) -> None:
+    with database_session() as session:
+        ContentItemRepository(session).set_cache_identity(
+            content_item_id,
+            content_hash=content_hash,
+            metadata_hash=metadata_hash,
+            transcript_hash=transcript_hash,
+        )
 
 
 def get_video_by_project_platform(
@@ -227,6 +266,13 @@ def update_rag_chunk_qdrant_point_id(
         EvidenceChunkRepository(session).update_qdrant_point_id(
             chunk_id, qdrant_point_id
         )
+
+
+def get_reusable_qdrant_point_ids(
+    embedding_hashes: list[str],
+) -> dict[str, str]:
+    with database_session() as session:
+        return EvidenceChunkRepository(session).reusable_point_ids(embedding_hashes)
 
 
 def create_chat_session(

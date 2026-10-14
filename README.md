@@ -376,7 +376,7 @@ Local URLs:
 | `DB_MAX_OVERFLOW` | optional | Additional temporary SQLAlchemy connections; defaults to `5` |
 | `DB_POOL_RECYCLE_SECONDS` | optional | Recycles pooled connections; defaults to `300` seconds |
 | `DB_CONNECT_TIMEOUT_SECONDS` | optional | Bounds PostgreSQL connection attempts; defaults to `10` seconds |
-| `REDIS_URL` | Phase 2 deployment | TLS Redis URL used by default for both the Celery broker and result backend |
+| `REDIS_URL` | Background worker deployment | TLS Redis URL used by default for both the Celery broker and result backend |
 | `CELERY_BROKER_URL` | optional | Overrides `REDIS_URL` for the Celery broker |
 | `CELERY_RESULT_BACKEND` | optional | Overrides `REDIS_URL` for temporary Celery task results |
 | `CELERY_RESULT_EXPIRES_SECONDS` | optional | Removes temporary Celery results after `3600` seconds by default |
@@ -398,6 +398,7 @@ Local URLs:
 | `QDRANT_API_KEY` | yes | Qdrant API key |
 | `QDRANT_COLLECTION` | yes | Vector collection name |
 | `EMBEDDING_MODEL_NAME` | yes | FastEmbed model name |
+| `EMBEDDING_MODEL_VERSION` | yes | Cache compatibility revision for the configured embedding model; increment when its generated vectors become incompatible |
 | `YOUTUBE_API_KEY` | recommended | YouTube Data API metadata |
 | `APIFY_API_TOKEN` | recommended | YouTube transcript fallback |
 | `APIFY_YOUTUBE_TRANSCRIPT_ACTOR` | recommended | Configurable Apify transcript actor |

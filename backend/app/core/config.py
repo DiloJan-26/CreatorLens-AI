@@ -92,6 +92,10 @@ class Settings(BaseSettings):
         default="BAAI/bge-small-en-v1.5",
         alias="EMBEDDING_MODEL_NAME",
     )
+    embedding_model_version: str = Field(
+        default="1",
+        alias="EMBEDDING_MODEL_VERSION",
+    )
 
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")

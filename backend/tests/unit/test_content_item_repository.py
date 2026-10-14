@@ -36,6 +36,36 @@ def test_content_item_repository_upserts_by_project_and_slot(
     assert len(repository.list_models(project_id)) == 1
 
 
+def test_content_item_repository_finds_valid_normalized_url_cache(
+    db_session: Session,
+) -> None:
+    project_id = _create_project(db_session)
+    repository = ContentItemRepository(db_session)
+    item = repository.upsert(
+        project_id=project_id,
+        slot="content_1",
+        platform="youtube",
+        url="https://youtu.be/example",
+        normalized_url="https://www.youtube.com/watch?v=example",
+        extraction_status="ready",
+        transcript_available=True,
+        transcript_segment_count=1,
+    )
+    repository.set_cache_identity(
+        item.id,
+        content_hash="a" * 64,
+        metadata_hash="b" * 64,
+        transcript_hash="c" * 64,
+    )
+
+    cached = repository.find_reusable_by_normalized_url(
+        "https://www.youtube.com/watch?v=example"
+    )
+
+    assert cached is not None
+    assert cached.id == item.id
+
+
 def _create_project(session: Session) -> str:
     project_id = str(uuid4())
     ProjectRepository(session).create(

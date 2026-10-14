@@ -38,6 +38,16 @@ def test_database_connection_timeout_has_bounded_default(monkeypatch) -> None:
     assert settings.db_connect_timeout_seconds == 10
 
 
+def test_embedding_model_has_a_cache_compatibility_version(monkeypatch) -> None:
+    monkeypatch.setenv("EMBEDDING_MODEL_NAME", "example/model")
+    monkeypatch.setenv("EMBEDDING_MODEL_VERSION", "weights-2026-10")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.embedding_model_name == "example/model"
+    assert settings.embedding_model_version == "weights-2026-10"
+
+
 def test_redis_url_is_default_celery_transport(monkeypatch) -> None:
     redis_url = "rediss://default:password@example.test:6379"
     monkeypatch.setenv("REDIS_URL", redis_url)

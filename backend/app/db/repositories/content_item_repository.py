@@ -29,6 +29,7 @@ class ContentItemRepository:
         extraction_status: str,
         transcript_available: bool,
         transcript_segment_count: int,
+        normalized_url: str | None = None,
     ) -> ContentItem:
         item = self.get_model_by_slot(project_id, slot)
         timestamp = utc_now()
@@ -39,6 +40,7 @@ class ContentItemRepository:
                 slot=slot,
                 platform=platform,
                 url=url,
+                normalized_url=normalized_url,
                 extraction_status=extraction_status,
                 transcript_available=transcript_available,
                 transcript_segment_count=transcript_segment_count,
@@ -49,12 +51,50 @@ class ContentItemRepository:
         else:
             item.platform = platform
             item.url = url
+            item.normalized_url = normalized_url
+            item.content_hash = None
+            item.metadata_hash = None
+            item.transcript_hash = None
             item.extraction_status = extraction_status
             item.transcript_available = transcript_available
             item.transcript_segment_count = transcript_segment_count
             item.updated_at = timestamp
         self.session.flush()
         return item
+
+    def find_reusable_by_normalized_url(
+        self, normalized_url: str
+    ) -> ContentItem | None:
+        return self.session.scalar(
+            select(ContentItem)
+            .where(
+                ContentItem.normalized_url == normalized_url,
+                ContentItem.extraction_status == "ready",
+                ContentItem.transcript_available.is_(True),
+                ContentItem.content_hash.is_not(None),
+                ContentItem.metadata_hash.is_not(None),
+                ContentItem.transcript_hash.is_not(None),
+            )
+            .order_by(ContentItem.updated_at.desc())
+            .limit(1)
+        )
+
+    def set_cache_identity(
+        self,
+        content_item_id: str,
+        *,
+        content_hash: str,
+        metadata_hash: str,
+        transcript_hash: str,
+    ) -> None:
+        item = self.session.get(ContentItem, content_item_id)
+        if item is None:
+            raise LookupError("Content item not found.")
+        item.content_hash = content_hash
+        item.metadata_hash = metadata_hash
+        item.transcript_hash = transcript_hash
+        item.updated_at = utc_now()
+        self.session.flush()
 
     def get_model_by_slot(self, project_id: str, slot: str) -> ContentItem | None:
         return self.session.scalar(
@@ -105,6 +145,10 @@ class ContentItemRepository:
             "slot": item.slot,
             "platform": item.platform,
             "url": item.url,
+            "normalized_url": item.normalized_url,
+            "content_hash": item.content_hash,
+            "metadata_hash": item.metadata_hash,
+            "transcript_hash": item.transcript_hash,
             "extraction_status": item.extraction_status,
             "transcript_available": item.transcript_available,
             "transcript_segment_count": item.transcript_segment_count,

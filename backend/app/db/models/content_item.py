@@ -20,6 +20,10 @@ class ContentItem(Base):
     slot: Mapped[str] = mapped_column(String(32), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_url: Mapped[str | None] = mapped_column(Text, index=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    metadata_hash: Mapped[str | None] = mapped_column(String(64))
+    transcript_hash: Mapped[str | None] = mapped_column(String(64))
     extraction_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending"
     )
