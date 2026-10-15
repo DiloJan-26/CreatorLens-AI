@@ -14,6 +14,62 @@ class Settings(BaseSettings):
     environment: str = Field(default="local", alias="ENVIRONMENT")
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    test_database_url: str | None = Field(default=None, alias="TEST_DATABASE_URL")
+    db_pool_size: int = Field(default=5, alias="DB_POOL_SIZE", ge=1, le=20)
+    db_max_overflow: int = Field(default=5, alias="DB_MAX_OVERFLOW", ge=0, le=20)
+    db_pool_recycle_seconds: int = Field(
+        default=300,
+        alias="DB_POOL_RECYCLE_SECONDS",
+        ge=30,
+    )
+    db_connect_timeout_seconds: int = Field(
+        default=10,
+        alias="DB_CONNECT_TIMEOUT_SECONDS",
+        ge=1,
+        le=60,
+    )
+
+    redis_url: str | None = Field(default=None, alias="REDIS_URL")
+    celery_broker_url_override: str | None = Field(
+        default=None,
+        alias="CELERY_BROKER_URL",
+    )
+    celery_result_backend_override: str | None = Field(
+        default=None,
+        alias="CELERY_RESULT_BACKEND",
+    )
+    celery_result_expires_seconds: int = Field(
+        default=3600,
+        alias="CELERY_RESULT_EXPIRES_SECONDS",
+        ge=60,
+        le=86400,
+    )
+    celery_visibility_timeout_seconds: int = Field(
+        default=3600,
+        alias="CELERY_VISIBILITY_TIMEOUT_SECONDS",
+        ge=300,
+        le=86400,
+    )
+    celery_max_retries: int = Field(
+        default=2,
+        alias="CELERY_MAX_RETRIES",
+        ge=0,
+        le=5,
+    )
+    celery_retry_backoff_seconds: int = Field(
+        default=15,
+        alias="CELERY_RETRY_BACKOFF_SECONDS",
+        ge=1,
+        le=300,
+    )
+    celery_broker_connection_timeout_seconds: int = Field(
+        default=5,
+        alias="CELERY_BROKER_CONNECTION_TIMEOUT_SECONDS",
+        ge=1,
+        le=30,
+    )
+
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
@@ -35,6 +91,10 @@ class Settings(BaseSettings):
     embedding_model_name: str = Field(
         default="BAAI/bge-small-en-v1.5",
         alias="EMBEDDING_MODEL_NAME",
+    )
+    embedding_model_version: str = Field(
+        default="1",
+        alias="EMBEDDING_MODEL_VERSION",
     )
 
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
@@ -82,6 +142,42 @@ class Settings(BaseSettings):
             for language in self.transcript_fallback_languages.split(",")
             if language.strip()
         ]
+
+    def sqlalchemy_database_url(self, *, test: bool = False) -> str | None:
+        value = self.test_database_url if test else self.database_url
+
+        if value is None or not value.strip():
+            return None
+
+        url = value.strip()
+        if url.startswith("postgres://"):
+            return f"postgresql+psycopg://{url.removeprefix('postgres://')}"
+        if url.startswith("postgresql://"):
+            return f"postgresql+psycopg://{url.removeprefix('postgresql://')}"
+
+        return url
+
+    @property
+    def celery_broker_url(self) -> str | None:
+        return self._first_configured_url(
+            self.celery_broker_url_override,
+            self.redis_url,
+        )
+
+    @property
+    def celery_result_backend(self) -> str | None:
+        return self._first_configured_url(
+            self.celery_result_backend_override,
+            self.redis_url,
+        )
+
+    @staticmethod
+    def _first_configured_url(*values: str | None) -> str | None:
+        for value in values:
+            if value is not None and value.strip():
+                return value.strip()
+
+        return None
 
 
 @lru_cache

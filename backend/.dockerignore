@@ -12,7 +12,7 @@ __pycache__/
 .env.local
 .env.*.local
 
-# SQLite database — starts fresh in production
+# Legacy SQLite fallback data — never copy into the PostgreSQL deployment
 storage/
 *.db
 

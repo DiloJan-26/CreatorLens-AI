@@ -23,11 +23,15 @@ from app.services.qdrant_service import (
 )
 
 
-router = APIRouter(tags=["health"])
+router = APIRouter(tags=["0. System Readiness"])
 settings = get_settings()
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Check API process health",
+    description="First check: confirms that the FastAPI process is responding.",
+)
 def health() -> dict[str, str]:
     return {
         "status": "ok",
@@ -36,7 +40,12 @@ def health() -> dict[str, str]:
     }
 
 
-@router.get("/health/qdrant", response_model=VectorStoreHealthResponse)
+@router.get(
+    "/health/qdrant",
+    response_model=VectorStoreHealthResponse,
+    summary="Check Qdrant connectivity",
+    description="Confirms vector-store configuration and lists reachable collections.",
+)
 def qdrant_health() -> VectorStoreHealthResponse:
     if not is_qdrant_configured():
         return VectorStoreHealthResponse(
@@ -64,7 +73,12 @@ def qdrant_health() -> VectorStoreHealthResponse:
         )
 
 
-@router.get("/health/embeddings", response_model=EmbeddingHealthResponse)
+@router.get(
+    "/health/embeddings",
+    response_model=EmbeddingHealthResponse,
+    summary="Check embedding model readiness",
+    description="Loads the configured embedding model and reports its vector size.",
+)
 def embeddings_health() -> EmbeddingHealthResponse:
     try:
         vector_size = get_embedding_dimension()
@@ -82,19 +96,33 @@ def embeddings_health() -> EmbeddingHealthResponse:
         )
 
 
-@router.get("/health/llm", response_model=LLMHealthResponse)
+@router.get(
+    "/health/llm",
+    response_model=LLMHealthResponse,
+    summary="Check LLM configuration",
+    description="Checks Gemini configuration without requiring a full project workflow.",
+)
 def llm_health() -> LLMHealthResponse:
     return check_llm_configured()
 
 
-@router.post("/health/llm/test", response_model=LLMGenerationTestResponse)
+@router.post(
+    "/health/llm/test",
+    response_model=LLMGenerationTestResponse,
+    summary="Run a small LLM generation test",
+    description="Optional diagnostic that calls Gemini and may consume provider quota.",
+)
 async def llm_generation_test(
     payload: LLMGenerationTestRequest,
 ) -> LLMGenerationTestResponse:
     return await run_llm_generation_test(payload.prompt)
 
 
-@router.post("/health/llm/stream-test")
+@router.post(
+    "/health/llm/stream-test",
+    summary="Run a streaming LLM test",
+    description="Optional Server-Sent Events diagnostic for Gemini streaming.",
+)
 def llm_stream_generation_test(
     payload: LLMGenerationTestRequest,
 ) -> StreamingResponse:

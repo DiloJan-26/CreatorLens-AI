@@ -1,16 +1,23 @@
+import logging
+
 from app.core.config import get_settings
 from app.models.rag import IndexProjectResponse, RagChunk
 from app.rag.chunk_builder import build_project_chunks
 from app.services.embedding_service import embed_texts
+from app.services.hash_service import hash_embedding
 from app.services.qdrant_service import (
     QdrantCollectionError,
     QdrantConfigurationError,
     delete_project_points,
     ensure_qdrant_collection,
+    get_point_vectors,
     is_qdrant_configured,
+    qdrant_points_exist,
     upsert_chunk_vectors,
 )
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
+    get_reusable_qdrant_point_ids,
+    get_rag_chunks,
     get_project_record,
     replace_rag_chunks,
     update_rag_chunk_qdrant_point_id,
@@ -21,14 +28,27 @@ class ProjectIndexingNotFoundError(Exception):
     """Raised when a project cannot be found for indexing."""
 
 
-def index_project(project_id: str) -> IndexProjectResponse:
+logger = logging.getLogger(__name__)
+
+
+def index_project(
+    project_id: str,
+    *,
+    rebuild_chunks: bool = True,
+) -> IndexProjectResponse:
     settings = get_settings()
 
     if get_project_record(project_id) is None:
         raise ProjectIndexingNotFoundError("Project not found.")
 
-    chunks = build_project_chunks(project_id)
-    replace_rag_chunks(project_id=project_id, chunks=chunks)
+    if rebuild_chunks:
+        chunks = build_project_chunks(project_id)
+        replace_rag_chunks(project_id=project_id, chunks=chunks)
+    else:
+        chunks = [
+            RagChunk(**record)
+            for record in get_rag_chunks(project_id=project_id)
+        ]
 
     if not chunks:
         return _failed_response(
@@ -44,13 +64,41 @@ def index_project(project_id: str) -> IndexProjectResponse:
             message="Qdrant is not configured.",
         )
 
-    try:
-        vectors = embed_texts([chunk.text for chunk in chunks])
-    except Exception:
-        return _failed_response(
+    if _has_reusable_embeddings(chunks) and _stored_points_exist(chunks):
+        logger.info(
+            "Embedding cache hit project_id=%s total_chunks=%s; "
+            "skipping embedding generation and Qdrant upsert",
+            project_id,
+            len(chunks),
+        )
+        return _indexed_response(
             project_id=project_id,
             chunks=chunks,
-            message="Could not load embedding model or embed chunks.",
+            message="Existing compatible embeddings and Qdrant points reused.",
+        )
+
+    logger.info(
+        "Embedding cache miss project_id=%s total_chunks=%s",
+        project_id,
+        len(chunks),
+    )
+
+    vectors = _reusable_vectors(chunks)
+    reused_embedding_vectors = vectors is not None
+    if vectors is None:
+        try:
+            vectors = embed_texts([chunk.text for chunk in chunks])
+        except Exception:
+            return _failed_response(
+                project_id=project_id,
+                chunks=chunks,
+                message="Could not load embedding model or embed chunks.",
+            )
+    else:
+        logger.info(
+            "Embedding vectors reused project_id=%s total_chunks=%s",
+            project_id,
+            len(chunks),
         )
 
     vector_size = _vector_size(vectors)
@@ -85,6 +133,21 @@ def index_project(project_id: str) -> IndexProjectResponse:
             qdrant_point_id=qdrant_point_id,
         )
 
+    return _indexed_response(
+        project_id=project_id,
+        chunks=chunks,
+        message=(
+            "Compatible embedding vectors reused and project points indexed."
+            if reused_embedding_vectors
+            else "Project chunks indexed in Qdrant."
+        ),
+    )
+
+
+def _indexed_response(
+    *, project_id: str, chunks: list[RagChunk], message: str
+) -> IndexProjectResponse:
+    settings = get_settings()
     return IndexProjectResponse(
         project_id=project_id,
         status="indexed",
@@ -98,8 +161,65 @@ def index_project(project_id: str) -> IndexProjectResponse:
         chunks_by_slot=_counts_by_field(chunks, "slot"),
         chunks_by_source_type=_counts_by_field(chunks, "source_type"),
         content_chunk_counts=_content_chunk_counts(chunks),
-        message="Project chunks indexed in Qdrant.",
+        message=message,
     )
+
+
+def _has_reusable_embeddings(chunks: list[RagChunk]) -> bool:
+    settings = get_settings()
+    for chunk in chunks:
+        if not chunk.qdrant_point_id or not chunk.chunk_hash or not chunk.embedding_hash:
+            return False
+        expected = hash_embedding(
+            chunk_hash=chunk.chunk_hash,
+            model_name=settings.embedding_model_name,
+            model_version=settings.embedding_model_version,
+        )
+        if chunk.embedding_hash != expected:
+            return False
+    return bool(chunks)
+
+
+def _stored_points_exist(chunks: list[RagChunk]) -> bool:
+    try:
+        return qdrant_points_exist(
+            [str(chunk.qdrant_point_id) for chunk in chunks if chunk.qdrant_point_id]
+        )
+    except Exception as exc:
+        logger.warning(
+            "Could not validate cached Qdrant points; rebuilding index "
+            "exception_type=%s",
+            type(exc).__name__,
+        )
+        return False
+
+
+def _reusable_vectors(chunks: list[RagChunk]) -> list[list[float]] | None:
+    embedding_hashes = [
+        str(chunk.embedding_hash) for chunk in chunks if chunk.embedding_hash
+    ]
+    if len(embedding_hashes) != len(chunks):
+        return None
+    try:
+        point_ids = get_reusable_qdrant_point_ids(embedding_hashes)
+        if any(digest not in point_ids for digest in embedding_hashes):
+            return None
+        vectors_by_point = get_point_vectors(
+            list(dict.fromkeys(point_ids[digest] for digest in embedding_hashes))
+        )
+        vectors = [
+            vectors_by_point.get(point_ids[digest]) for digest in embedding_hashes
+        ]
+        if any(vector is None for vector in vectors):
+            return None
+        return [vector for vector in vectors if vector is not None]
+    except Exception as exc:
+        logger.warning(
+            "Could not reuse cached embedding vectors; generating them again "
+            "exception_type=%s",
+            type(exc).__name__,
+        )
+        return None
 
 
 def _failed_response(

@@ -37,6 +37,10 @@ def init_db() -> None:
                 slot TEXT,
                 platform TEXT NOT NULL,
                 url TEXT NOT NULL,
+                normalized_url TEXT,
+                content_hash TEXT,
+                metadata_hash TEXT,
+                transcript_hash TEXT,
                 title TEXT,
                 description TEXT,
                 caption TEXT,
@@ -105,6 +109,10 @@ def init_db() -> None:
                 creator TEXT,
                 text TEXT NOT NULL,
                 content_hash TEXT NOT NULL,
+                chunk_hash TEXT,
+                embedding_hash TEXT,
+                embedding_model_name TEXT,
+                embedding_model_version TEXT,
                 citation_label TEXT NOT NULL,
                 qdrant_point_id TEXT,
                 created_at TEXT NOT NULL
@@ -198,6 +206,14 @@ def init_db() -> None:
         _ensure_video_columns(connection)
         _ensure_transcript_columns(connection)
         _ensure_rag_chunk_columns(connection)
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_videos_normalized_url "
+            "ON videos(normalized_url)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rag_chunks_embedding_hash "
+            "ON rag_chunks(embedding_hash)"
+        )
         connection.commit()
 
 
@@ -329,6 +345,7 @@ def upsert_video_metadata(
     project_id: str,
     metadata: VideoMetadata,
     slot: str | None = None,
+    normalized_url: str | None = None,
 ) -> dict[str, Any]:
     init_db()
     content_slot = _content_slot(slot or metadata.slot or metadata.platform)
@@ -454,6 +471,15 @@ def upsert_video_metadata(
                 updated_at,
             ),
         )
+        connection.execute(
+            """
+            UPDATE videos
+            SET normalized_url = ?, content_hash = NULL,
+                metadata_hash = NULL, transcript_hash = NULL
+            WHERE id = ?
+            """,
+            (normalized_url, video_id),
+        )
         connection.commit()
 
     record = get_video_by_project_slot(project_id, content_slot)
@@ -461,6 +487,74 @@ def upsert_video_metadata(
         raise RuntimeError("Video metadata record was not saved.")
 
     return record
+
+
+def get_cached_extraction(normalized_url: str) -> dict[str, Any] | None:
+    init_db()
+    with _connect() as connection:
+        row = connection.execute(
+            """
+            SELECT * FROM videos
+            WHERE normalized_url = ?
+              AND extraction_status = 'ready'
+              AND transcript_available = 1
+              AND content_hash IS NOT NULL
+              AND metadata_hash IS NOT NULL
+              AND transcript_hash IS NOT NULL
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (normalized_url,),
+        ).fetchone()
+        if row is None:
+            return None
+        record = _video_row_to_dict(row)
+        segments = connection.execute(
+            """
+            SELECT segment_index, start_time, end_time, text
+            FROM transcript_segments
+            WHERE video_id = ?
+            ORDER BY segment_index
+            """,
+            (record["id"],),
+        ).fetchall()
+    return {
+        "source_project_id": record["project_id"],
+        "content_item_id": record["id"],
+        "normalized_url": record["normalized_url"],
+        "content_hash": record["content_hash"],
+        "metadata_hash": record["metadata_hash"],
+        "transcript_hash": record["transcript_hash"],
+        "metadata": _metadata_from_video_record(record),
+        "segments": [dict(segment) for segment in segments],
+    }
+
+
+def update_content_cache_identity(
+    content_item_id: str,
+    *,
+    content_hash: str,
+    metadata_hash: str,
+    transcript_hash: str,
+) -> None:
+    init_db()
+    with _connect() as connection:
+        connection.execute(
+            """
+            UPDATE videos
+            SET content_hash = ?, metadata_hash = ?, transcript_hash = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                content_hash,
+                metadata_hash,
+                transcript_hash,
+                _utc_timestamp(),
+                content_item_id,
+            ),
+        )
+        connection.commit()
 
 
 def replace_transcript_segments(
@@ -817,6 +911,17 @@ def get_transcript_segments(
 def replace_rag_chunks(project_id: str, chunks: list[RagChunk]) -> None:
     init_db()
     timestamp = _utc_timestamp()
+    reusable_point_ids = {
+        (
+            record.get("slot"),
+            record.get("platform"),
+            record.get("source_type"),
+            record.get("chunk_index"),
+            record.get("embedding_hash"),
+        ): record.get("qdrant_point_id")
+        for record in get_rag_chunks(project_id)
+        if record.get("embedding_hash") and record.get("qdrant_point_id")
+    }
 
     with _connect() as connection:
         connection.execute(
@@ -842,11 +947,15 @@ def replace_rag_chunks(project_id: str, chunks: list[RagChunk]) -> None:
                 creator,
                 text,
                 content_hash,
+                chunk_hash,
+                embedding_hash,
+                embedding_model_name,
+                embedding_model_version,
                 citation_label,
                 qdrant_point_id,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -863,8 +972,23 @@ def replace_rag_chunks(project_id: str, chunks: list[RagChunk]) -> None:
                     chunk.creator,
                     chunk.text,
                     chunk.content_hash,
+                    chunk.chunk_hash,
+                    chunk.embedding_hash,
+                    chunk.embedding_model_name,
+                    chunk.embedding_model_version,
                     chunk.citation_label,
-                    chunk.qdrant_point_id,
+                    (
+                        chunk.qdrant_point_id
+                        or reusable_point_ids.get(
+                            (
+                                chunk.slot,
+                                chunk.platform,
+                                chunk.source_type,
+                                chunk.chunk_index,
+                                chunk.embedding_hash,
+                            )
+                        )
+                    ),
                     timestamp,
                 )
                 for chunk in chunks
@@ -897,6 +1021,10 @@ def get_rag_chunks(
             creator,
             text,
             content_hash,
+            chunk_hash,
+            embedding_hash,
+            embedding_model_name,
+            embedding_model_version,
             citation_label,
             qdrant_point_id
         FROM rag_chunks
@@ -947,6 +1075,29 @@ def update_rag_chunk_qdrant_point_id(
             (qdrant_point_id, chunk_id),
         )
         connection.commit()
+
+
+def get_reusable_qdrant_point_ids(
+    embedding_hashes: list[str],
+) -> dict[str, str]:
+    init_db()
+    if not embedding_hashes:
+        return {}
+    placeholders = ",".join("?" for _ in embedding_hashes)
+    with _connect() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT embedding_hash, qdrant_point_id
+            FROM rag_chunks
+            WHERE embedding_hash IN ({placeholders})
+              AND qdrant_point_id IS NOT NULL
+            """,
+            tuple(embedding_hashes),
+        ).fetchall()
+    return {
+        str(row["embedding_hash"]): str(row["qdrant_point_id"])
+        for row in rows
+    }
 
 
 def create_chat_session(
@@ -1533,6 +1684,10 @@ def _ensure_video_columns(connection: sqlite3.Connection) -> None:
         "transcript_source": "TEXT",
         "metric_source_note": "TEXT",
         "transcript_source_note": "TEXT",
+        "normalized_url": "TEXT",
+        "content_hash": "TEXT",
+        "metadata_hash": "TEXT",
+        "transcript_hash": "TEXT",
     }
 
     for column_name, column_type in required_columns.items():
@@ -1609,6 +1764,10 @@ def _ensure_rag_chunk_columns(connection: sqlite3.Connection) -> None:
     required_columns = {
         "content_id": "TEXT",
         "slot": "TEXT",
+        "embedding_model_name": "TEXT",
+        "embedding_model_version": "TEXT",
+        "chunk_hash": "TEXT",
+        "embedding_hash": "TEXT",
     }
 
     for column_name, column_type in required_columns.items():

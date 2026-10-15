@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CreatorLens AI Frontend
 
-## Getting Started
+The CreatorLens frontend is a Next.js App Router application for the public V1 comparison, evidence, insights, and streaming chat experience.
 
-First, run the development server:
+## Routes
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- `/`: product landing page.
+- `/analyze`: creates a two-content project, queues background ingestion, polls persisted progress, and loads results when the worker reaches a terminal state.
+- `/chat`: opens chat for the active in-memory project.
+
+The active project ID is persisted in browser local storage so `/analyze` can recover the latest ingestion status after a refresh. Chat-session state remains in browser module memory. The frontend calls FastAPI directly; there is no Next.js API proxy.
+
+## Environment
+
+Copy `.env.example` to `.env.local` and set:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+For Vercel, configure `NEXT_PUBLIC_API_BASE_URL` with the public Render backend origin. Do not place backend credentials in frontend environment variables.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm install
+npm run dev
+```
 
-## Learn More
+User-executed frontend validation:
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The production deployment uses Vercel with `frontend` as the project root.

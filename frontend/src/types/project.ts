@@ -12,6 +12,39 @@ export type ProjectCreateResponse = {
   message: string;
 };
 
+export type IngestionJobStatus =
+  | "PENDING"
+  | "EXTRACTING_METADATA"
+  | "EXTRACTING_TRANSCRIPT"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "READY"
+  | "PARTIAL_READY"
+  | "FAILED";
+
+export type IngestionStartResponse = {
+  project_id: string;
+  job_id: string;
+  status: IngestionJobStatus;
+  status_url: string;
+  message: string;
+};
+
+export type IngestionStatusResponse = {
+  project_id: string;
+  job_id: string;
+  status: IngestionJobStatus;
+  progress_percent: number;
+  retry_count: number;
+  error_code?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
 export type ExtractionStatus =
   | "pending"
   | "extracting"

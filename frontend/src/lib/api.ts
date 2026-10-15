@@ -7,6 +7,8 @@ import type {
   ContentSlot,
   CreatorInsightSummaryResponse,
   HealthResponse,
+  IngestionStartResponse,
+  IngestionStatusResponse,
   IndexProjectResponse,
   LlmGenerationTestResponse,
   LlmHealthResponse,
@@ -53,6 +55,34 @@ export async function createProject(
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function startProjectIngestion(
+  projectId: string,
+  init?: Pick<RequestInit, "signal">,
+): Promise<IngestionStartResponse> {
+  return request<IngestionStartResponse>(`/api/projects/${projectId}/ingest`, {
+    method: "POST",
+    ...init,
+  });
+}
+
+export async function getProjectIngestionStatus(
+  projectId: string,
+  jobId?: string | null,
+  init?: Pick<RequestInit, "signal">,
+): Promise<IngestionStatusResponse> {
+  const params = new URLSearchParams();
+
+  if (jobId) {
+    params.set("job_id", jobId);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  return request<IngestionStatusResponse>(
+    `/api/projects/${projectId}/status${query}`,
+    init,
+  );
 }
 
 export async function extractProject(

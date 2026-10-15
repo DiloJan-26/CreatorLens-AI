@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field, model_validator
 from app.models.video import Platform, VideoMetadata
 
 
-ProjectStatus = Literal["created", "extracting", "ready", "failed"]
+ProjectStatus = Literal[
+    "created",
+    "extracting",
+    "ready",
+    "partial_ready",
+    "failed",
+]
 
 
 class ProjectCreateRequest(BaseModel):

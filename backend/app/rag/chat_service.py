@@ -24,7 +24,7 @@ from app.services.chat_memory_service import (
 )
 from app.services.llm_service import LLMConfigurationError, get_llm
 from app.services.qdrant_service import QdrantConfigurationError
-from app.services.storage_service import save_chat_citations
+from app.services.storage_compat_service import save_chat_citations
 
 
 def build_system_prompt() -> str:

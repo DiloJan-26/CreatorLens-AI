@@ -9,7 +9,7 @@ from app.models.rag import (
 )
 from app.services.embedding_service import embed_query
 from app.services.qdrant_service import search_project_chunks
-from app.services.storage_service import get_project_record, get_rag_chunks
+from app.services.storage_compat_service import get_project_record, get_rag_chunks
 
 
 class RetrievalProjectNotFoundError(Exception):

@@ -19,7 +19,7 @@ from app.insights.score_service import (
     calculate_public_performance_score,
     calculate_problem_solution_score,
 )
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     get_project_detail_record,
     get_transcript_segments,
 )

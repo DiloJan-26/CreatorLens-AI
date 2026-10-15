@@ -7,7 +7,7 @@ from app.models.metrics import (
     SaveVerifiedMetricsResponse,
     VerifiedMetricInput,
 )
-from app.services.storage_service import (
+from app.services.storage_compat_service import (
     delete_metric_source_record,
     get_metric_source_record,
     get_project_record,

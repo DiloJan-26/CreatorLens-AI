@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -23,8 +24,14 @@ from app.models.video import (
 )
 from app.rag.chunk_builder import build_project_chunks
 from app.services.metric_source_service import ensure_public_metric_records
-from app.services.storage_service import (
+from app.services.hash_service import (
+    hash_content,
+    hash_metadata,
+    hash_transcript,
+)
+from app.services.storage_compat_service import (
     create_project_record,
+    get_cached_extraction,
     get_project_detail_record,
     get_project_record,
     get_rag_chunks,
@@ -35,7 +42,12 @@ from app.services.storage_service import (
     replace_rag_chunks,
     replace_transcript_segments,
     update_project_status,
+    update_content_cache_identity,
     upsert_video_metadata,
+)
+from app.services.url_normalization_service import (
+    UnsupportedContentUrlError,
+    normalize_content_url,
 )
 from app.services.platform_detection_service import (
     UnsupportedPlatformUrlError,
@@ -44,6 +56,7 @@ from app.services.platform_detection_service import (
 
 
 SUCCESSFUL_VIDEO_STATUSES = {"ready", "partial"}
+logger = logging.getLogger(__name__)
 
 
 def is_valid_youtube_url(url: str) -> bool:
@@ -282,28 +295,42 @@ def _extract_and_store_platform(
     platform: str,
     url: str,
 ) -> str:
-    existing_video = get_video_by_project_slot(project_id, slot)
+    normalized_url = _normalized_cache_url(url)
+    extraction_result = _cached_extraction_result(normalized_url)
 
-    if _is_successful_video(existing_video):
-        return str(existing_video["extraction_status"])
-
-    try:
-        extraction_result = _extract_url(
-            project_id=project_id,
-            slot=slot,
-            platform=platform,
-            url=url,
+    if extraction_result is not None:
+        logger.info(
+            "Content cache hit project_id=%s slot=%s platform=%s",
+            project_id,
+            slot,
+            platform,
         )
-    except Exception:
-        extraction_result = VideoExtractionResult(
-            metadata=_failed_video_metadata(
+        extraction_result.metadata.url = url
+        extraction_result.metadata.platform = platform  # type: ignore[assignment]
+    else:
+        logger.info(
+            "Content cache miss project_id=%s slot=%s platform=%s",
+            project_id,
+            slot,
+            platform,
+        )
+        try:
+            extraction_result = _extract_url(
+                project_id=project_id,
                 slot=slot,
                 platform=platform,
                 url=url,
-                message=f"{_platform_display_name(platform)} extraction failed.",
-            ),
-            transcript_segments=[],
-        )
+            )
+        except Exception:
+            extraction_result = VideoExtractionResult(
+                metadata=_failed_video_metadata(
+                    slot=slot,
+                    platform=platform,
+                    url=url,
+                    message=f"{_platform_display_name(platform)} extraction failed.",
+                ),
+                transcript_segments=[],
+            )
 
     try:
         extraction_result.metadata.slot = slot  # type: ignore[assignment]
@@ -311,6 +338,7 @@ def _extract_and_store_platform(
             project_id=project_id,
             metadata=extraction_result.metadata,
             slot=slot,
+            normalized_url=normalized_url,
         )
         replace_transcript_segments(
             project_id=project_id,
@@ -319,10 +347,95 @@ def _extract_and_store_platform(
             segments=extraction_result.transcript_segments,
             slot=slot,
         )
+        content_hash, metadata_hash, transcript_hash = _cache_hashes(
+            extraction_result
+        )
+        update_content_cache_identity(
+            str(video_record["id"]),
+            content_hash=content_hash,
+            metadata_hash=metadata_hash,
+            transcript_hash=transcript_hash,
+        )
     except Exception:
         return "failed"
 
     return extraction_result.metadata.extraction_status
+
+
+def _normalized_cache_url(url: str) -> str | None:
+    try:
+        return normalize_content_url(url)
+    except UnsupportedContentUrlError:
+        return None
+
+
+def _cached_extraction_result(
+    normalized_url: str | None,
+) -> VideoExtractionResult | None:
+    if normalized_url is None:
+        return None
+    cached = get_cached_extraction(normalized_url)
+    if cached is None:
+        return None
+    try:
+        result = VideoExtractionResult(
+            metadata=VideoMetadata.model_validate(cached["metadata"]),
+            transcript_segments=[
+                {
+                    "segment_index": segment["segment_index"],
+                    "start_time": segment.get("start_time"),
+                    "end_time": segment.get("end_time"),
+                    "text": segment["text"],
+                }
+                for segment in cached["segments"]
+            ],
+        )
+        if not result.transcript_segments:
+            return None
+        content_hash, metadata_hash, transcript_hash = _cache_hashes(result)
+        if (
+            cached.get("content_hash") != content_hash
+            or cached.get("metadata_hash") != metadata_hash
+            or cached.get("transcript_hash") != transcript_hash
+        ):
+            logger.warning(
+                "Content cache entry failed hash validation content_item_id=%s",
+                cached.get("content_item_id"),
+            )
+            return None
+        return result
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Content cache entry could not be validated.")
+        return None
+
+
+def _cache_hashes(result: VideoExtractionResult) -> tuple[str, str, str]:
+    metadata_payload = result.metadata.model_dump(
+        mode="json",
+        exclude={
+            "slot",
+            "url",
+            "transcript_available",
+            "transcript_segment_count",
+            "transcript_language",
+            "detected_language",
+            "language_confidence",
+            "transcript_source",
+            "transcript_source_note",
+        },
+    )
+    metadata_digest = hash_metadata(metadata_payload)
+    transcript_digest = hash_transcript(
+        [segment.model_dump(mode="json") for segment in result.transcript_segments]
+    )
+    return (
+        hash_content(
+            metadata_hash=metadata_digest,
+            transcript_hash=transcript_digest,
+        ),
+        metadata_digest,
+        transcript_digest,
+    )
 
 
 def _is_successful_video(record: dict | None) -> bool:

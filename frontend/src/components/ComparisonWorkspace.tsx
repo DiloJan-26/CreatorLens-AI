@@ -13,16 +13,17 @@ import { ContentCard } from "@/components/ContentCard";
 import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
 import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
 import { ExecutiveInsightSnapshot } from "@/components/ExecutiveInsightSnapshot";
+import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
 import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import {
   createProject,
-  extractProject,
   getCreatorInsightSummary,
   getProject,
-  indexProject,
+  getProjectIngestionStatus,
+  startProjectIngestion,
 } from "@/lib/api";
 import {
   clearActiveProjectId,
@@ -32,6 +33,8 @@ import {
 import type {
   CreatorInsightSummaryResponse,
   IndexProjectResponse,
+  IngestionJobStatus,
+  IngestionStatusResponse,
   ProjectCreateResponse,
   ProjectDetailResponse,
 } from "@/types/project";
@@ -65,7 +68,16 @@ export function ComparisonWorkspace() {
     useState<CreatorInsightSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
-  const indexReady = indexResult?.status === "indexed";
+  const [ingestionStatus, setIngestionStatus] =
+    useState<IngestionStatusResponse | null>(null);
+  const [activeIngestion, setActiveIngestion] = useState<{
+    projectId: string;
+    jobId: string;
+  } | null>(null);
+  const indexReady =
+    indexResult?.status === "indexed" ||
+    ingestionStatus?.status === "READY" ||
+    ingestionStatus?.status === "PARTIAL_READY";
   const hasResults = Boolean(projectDetail);
 
   const resetWorkspaceState = useCallback(() => {
@@ -79,6 +91,8 @@ export function ComparisonWorkspace() {
     setInsightSummary(null);
     setError(null);
     setPartialNotice(null);
+    setIngestionStatus(null);
+    setActiveIngestion(null);
   }, []);
 
   const restoreProject = useCallback(async (activeProjectId: string) => {
@@ -87,9 +101,10 @@ export function ComparisonWorkspace() {
     setPartialNotice(null);
 
     try {
-      const [detail, summary] = await Promise.all([
+      const [detail, summary, latestIngestion] = await Promise.all([
         getProject(activeProjectId),
         getCreatorInsightSummary(activeProjectId).catch(() => null),
+        getProjectIngestionStatus(activeProjectId).catch(() => null),
       ]);
 
       setProjectDetail(detail);
@@ -101,8 +116,34 @@ export function ComparisonWorkspace() {
         status: detail.status,
         message: "Restored the current analysis session.",
       });
-      setProgressSteps(restoredProgressSteps());
-      setShowProgress(false);
+      setIngestionStatus(latestIngestion);
+
+      if (latestIngestion && !isTerminalStatus(latestIngestion.status)) {
+        setProgressSteps(progressStepsForIngestion(latestIngestion.status));
+        setShowProgress(true);
+        setIsSubmitting(true);
+        setActiveIngestion({
+          projectId: activeProjectId,
+          jobId: latestIngestion.job_id,
+        });
+      } else if (latestIngestion) {
+        setProgressSteps(progressStepsForIngestion(latestIngestion.status));
+        setShowProgress(true);
+
+        if (latestIngestion.status === "FAILED") {
+          setError(
+            latestIngestion.error_message ??
+              "The latest background ingestion job failed.",
+          );
+        } else if (latestIngestion.status === "PARTIAL_READY") {
+          setPartialNotice(
+            "The restored analysis contains partial evidence. Unavailable fields remain clearly marked.",
+          );
+        }
+      } else {
+        setProgressSteps(restoredProgressSteps());
+        setShowProgress(false);
+      }
     } catch (caughtError) {
       clearLatestProject();
       setProjectDetail(null);
@@ -113,6 +154,109 @@ export function ComparisonWorkspace() {
       setIsRestoringProject(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!activeIngestion) {
+      return;
+    }
+
+    const ingestion = activeIngestion;
+    const controller = new AbortController();
+    let pollTimer: number | null = null;
+    let consecutiveFailures = 0;
+
+    async function poll() {
+      try {
+        const latest = await getProjectIngestionStatus(
+          ingestion.projectId,
+          ingestion.jobId,
+          { signal: controller.signal },
+        );
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        consecutiveFailures = 0;
+        setIngestionStatus(latest);
+        setProgressSteps(progressStepsForIngestion(latest.status));
+
+        if (!isTerminalStatus(latest.status)) {
+          pollTimer = window.setTimeout(poll, 2000);
+          return;
+        }
+
+        if (latest.status === "FAILED") {
+          setError(
+            latest.error_message ??
+              "Background ingestion failed. Check the worker logs and try again.",
+          );
+          setIsSubmitting(false);
+          setActiveIngestion(null);
+          return;
+        }
+
+        const [detail, summary] = await Promise.all([
+          getProject(ingestion.projectId),
+          getCreatorInsightSummary(ingestion.projectId).catch(() => null),
+        ]);
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setProjectDetail(detail);
+        setInsightSummary(summary);
+        setContent1Url(detail.content_1_url ?? "");
+        setContent2Url(detail.content_2_url ?? "");
+        setProgressSteps(
+          summary
+            ? restoredProgressSteps()
+            : restoredProgressSteps().map((step) =>
+                step.id === "insights" ? { ...step, status: "failed" } : step,
+              ),
+        );
+
+        if (latest.status === "PARTIAL_READY") {
+          setPartialNotice(
+            "The analysis is ready with partial evidence. Unavailable metadata or transcript fields remain clearly marked.",
+          );
+        } else if (!summary) {
+          setPartialNotice(
+            "The evidence index is ready, but the creator insight summary could not be loaded. Content, evidence, and chat remain available.",
+          );
+        }
+
+        setIsSubmitting(false);
+        setActiveIngestion(null);
+      } catch (caughtError) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        consecutiveFailures += 1;
+        if (consecutiveFailures < 3) {
+          pollTimer = window.setTimeout(poll, 3000);
+          return;
+        }
+
+        setError(
+          `${getErrorMessage(caughtError)} Automatic status checks stopped after three attempts. Refresh the page to resume.`,
+        );
+        setIsSubmitting(false);
+        setActiveIngestion(null);
+      }
+    }
+
+    void poll();
+
+    return () => {
+      controller.abort();
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer);
+      }
+    };
+  }, [activeIngestion]);
 
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
@@ -167,6 +311,8 @@ export function ComparisonWorkspace() {
     setInsightSummary(null);
     setError(null);
     setPartialNotice(null);
+    setIngestionStatus(null);
+    setActiveIngestion(null);
 
     try {
       setProgressStatus("detect", "running");
@@ -178,62 +324,14 @@ export function ComparisonWorkspace() {
       persistLatestProject(created.project_id);
       setProgressStatus("detect", "complete");
 
-      setProgressStatus("extract", "running");
-      setProgressStatus("transcribe", "running");
-      const extracted = await extractProject(created.project_id);
-      setProjectDetail(extracted);
-      setProgressStatus("extract", "complete");
-      setProgressStatus("transcribe", "complete");
-
-      let latestDetail = extracted;
-      try {
-        latestDetail = await getProject(created.project_id);
-        setProjectDetail(latestDetail);
-      } catch {
-        setPartialNotice(
-          "Analysis results are shown from the extraction response. Latest project refresh was unavailable.",
-        );
-      }
-
-      setProgressStatus("index", "running");
-      try {
-        const nextIndexResult = await indexProject(created.project_id);
-        setIndexResult(nextIndexResult);
-        setProgressStatus(
-          "index",
-          nextIndexResult.status === "indexed" ? "complete" : "failed",
-        );
-
-        if (nextIndexResult.status !== "indexed") {
-          setPartialNotice(
-            nextIndexResult.message ||
-              "Content was analyzed, but the evidence index is not ready yet. You can retry in Evidence & System Details.",
-          );
-        }
-      } catch (caughtError) {
-        setProgressStatus("index", "failed");
-        setPartialNotice(
-          `${getErrorMessage(caughtError)} You can retry in Evidence & System Details.`,
-        );
-      }
-
-      setProgressStatus("insights", "running");
-      try {
-        const summary = await getCreatorInsightSummary(latestDetail.project_id);
-        setInsightSummary(summary);
-        setProgressStatus("insights", "complete");
-      } catch (caughtError) {
-        setProgressStatus("insights", "failed");
-        setPartialNotice(
-          `${getErrorMessage(caughtError)} Content cards and metadata availability remain available.`,
-        );
-      }
-
-      setProgressStatus("chat", "complete");
+      const started = await startProjectIngestion(created.project_id);
+      setActiveIngestion({
+        projectId: created.project_id,
+        jobId: started.job_id,
+      });
     } catch (caughtError) {
       failRunningSteps();
       setError(getErrorMessage(caughtError));
-    } finally {
       setIsSubmitting(false);
     }
   }
@@ -294,6 +392,10 @@ export function ComparisonWorkspace() {
 
         <div className="mt-8 grid gap-4">
           <AnalysisProgress steps={progressSteps} isVisible={showProgress} />
+          <IngestionProgressPanel
+            status={ingestionStatus}
+            isPolling={Boolean(activeIngestion)}
+          />
 
           {isRestoringProject ? (
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-100">
@@ -456,6 +558,55 @@ function restoredProgressSteps(): AnalysisProgressStep[] {
   return INITIAL_PROGRESS_STEPS.map((step) => ({
     ...step,
     status: "complete",
+  }));
+}
+
+function isTerminalStatus(status: IngestionJobStatus): boolean {
+  return status === "READY" || status === "PARTIAL_READY" || status === "FAILED";
+}
+
+function progressStepsForIngestion(
+  status: IngestionJobStatus,
+): AnalysisProgressStep[] {
+  if (status === "READY" || status === "PARTIAL_READY") {
+    return restoredProgressSteps();
+  }
+
+  if (status === "FAILED") {
+    return INITIAL_PROGRESS_STEPS.map((step) => ({
+      ...step,
+      status:
+        step.id === "detect"
+          ? "complete"
+          : step.id === "insights" || step.id === "chat"
+            ? "pending"
+            : "failed",
+    }));
+  }
+
+  const completed = new Set<string>(["detect"]);
+  let runningStep: string | null = status === "PENDING" ? null : "extract";
+
+  if (status === "EXTRACTING_TRANSCRIPT") {
+    completed.add("extract");
+    runningStep = "transcribe";
+  } else if (
+    status === "CHUNKING" ||
+    status === "EMBEDDING" ||
+    status === "INDEXING"
+  ) {
+    completed.add("extract");
+    completed.add("transcribe");
+    runningStep = "index";
+  }
+
+  return INITIAL_PROGRESS_STEPS.map((step) => ({
+    ...step,
+    status: completed.has(step.id)
+      ? "complete"
+      : runningStep !== null && step.id === runningStep
+        ? "running"
+        : "pending",
   }));
 }
 
