@@ -54,4 +54,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD if [ "${SERVICE_ROLE:-web}" = "worker" ]; then exit 0; else curl -f http://localhost:${PORT:-8000}/health || exit 1; fi
 
-CMD ["sh", "-c", "if [ \"${SERVICE_ROLE:-web}\" = \"worker\" ]; then exec celery -A app.workers.celery_app:celery_app worker --loglevel=${CELERY_LOG_LEVEL:-INFO} --pool=solo --concurrency=${CELERY_WORKER_CONCURRENCY:-1} --hostname=creatorlens-worker@%h; else exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
+CMD ["sh", "-c", "if [ \"${SERVICE_ROLE:-web}\" = \"worker\" ]; then exec celery -A app.workers.celery_app:celery_app worker --loglevel=${CELERY_LOG_LEVEL:-INFO} --pool=solo --concurrency=${CELERY_WORKER_CONCURRENCY:-1} --hostname=creatorlens-worker@%h; else python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
