@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.llm.citation_service import validate_evidence_items
 from app.llm.structured_outputs import (
     ComparisonAnswer,
+    EvidenceItem,
     MetricAnswer,
     MetricItem,
     RecommendationAnswer,
@@ -68,6 +69,57 @@ def parse_structured_output(
     )
 
 
+def structured_answer_json_schema(
+    answer_type: StructuredAnswerType | str,
+) -> dict[str, Any]:
+    return _schema_for(StructuredAnswerType(answer_type)).model_json_schema()
+
+
+def render_structured_answer(answer: StructuredAnswer) -> str:
+    if isinstance(answer, MetricAnswer):
+        lines = [answer.summary]
+        if answer.metrics:
+            lines.extend(["", "## Confirmed metrics"])
+            for metric in answer.metrics:
+                slot = _slot_label(metric.slot)
+                value = metric.value if metric.availability == "confirmed" else "Unavailable"
+                lines.append(f"- **{slot} {metric.name}:** {value}")
+    elif isinstance(answer, ComparisonAnswer):
+        lines = [
+            f"## Verdict\n{_winner_label(answer.winner)}",
+            f"**Confidence:** {round(answer.confidence * 100)}%",
+        ]
+        if answer.key_reasons:
+            lines.extend(["", "## Key reasons"])
+            lines.extend(
+                f"{index}. {reason}"
+                for index, reason in enumerate(answer.key_reasons, start=1)
+            )
+        if answer.recommendations:
+            lines.extend(["", "## Recommendations"])
+            lines.extend(
+                f"{index}. **{item.recommendation}** — {item.rationale}"
+                for index, item in enumerate(answer.recommendations, start=1)
+            )
+    else:
+        lines = [answer.summary]
+        if answer.recommendations:
+            lines.extend(["", "## Recommendations"])
+            lines.extend(
+                (
+                    f"{index}. **{item.recommendation}** "
+                    f"({item.priority} priority) — {item.rationale}"
+                )
+                for index, item in enumerate(answer.recommendations, start=1)
+            )
+
+    if answer.limitations:
+        lines.extend(["", "## Limitations"])
+        lines.extend(f"- {limitation}" for limitation in answer.limitations)
+
+    return "\n".join(lines).strip()
+
+
 def _extract_json_object(raw_output: str) -> dict[str, Any]:
     value = raw_output.strip()
     if not value:
@@ -123,7 +175,7 @@ def _fallback_answer(
 def _apply_citation_validation(
     answer: StructuredAnswer,
     *,
-    grounded_evidence: list,
+    grounded_evidence: list[EvidenceItem],
     valid_citation_labels: set[str],
     warnings: list[str],
 ) -> StructuredAnswer:
@@ -160,10 +212,37 @@ def _apply_citation_validation(
             }
         )
 
+    recommendations = [
+        item.model_copy(
+            update={
+                "citation_labels": [
+                    label
+                    for label in item.citation_labels
+                    if label in valid_citation_labels
+                ]
+            }
+        )
+        for item in answer.recommendations
+    ]
+
     return answer.model_copy(
         update={
             "evidence": grounded_evidence,
             "limitations": limitations,
+            "recommendations": recommendations,
         }
     )
+
+
+def _slot_label(slot: str) -> str:
+    return "Content 1" if slot == "content_1" else "Content 2"
+
+
+def _winner_label(winner: str) -> str:
+    return {
+        "content_1": "Content 1 has the stronger supported result.",
+        "content_2": "Content 2 has the stronger supported result.",
+        "tie": "The available evidence supports a tie.",
+        "insufficient_evidence": "There is insufficient evidence to name a winner.",
+    }[winner]
 

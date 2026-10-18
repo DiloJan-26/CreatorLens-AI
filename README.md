@@ -221,11 +221,14 @@ flowchart TD
     RETRIEVE --> CONTEXT
     STRUCTURED --> CONTEXT
 
-    CONTEXT --> PROMPT[Senior creator strategist prompt]
+    CONTEXT --> PROMPT[Versioned structured prompt]
     PROMPT --> LLM[Gemini Flash via LangChain]
-    LLM --> STREAM[Stream tokens]
+    LLM --> VALIDATE[Pydantic and citation validation]
+    VALIDATE --> STREAM[Structured answer and readable token events]
     STREAM --> CITE[Attach backend citations]
 ```
+
+Gemini answers are validated internally as metric, comparison, or recommendation structures. Invalid JSON produces a safe insufficient-evidence response, and model-provided citation labels are accepted only when they match backend evidence. The SSE contract remains backward compatible: a `structured_answer` event is additive, followed by the existing `token`, `citations`, and `done` events.
 
 The chat supports questions such as:
 

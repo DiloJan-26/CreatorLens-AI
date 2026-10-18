@@ -9,6 +9,12 @@ user_template: |-
   Question:
   {question}
 
+  Question intent:
+  {intent}
+
+  Recent conversation:
+  {history_text}
+
   Structured metadata:
   {structured_context}
 
@@ -17,6 +23,9 @@ user_template: |-
 
   Allowed citations:
   {citation_catalog}
+
+  Additional answer requirements:
+  {style_instructions}
 
   Return the metric answer schema with explicit limitations.
 

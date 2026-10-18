@@ -1,10 +1,25 @@
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.config import get_settings
+from app.llm.prompt_registry import get_prompt
+from app.llm.structured_output_service import (
+    parse_structured_output,
+    render_structured_answer,
+    structured_answer_json_schema,
+)
+from app.llm.structured_outputs import (
+    ComparisonAnswer,
+    EvidenceItem,
+    MetricAnswer,
+    RecommendationAnswer,
+    StructuredAnswer,
+    StructuredAnswerType,
+)
 from app.models.chat import ChatMessage, ChatStreamRequest, Citation
 from app.rag.query_router import parse_target_reference_slots
 from app.rag.context_builder import (
@@ -25,6 +40,9 @@ from app.services.chat_memory_service import (
 from app.services.llm_service import LLMConfigurationError, get_llm
 from app.services.qdrant_service import QdrantConfigurationError
 from app.services.storage_compat_service import save_chat_citations
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_system_prompt() -> str:
@@ -51,7 +69,7 @@ def build_system_prompt() -> str:
             "For performance reasoning, compare confirmed metrics first, then hook, caption, CTA, and audience angle differences.",
             "Complete every answer fully before the citations are shown. Do not stop mid-sentence or mid-section.",
             "Use citations only from backend-provided source labels. Do not fabricate citation labels.",
-            "The frontend displays citations separately; do not reproduce source labels inside the answer text.",
+            "Use backend source labels in the structured evidence field only; do not reproduce labels inside display text.",
             "If evidence is limited, state exactly what is missing and what you are basing your answer on.",
             "Never claim Instagram underperformed solely from missing views.",
             "If Facebook cross-post data is not connected, say combined Meta performance may be incomplete.",
@@ -122,6 +140,11 @@ async def stream_chat_answer(
                 for citation in direct_answer["citations"]
                 if isinstance(citation, Citation)
             ]
+            structured_answer = _structured_direct_answer(
+                answer=assistant_answer,
+                intent=rag_context.intent,
+                citations=citations,
+            )
             yield sse_event(
                 "trace",
                 _trace_payload(
@@ -131,7 +154,18 @@ async def stream_chat_answer(
                     rag_context=rag_context,
                     recent_messages=recent_messages,
                     citations=citations,
+                    structured_answer_type=structured_answer.answer_type,
+                    prompt_name="deterministic_metric_answer",
+                    prompt_version="1.0.0",
+                    fallback_used=False,
                 ),
+            )
+            yield _structured_answer_event(
+                structured_answer,
+                prompt_name="deterministic_metric_answer",
+                prompt_version="1.0.0",
+                fallback_used=False,
+                warnings=[],
             )
 
             for token in _direct_answer_tokens(assistant_answer):
@@ -163,7 +197,6 @@ async def stream_chat_answer(
             return
 
         citations = rag_context.citations
-        llm = get_llm(streaming=True)
         history_text = format_chat_history(recent_messages)
         prompt_context_summary = _prompt_context_summary(
             rag_context=rag_context,
@@ -171,17 +204,39 @@ async def stream_chat_answer(
             citation_count=len(citations),
         )
         target_slot, reference_slot = parse_target_reference_slots(question)
+        answer_type = _answer_type_for_intent(rag_context.intent)
+        prompt = get_prompt(answer_type)
+        llm = get_llm(streaming=False)
         messages = [
-            SystemMessage(content=build_system_prompt()),
+            SystemMessage(
+                content="\n\n".join(
+                    [
+                        build_system_prompt(),
+                        prompt.system_prompt,
+                        "Required JSON schema:\n"
+                        + json.dumps(
+                            structured_answer_json_schema(answer_type),
+                            ensure_ascii=False,
+                        ),
+                    ]
+                )
+            ),
             HumanMessage(
-                content=_human_prompt(
+                content=prompt.render_user(
                     question=question,
                     intent=rag_context.intent,
                     structured_context=rag_context.structured_context,
-                    retrieved_context=rag_context.retrieved_context,
+                    retrieved_context=(
+                        rag_context.retrieved_context.strip()
+                        or "No retrieved source chunks were needed for this question."
+                    ),
                     history_text=history_text,
-                    target_slot=target_slot,
-                    reference_slot=reference_slot,
+                    citation_catalog=_citation_catalog(citations),
+                    style_instructions=_answer_style_instructions(
+                        rag_context.intent,
+                        target_slot,
+                        reference_slot,
+                    ),
                 )
             ),
         ]
@@ -192,23 +247,48 @@ async def stream_chat_answer(
         yield sse_event(
             "trace",
             _trace_payload(
-                mode="gemini_rag_answer",
+                mode="gemini_structured_answer",
                 model=settings.llm_model,
                 intent=rag_context.intent,
                 rag_context=rag_context,
                 recent_messages=recent_messages,
                 citations=citations,
                 prompt_context_summary=prompt_context_summary,
+                structured_answer_type=answer_type,
+                prompt_name=prompt.name,
+                prompt_version=prompt.version,
             ),
         )
 
-        async for chunk in llm.astream(messages):
-            token = _chunk_text(chunk)
+        response = await llm.ainvoke(messages)
+        parsed = parse_structured_output(
+            _chunk_text(response),
+            answer_type,
+            citations=citations,
+        )
+        structured_answer = parsed.answer
+        assistant_answer = render_structured_answer(structured_answer)
 
-            if not token:
-                continue
+        if parsed.used_fallback or parsed.warnings:
+            logger.warning(
+                "Structured chat output required recovery project_id=%s "
+                "session_id=%s answer_type=%s fallback=%s warning_count=%d",
+                project_id,
+                session_id,
+                answer_type.value,
+                parsed.used_fallback,
+                len(parsed.warnings),
+            )
 
-            assistant_answer += token
+        yield _structured_answer_event(
+            structured_answer,
+            prompt_name=prompt.name,
+            prompt_version=prompt.version,
+            fallback_used=parsed.used_fallback,
+            warnings=parsed.warnings,
+        )
+
+        for token in _direct_answer_tokens(assistant_answer):
             yield sse_event("token", {"text": token})
 
         assistant_message = add_message(
@@ -254,6 +334,11 @@ async def stream_chat_answer(
     except LLMConfigurationError as exc:
         yield sse_event("error", {"message": str(exc)})
     except Exception:
+        logger.exception(
+            "Chat stream failed project_id=%s session_id=%s",
+            project_id,
+            session_id,
+        )
         yield sse_event("error", {"message": "Could not stream chat answer."})
 
 
@@ -269,6 +354,10 @@ def _trace_payload(
     recent_messages: list[ChatMessage],
     citations: list[Citation],
     prompt_context_summary: dict[str, int] | None = None,
+    structured_answer_type: StructuredAnswerType | str | None = None,
+    prompt_name: str | None = None,
+    prompt_version: str | None = None,
+    fallback_used: bool | None = None,
 ) -> dict[str, Any]:
     context_summary = prompt_context_summary or _prompt_context_summary(
         rag_context=rag_context,
@@ -276,7 +365,7 @@ def _trace_payload(
         citation_count=len(citations),
     )
 
-    return {
+    payload: dict[str, Any] = {
         "mode": mode,
         "model": model,
         "intent": intent,
@@ -286,6 +375,121 @@ def _trace_payload(
         "has_memory": len(recent_messages) > 1,
         "prompt_context_summary": context_summary,
     }
+
+    if structured_answer_type is not None:
+        payload["structured_answer_type"] = str(structured_answer_type)
+    if prompt_name is not None:
+        payload["prompt_name"] = prompt_name
+    if prompt_version is not None:
+        payload["prompt_version"] = prompt_version
+    if fallback_used is not None:
+        payload["fallback_used"] = fallback_used
+
+    return payload
+
+
+def _structured_answer_event(
+    answer: StructuredAnswer,
+    *,
+    prompt_name: str,
+    prompt_version: str,
+    fallback_used: bool,
+    warnings: list[str],
+) -> str:
+    return sse_event(
+        "structured_answer",
+        {
+            "answer": answer.model_dump(mode="json"),
+            "prompt": {
+                "name": prompt_name,
+                "version": prompt_version,
+            },
+            "fallback_used": fallback_used,
+            "warnings": warnings,
+        },
+    )
+
+
+def _answer_type_for_intent(intent: str) -> StructuredAnswerType:
+    if intent in {"metrics", "creator_info", "metadata_missing"}:
+        return StructuredAnswerType.METRIC
+    if intent in {
+        "performance_reasoning",
+        "hook_analysis",
+        "content_summary",
+        "insight_summary",
+    }:
+        return StructuredAnswerType.COMPARISON
+    return StructuredAnswerType.RECOMMENDATION
+
+
+def _structured_direct_answer(
+    *,
+    answer: str,
+    intent: str,
+    citations: list[Citation],
+) -> StructuredAnswer:
+    answer_type = _answer_type_for_intent(intent)
+    evidence = [
+        EvidenceItem(
+            citation_label=citation.citation_label,
+            claim="Supports the deterministic answer from extracted project data.",
+            slot=(
+                citation.slot
+                if citation.slot in {"content_1", "content_2"}
+                else None
+            ),
+            platform=citation.platform,
+            source_type=citation.source_type,
+            excerpt=citation.text,
+        )
+        for citation in citations
+    ]
+    limitations = _direct_answer_limitations(answer)
+
+    if answer_type == StructuredAnswerType.METRIC:
+        return MetricAnswer(
+            summary=answer,
+            evidence=evidence,
+            limitations=limitations,
+        )
+    if answer_type == StructuredAnswerType.COMPARISON:
+        return ComparisonAnswer(
+            winner="insufficient_evidence",
+            confidence=0.0,
+            evidence=evidence,
+            limitations=limitations
+            or ["The deterministic answer does not provide a structured winner."],
+        )
+    return RecommendationAnswer(
+        summary=answer,
+        evidence=evidence,
+        limitations=limitations,
+    )
+
+
+def _direct_answer_limitations(answer: str) -> list[str]:
+    normalized = answer.lower()
+    if any(word in normalized for word in ("unavailable", "incomplete", "missing")):
+        return [
+            "One or more public fields are unavailable; missing values were not estimated."
+        ]
+    return []
+
+
+def _citation_catalog(citations: list[Citation]) -> str:
+    return json.dumps(
+        [
+            {
+                "citation_label": citation.citation_label,
+                "slot": citation.slot,
+                "platform": citation.platform,
+                "source_type": citation.source_type,
+            }
+            for citation in citations
+        ],
+        ensure_ascii=False,
+    )
 
 
 def _prompt_context_summary(
@@ -335,50 +539,6 @@ def _maybe_debug_prompt(
                 **prompt_context_summary,
             }
         ),
-    )
-
-
-def _human_prompt(
-    question: str,
-    intent: str,
-    structured_context: str,
-    retrieved_context: str,
-    history_text: str,
-    target_slot: str | None = None,
-    reference_slot: str | None = None,
-) -> str:
-    source_context = retrieved_context.strip() or "No retrieved source chunks were needed for this question."
-    style_instructions = _answer_style_instructions(intent, target_slot, reference_slot)
-
-    target_line = ""
-    if target_slot or reference_slot:
-        target_label = "Content 1" if target_slot == "content_1" else ("Content 2" if target_slot == "content_2" else "")
-        reference_label = "Content 2" if reference_slot == "content_2" else ("Content 1" if reference_slot == "content_1" else "")
-        if target_label and reference_label:
-            target_line = f"\nImprovement direction: Improve {target_label} using insights from {reference_label}.\n"
-        elif target_label:
-            target_line = f"\nTarget content: {target_label}.\n"
-
-    return "\n\n".join(
-        [
-            f"User question:\n{question}",
-            f"Question intent:\n{intent}{target_line}",
-            f"Recent conversation:\n{history_text}",
-            f"Structured metadata context:\n{structured_context}",
-            f"Retrieved source context:\n{source_context}",
-            "Answer requirements:\n"
-            "- Ground every claim in the provided context.\n"
-            "- Say Unavailable when public data is missing.\n"
-            "- Name Content 1 and Content 2 with their platform names.\n"
-            "- Separate confirmed public metrics from heuristic insight scores.\n"
-            "- Treat Metadata Availability as confidence context, not as a quality or performance score.\n"
-            "- Do not output fake citation labels.\n"
-            "- For reasoning, improvement, hook, or rewrite questions: use structured numbered sections. "
-            "Do not give a single-paragraph answer.\n"
-            "- If the user asks for a specific number of points, return exactly that many numbered points.\n"
-            "- Complete the full answer before stopping. Do not truncate mid-section.\n"
-            f"{style_instructions}",
-        ]
     )
 
 

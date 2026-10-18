@@ -172,8 +172,9 @@ def preview_chat_context_endpoint(
     tags=["9. AI Chat"],
     summary="2. Stream a cited AI answer",
     description=(
-        "Streams trace, citation, token, completion, or error events using "
-        "`text/event-stream`. Requires indexed evidence and a valid session."
+        "Streams trace, structured answer, token, citation, completion, or error "
+        "events using `text/event-stream`. Requires indexed evidence and a valid "
+        "session."
     ),
 )
 def stream_chat_endpoint(
