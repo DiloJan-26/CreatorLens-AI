@@ -10,12 +10,10 @@ from app.models.chat import ChatMessage, Citation, RagContext
 from app.models.metrics import MetricSourceRecord, MetricSummaryResponse
 from app.models.rag import RetrieveRequest, RetrievedChunk
 from app.rag.query_router import (
-    MULTI_SOURCE_INTENTS,
     classify_question,
     get_retrieval_plan,
-    parse_target_reference_slots,
 )
-from app.rag.retrieval_service import retrieve_balanced_evidence, retrieve_project_chunks
+from app.rag.retrieval_service import retrieve_project_chunks
 from app.services.metric_source_service import get_metric_summary
 from app.services.storage_compat_service import get_project_detail_record
 
@@ -129,27 +127,19 @@ def build_rag_context(
     retrieved_context = ""
     citations: list[Citation] = []
 
+    retrieval_response = retrieve_project_chunks(
+        project_id=project_id,
+        request=RetrieveRequest(
+            query=query,
+            top_k=plan["top_k"],
+            platform=plan["platform"],  # type: ignore[arg-type]
+            slot=plan["slot"],  # type: ignore[arg-type]
+            source_type=plan["source_type"],  # type: ignore[arg-type]
+            retrieval_mode=plan["mode"],
+        ),
+    )
+
     if plan["retrieve"]:
-        if plan.get("multi_source") or intent in MULTI_SOURCE_INTENTS:
-            target_slot, reference_slot = parse_target_reference_slots(query)
-            retrieval_response = retrieve_balanced_evidence(
-                project_id=project_id,
-                message=query,
-                target_slot=target_slot,
-                reference_slot=reference_slot,
-                top_k=plan["top_k"],
-            )
-        else:
-            retrieval_response = retrieve_project_chunks(
-                project_id=project_id,
-                request=RetrieveRequest(
-                    query=query,
-                    top_k=plan["top_k"],
-                    platform=plan["platform"],  # type: ignore[arg-type]
-                    slot=plan["slot"],  # type: ignore[arg-type]
-                    source_type=plan["source_type"],  # type: ignore[arg-type]
-                ),
-            )
         retrieved_context = _retrieved_context_text(retrieval_response.results)
         citations = [_citation_from_chunk(chunk) for chunk in retrieval_response.results]
 
@@ -540,6 +530,7 @@ def _retrieved_context_text(chunks: list[RetrievedChunk]) -> str:
 
 def _citation_from_chunk(chunk: RetrievedChunk) -> Citation:
     return Citation(
+        slot=chunk.slot,
         platform=_platform_label(chunk.platform),
         source_type=chunk.source_type,
         citation_label=chunk.citation_label,
@@ -558,6 +549,7 @@ def _metadata_citations(project: dict[str, Any]) -> list[Citation]:
         platform_label = _content_label(metadata)
         citations.append(
             Citation(
+                slot=str(metadata.get("slot")) if metadata.get("slot") else None,
                 platform=platform_label,
                 source_type="metadata",
                 citation_label=f"{platform_label} metadata",

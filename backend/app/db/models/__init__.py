@@ -5,6 +5,7 @@ from app.db.models.ingestion_job import IngestionJob
 from app.db.models.metadata_snapshot import MetadataSnapshot
 from app.db.models.metric_source import MetricSource
 from app.db.models.project import Project
+from app.db.models.retrieval_run import RetrievalRun
 from app.db.models.transcript_segment import TranscriptSegment
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "MetadataSnapshot",
     "MetricSource",
     "Project",
+    "RetrievalRun",
     "TranscriptSegment",
 ]

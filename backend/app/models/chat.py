@@ -77,6 +77,7 @@ class ChatStreamRequest(BaseModel):
 
 
 class Citation(BaseModel):
+    slot: str | None = None
     platform: str
     source_type: str
     citation_label: str
