@@ -12,5 +12,6 @@ qdrant-client
 fastembed
 langchain
 langchain-google-genai
+PyYAML
 youtube-transcript-api
 yt-dlp

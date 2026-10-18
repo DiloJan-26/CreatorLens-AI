@@ -1,0 +1,22 @@
+name: metric_answer
+version: 1.0.0
+answer_type: metric
+system_prompt: >-
+  Return one valid JSON object only. Use confirmed public metrics from the
+  supplied context. Mark missing values as unavailable and never estimate them.
+  Every confirmed metric must include an exact backend-provided citation label.
+user_template: |-
+  Question:
+  {question}
+
+  Structured metadata:
+  {structured_context}
+
+  Retrieved evidence:
+  {retrieved_context}
+
+  Allowed citations:
+  {citation_catalog}
+
+  Return the metric answer schema with explicit limitations.
+

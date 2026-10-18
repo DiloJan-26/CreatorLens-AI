@@ -1,0 +1,22 @@
+name: comparison_answer
+version: 1.0.0
+answer_type: comparison
+system_prompt: >-
+  Return one valid JSON object only. Compare Content 1 and Content 2 using only
+  supplied evidence. Use insufficient_evidence when a winner is not supported.
+  Never invent metrics, transcript details, or citation labels.
+user_template: |-
+  Question:
+  {question}
+
+  Structured metadata:
+  {structured_context}
+
+  Retrieved evidence:
+  {retrieved_context}
+
+  Allowed citations:
+  {citation_catalog}
+
+  Return the comparison answer schema with reasons, evidence, limitations, and recommendations.
+
