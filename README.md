@@ -283,6 +283,7 @@ CreatorLens AI follows strict evidence rules:
 | RAG | `backend/app/rag/chunk_builder.py`, `indexing_service.py`, `retrieval_service.py`, `context_builder.py`, `query_router.py`, `chat_service.py` |
 | Insight scoring | `backend/app/insights/insight_service.py`, `score_service.py`, `hook_analyzer.py` |
 | Persistence | `backend/app/db/models/`, `backend/app/db/repositories/`, Alembic migrations |
+| Evaluation foundation | `backend/app/evaluations/`, `backend/app/schemas/evaluation.py`, `backend/app/db/models/evaluation.py` |
 | Background workers | `backend/app/workers/celery_app.py`, `ingestion_tasks.py`, `indexing_tasks.py` |
 | Config | `backend/app/core/config.py`, `paths.py` |
 

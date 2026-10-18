@@ -1,6 +1,12 @@
 from app.db.models.chat import ChatCitation, ChatMessage, ChatSession
 from app.db.models.content_item import ContentItem
 from app.db.models.evidence_chunk import EvidenceChunk
+from app.db.models.evaluation import (
+    EvaluationCase,
+    EvaluationDataset,
+    EvaluationResult,
+    EvaluationRun,
+)
 from app.db.models.ingestion_job import IngestionJob
 from app.db.models.metadata_snapshot import MetadataSnapshot
 from app.db.models.metric_source import MetricSource
@@ -14,6 +20,10 @@ __all__ = [
     "ChatSession",
     "ContentItem",
     "EvidenceChunk",
+    "EvaluationCase",
+    "EvaluationDataset",
+    "EvaluationResult",
+    "EvaluationRun",
     "IngestionJob",
     "MetadataSnapshot",
     "MetricSource",

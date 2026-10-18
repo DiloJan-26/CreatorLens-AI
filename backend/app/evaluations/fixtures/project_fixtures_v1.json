@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0.0",
+  "fixtures": [
+    {
+      "fixture_id": "complete_comparison_v1",
+      "description": "Two synthetic content items with confirmed metadata and transcripts.",
+      "contents": [
+        {
+          "slot": "content_1",
+          "platform": "youtube",
+          "title": "Three ways to improve your opening hook",
+          "creator": "Fixture Creator A",
+          "metadata": {"views": 12500, "likes": 840, "comments": 42, "shares": null, "engagement_rate": 7.056, "missing_fields": ["shares"]},
+          "transcript_available": true,
+          "transcript_segments": [
+            {"start_time": 0.0, "end_time": 5.0, "text": "Most creators lose attention in the first three seconds."},
+            {"start_time": 5.0, "end_time": 18.0, "text": "Start with the problem, show the result, and invite viewers to try the checklist."}
+          ]
+        },
+        {
+          "slot": "content_2",
+          "platform": "instagram",
+          "title": "A calmer creative workflow",
+          "creator": "Fixture Creator B",
+          "metadata": {"views": 9200, "likes": 710, "comments": 35, "shares": 18, "engagement_rate": 8.293, "missing_fields": []},
+          "transcript_available": true,
+          "transcript_segments": [
+            {"start_time": 0.0, "end_time": 5.0, "text": "A calm workflow makes consistent publishing easier."},
+            {"start_time": 5.0, "end_time": 16.0, "text": "Save this workflow and follow for the next creator planning guide."}
+          ]
+        }
+      ]
+    },
+    {
+      "fixture_id": "partial_metrics_v1",
+      "description": "A comparison with unavailable Facebook interaction and audience metrics.",
+      "contents": [
+        {
+          "slot": "content_1",
+          "platform": "facebook",
+          "title": "Finding the right companies",
+          "creator": "Fixture Creator C",
+          "metadata": {"views": 801, "likes": null, "comments": null, "reactions": null, "shares": null, "follower_count": null, "engagement_rate": null, "missing_fields": ["likes", "comments", "reactions", "shares", "follower_count", "engagement_rate"]},
+          "transcript_available": true,
+          "transcript_segments": [
+            {"start_time": 0.0, "end_time": 5.0, "text": "Thousands of companies can sponsor qualified applicants."},
+            {"start_time": 5.0, "end_time": 20.0, "text": "Focus your search and comment checklist for the planning guide."}
+          ]
+        },
+        {
+          "slot": "content_2",
+          "platform": "youtube",
+          "title": "Plan the next step",
+          "creator": "Fixture Creator D",
+          "metadata": {"views": 24000, "likes": 1200, "comments": 85, "shares": null, "subscriber_count": 4800, "engagement_rate": 5.354, "missing_fields": ["shares"]},
+          "transcript_available": true,
+          "transcript_segments": [
+            {"start_time": 0.0, "end_time": 5.0, "text": "Your next opportunity starts with one focused decision."},
+            {"start_time": 5.0, "end_time": 15.0, "text": "Choose one goal today and subscribe for the full planning series."}
+          ]
+        }
+      ]
+    },
+    {
+      "fixture_id": "missing_transcript_v1",
+      "description": "Confirmed metadata for both items with no transcript evidence for Content 2.",
+      "contents": [
+        {
+          "slot": "content_1",
+          "platform": "instagram",
+          "title": "Build a repeatable content habit",
+          "creator": "Fixture Creator E",
+          "metadata": {"views": 6400, "likes": 510, "comments": 28, "engagement_rate": 8.406, "missing_fields": ["shares"]},
+          "transcript_available": true,
+          "transcript_segments": [
+            {"start_time": 0.0, "end_time": 6.0, "text": "Consistency gets easier when the first step takes less than five minutes."}
+          ]
+        },
+        {
+          "slot": "content_2",
+          "platform": "facebook",
+          "title": "Weekly creator planning template",
+          "creator": "Fixture Creator F",
+          "metadata": {"views": 7100, "likes": null, "comments": null, "engagement_rate": null, "missing_fields": ["likes", "comments", "shares", "engagement_rate"]},
+          "transcript_available": false,
+          "transcript_segments": []
+        }
+      ]
+    }
+  ]
+}

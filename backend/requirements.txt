@@ -13,5 +13,7 @@ fastembed
 langchain
 langchain-google-genai
 PyYAML
+ragas>=0.4.3,<0.5
+deepeval>=4.3.1,<5
 youtube-transcript-api
 yt-dlp
