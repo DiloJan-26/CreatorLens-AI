@@ -400,10 +400,13 @@ Local URLs:
 | `EMBEDDING_MODEL_NAME` | yes | FastEmbed model name |
 | `EMBEDDING_MODEL_VERSION` | yes | Cache compatibility revision for the configured embedding model; increment when its generated vectors become incompatible |
 | `YOUTUBE_API_KEY` | recommended | YouTube Data API metadata |
-| `APIFY_API_TOKEN` | recommended | YouTube transcript fallback |
-| `APIFY_YOUTUBE_TRANSCRIPT_ACTOR` | recommended | Configurable Apify transcript actor |
-| `APIFY_YOUTUBE_TRANSCRIPT_INPUT_STYLE` | recommended | Input shape expected by the configured Apify actor |
-| `APIFY_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS` | recommended | Apify transcript request timeout |
+| `SUPADATA_API_KEY` | recommended | Managed YouTube transcript fallback; store as a secret |
+| `SUPADATA_TRANSCRIPT_MODE` | optional | Supadata mode; defaults to `native` for predictable credit use |
+| `SUPADATA_TRANSCRIPT_TIMEOUT_SECONDS` | optional | Supadata request timeout; defaults to `60` seconds |
+| `APIFY_API_TOKEN` | legacy optional | Apify fallback used only when Supadata is not configured |
+| `APIFY_YOUTUBE_TRANSCRIPT_ACTOR` | legacy optional | Configurable Apify transcript actor |
+| `APIFY_YOUTUBE_TRANSCRIPT_INPUT_STYLE` | legacy optional | Input shape expected by the configured Apify actor |
+| `APIFY_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS` | legacy optional | Apify transcript request timeout |
 | `DEEPGRAM_API_KEY` | recommended | Audio transcription fallback |
 | `TRANSCRIPT_LANGUAGE` | yes | `multi` for language detection |
 | `TRANSCRIPT_FALLBACK_LANGUAGES` | yes | Caption language priority |

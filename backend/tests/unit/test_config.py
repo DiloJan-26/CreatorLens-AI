@@ -48,6 +48,16 @@ def test_embedding_model_has_a_cache_compatibility_version(monkeypatch) -> None:
     assert settings.embedding_model_version == "weights-2026-10"
 
 
+def test_supadata_defaults_to_native_transcript_mode(monkeypatch) -> None:
+    monkeypatch.delenv("SUPADATA_TRANSCRIPT_MODE", raising=False)
+    monkeypatch.delenv("SUPADATA_TRANSCRIPT_TIMEOUT_SECONDS", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.supadata_transcript_mode == "native"
+    assert settings.supadata_transcript_timeout_seconds == 60
+
+
 def test_redis_url_is_default_celery_transport(monkeypatch) -> None:
     redis_url = "rediss://default:password@example.test:6379"
     monkeypatch.setenv("REDIS_URL", redis_url)

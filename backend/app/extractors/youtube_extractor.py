@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import Iterable
 from typing import Any
@@ -13,6 +14,10 @@ from app.models.video import TranscriptSegment, VideoExtractionResult, VideoMeta
 from app.services.apify_transcript_service import (
     ApifyTranscriptUnavailableError,
     transcribe_youtube_url_with_apify,
+)
+from app.services.supadata_transcript_service import (
+    SupadataTranscriptUnavailableError,
+    transcribe_video_url_with_supadata,
 )
 from app.services.transcription_service import (
     TranscriptionResult,
@@ -36,6 +41,8 @@ YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE = (
 )
 TRANSCRIPT_COMPLETENESS_RATIO = 0.92
 TRANSCRIPT_COMPLETENESS_GAP_SECONDS = 1.5
+
+logger = logging.getLogger(__name__)
 
 
 def extract_youtube_video_id(url: str) -> str:
@@ -314,19 +321,37 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
 
     expected_duration = _expected_duration_seconds(info)
 
-    # Step 3: Always attempt captions via youtube-transcript-api (works on cloud).
+    # Attempt captions directly before using a managed fallback.
     transcript_result = fetch_youtube_transcript_with_metadata(video_id)
 
-    # Step 4: Apify transcript fallback for Render/cloud IP blocking or partial captions.
-    if _should_try_transcript_fallback(transcript_result, expected_duration):
+    # Prefer Supadata when configured. Apify remains a legacy fallback only
+    # when Supadata is absent, preventing paid actor starts after migration.
+    supadata_configured = bool((settings.supadata_api_key or "").strip())
+    if (
+        supadata_configured
+        and _should_try_transcript_fallback(transcript_result, expected_duration)
+    ):
+        try:
+            transcript_result = _better_transcript_result(
+                current=transcript_result,
+                candidate=transcribe_video_url_with_supadata(url),
+                expected_duration=expected_duration,
+            )
+        except SupadataTranscriptUnavailableError as exc:
+            logger.warning("Supadata transcript fallback unavailable: %s", exc)
+
+    if (
+        not supadata_configured
+        and _should_try_transcript_fallback(transcript_result, expected_duration)
+    ):
         try:
             transcript_result = _better_transcript_result(
                 current=transcript_result,
                 candidate=transcribe_youtube_url_with_apify(url),
                 expected_duration=expected_duration,
             )
-        except ApifyTranscriptUnavailableError:
-            pass
+        except ApifyTranscriptUnavailableError as exc:
+            logger.warning("Apify transcript fallback unavailable: %s", exc)
 
     # Step 4: Audio transcription fallback — only when yt-dlp provided the info
     # (audio format URLs are yt-dlp specific; YouTube Data API v3 doesn't supply them).
