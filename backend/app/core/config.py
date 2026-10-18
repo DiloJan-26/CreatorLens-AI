@@ -98,6 +98,18 @@ class Settings(BaseSettings):
     )
 
     youtube_api_key: str | None = Field(default=None, alias="YOUTUBE_API_KEY")
+    supadata_api_key: str | None = Field(default=None, alias="SUPADATA_API_KEY")
+    supadata_transcript_mode: str = Field(
+        default="native",
+        alias="SUPADATA_TRANSCRIPT_MODE",
+        pattern="^(native|auto|generate)$",
+    )
+    supadata_transcript_timeout_seconds: int = Field(
+        default=60,
+        alias="SUPADATA_TRANSCRIPT_TIMEOUT_SECONDS",
+        ge=10,
+        le=300,
+    )
     apify_api_token: str | None = Field(default=None, alias="APIFY_API_TOKEN")
     apify_youtube_transcript_actor: str = Field(
         default="abotapi/youtube-transcript-scraper",

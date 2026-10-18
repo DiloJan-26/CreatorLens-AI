@@ -1,4 +1,4 @@
-name: Build Content Cache Worker Image
+name: Build Managed Transcript Worker Image
 
 on:
   workflow_dispatch:
@@ -38,4 +38,4 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:content-cache-v1
+          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:managed-transcripts-v1

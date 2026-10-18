@@ -77,6 +77,7 @@ def _configured_secret_values(settings: Settings) -> tuple[str, ...]:
         settings.groq_api_key,
         settings.qdrant_api_key,
         settings.youtube_api_key,
+        settings.supadata_api_key,
         settings.apify_api_token,
         settings.deepgram_api_key,
         settings.assemblyai_api_key,
