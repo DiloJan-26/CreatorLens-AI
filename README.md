@@ -228,7 +228,7 @@ flowchart TD
     STREAM --> CITE[Attach backend citations]
 ```
 
-Gemini answers are validated internally as metric, comparison, or recommendation structures. Invalid JSON produces a safe insufficient-evidence response, and model-provided citation labels are accepted only when they match backend evidence. The SSE contract remains backward compatible: a `structured_answer` event is additive, followed by the existing `token`, `citations`, and `done` events.
+Gemini answers are validated internally as metric, comparison, or recommendation structures. Invalid JSON produces a safe insufficient-evidence response, and model-provided citation labels are accepted only when they match backend evidence. The SSE contract remains backward compatible: a `structured_answer` event is additive, followed by the existing `token`, `citations`, and `done` events. The frontend renders validated structured answers as dedicated cards and falls back to the readable Markdown stream when structured data is absent or invalid.
 
 The chat supports questions such as:
 
@@ -293,7 +293,7 @@ CreatorLens AI follows strict evidence rules:
 | App routes | `frontend/src/app/page.tsx`, `analyze/page.tsx`, `chat/page.tsx` |
 | Main workflow | `frontend/src/components/ComparisonWorkspace.tsx` |
 | Background progress | `frontend/src/components/IngestionProgressPanel.tsx` |
-| Chat | `frontend/src/components/CreatorChatPanel.tsx`, `CreatorChatPage.tsx` |
+| Chat | `frontend/src/components/CreatorChatPanel.tsx`, `StructuredAnswerCard.tsx`, `CreatorChatPage.tsx` |
 | Insights | `CreatorInsightSummaryPanel.tsx`, `InsightScoreCard.tsx`, `HookComparisonCard.tsx` |
 | Evidence tools | `RagIndexPanel.tsx`, `RetrievalTestPanel.tsx`, `TranscriptPreviewPanel.tsx` |
 | API client | `frontend/src/lib/api.ts` |

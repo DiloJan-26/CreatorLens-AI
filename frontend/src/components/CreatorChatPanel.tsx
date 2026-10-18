@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { StructuredAnswerCard } from "@/components/StructuredAnswerCard";
 import { getChatHistory, streamChatResponse } from "@/lib/api";
 import {
   clearChatSessionId,
@@ -16,6 +17,7 @@ import type {
   ChatCitation,
   ChatMessage,
   StoredChatMessage,
+  StructuredAnswerPayload,
 } from "@/types/project";
 
 const SUGGESTED_QUESTIONS = [
@@ -179,6 +181,13 @@ export function CreatorChatPanel({
             setMessages((previousMessages) =>
               updateLastAssistantMessage(previousMessages, {
                 citations,
+              }),
+            );
+          },
+          onStructuredAnswer: (structuredAnswer) => {
+            setMessages((previousMessages) =>
+              updateLastAssistantMessage(previousMessages, {
+                structuredAnswer,
               }),
             );
           },
@@ -408,6 +417,8 @@ function ChatMessageBubble({
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-100">
           {message.content}
         </p>
+      ) : message.structuredAnswer ? (
+        <StructuredAnswerCard payload={message.structuredAnswer} />
       ) : message.content ? (
         <AssistantMarkdown content={message.content} />
       ) : isStreaming ? (
@@ -461,6 +472,7 @@ function updateLastAssistantMessage(
   update: {
     appendText?: string;
     citations?: ChatCitation[];
+    structuredAnswer?: StructuredAnswerPayload;
   },
 ): ChatMessage[] {
   const nextMessages = [...messages];
@@ -476,6 +488,8 @@ function updateLastAssistantMessage(
       ...message,
       content: `${message.content}${update.appendText ?? ""}`,
       citations: update.citations ?? message.citations,
+      structuredAnswer:
+        update.structuredAnswer ?? message.structuredAnswer,
     };
     break;
   }
