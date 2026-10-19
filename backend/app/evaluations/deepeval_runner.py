@@ -17,6 +17,7 @@ def evaluate_with_deepeval(
     case: EvaluationCaseDefinition,
     artifact: EvaluationArtifact,
     fixture: EvaluationProjectFixture,
+    metric_scores: dict[str, float],
 ) -> dict[str, EvaluationCheckResult]:
     os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "true")
     from deepeval.test_case import LLMTestCase
@@ -28,4 +29,4 @@ def evaluate_with_deepeval(
     )
     if test_case.input != case.question or test_case.actual_output != artifact.answer_text:
         raise ValueError("DeepEval test-case construction changed evaluation content.")
-    return evaluate_rubric(case, artifact, fixture)
+    return evaluate_rubric(case, artifact, fixture, metric_scores)

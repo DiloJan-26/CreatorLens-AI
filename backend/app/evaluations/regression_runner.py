@@ -16,8 +16,10 @@ from app.db.repositories.evaluation_repository import EvaluationRepository
 from app.db.session import database_session, is_database_configured
 from app.evaluations.deepeval_runner import evaluate_with_deepeval
 from app.evaluations.fixture_loader import (
+    DATASET_VERSION,
     DATASETS_DIR,
     build_fixture_artifact,
+    build_reference_contexts,
     load_dataset,
     load_project_fixtures,
 )
@@ -27,6 +29,7 @@ from app.schemas.evaluation import EvaluationCaseReport, EvaluationRunReport
 
 logger = logging.getLogger(__name__)
 DEFAULT_REPORT_DIR = Path(__file__).resolve().parents[2] / "storage" / "evaluation_reports"
+EVALUATOR_NAME = "ragas+deepeval-deterministic-v1.1"
 
 
 def run_regression(
@@ -55,14 +58,14 @@ def _run(dataset_name, cases, fixtures, session: Session | None) -> EvaluationRu
     if repository is not None:
         dataset_row = repository.get_or_create_dataset(
             name=dataset_name,
-            version="1.0.0",
+            version=DATASET_VERSION,
             source_path=str(DATASETS_DIR / f"{dataset_name}.jsonl"),
             description="CreatorLens deterministic RAG regression dataset.",
         )
         case_rows = repository.sync_cases(dataset_row.id, cases)
         run_row = repository.start_run(
             dataset_id=dataset_row.id,
-            evaluator="ragas+deepeval-deterministic",
+            evaluator=EVALUATOR_NAME,
             total_cases=len(cases),
         )
 
@@ -71,8 +74,9 @@ def _run(dataset_name, cases, fixtures, session: Session | None) -> EvaluationRu
         started = perf_counter()
         fixture = fixtures[case.project_fixture]
         artifact = build_fixture_artifact(case, fixture)
-        metrics = evaluate_with_ragas(case, artifact)
-        checks = evaluate_with_deepeval(case, artifact, fixture)
+        reference_contexts = build_reference_contexts(case, fixture)
+        metrics = evaluate_with_ragas(case, artifact, reference_contexts)
+        checks = evaluate_with_deepeval(case, artifact, fixture, metrics)
         status = "PASSED" if all(check.passed for check in checks.values()) else "FAILED"
         report = EvaluationCaseReport(
             case_id=case.case_id,
@@ -112,7 +116,7 @@ def _run(dataset_name, cases, fixtures, session: Session | None) -> EvaluationRu
     return EvaluationRunReport(
         run_id=run_id,
         dataset=dataset_name,
-        evaluator="ragas+deepeval-deterministic",
+        evaluator=EVALUATOR_NAME,
         status="COMPLETED",
         total_cases=len(reports),
         passed_cases=passed,

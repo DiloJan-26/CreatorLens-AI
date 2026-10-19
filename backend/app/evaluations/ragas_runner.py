@@ -24,13 +24,9 @@ _STOP_WORDS = {
 def evaluate_with_ragas(
     case: EvaluationCaseDefinition,
     artifact: EvaluationArtifact,
+    reference_contexts: list[str],
 ) -> dict[str, float]:
     ragas = load_ragas()
-    reference_contexts = [
-        item.text
-        for item in artifact.evidence
-        if item.source_type in set(case.required_sources)
-    ] or artifact.retrieved_contexts
     sample = ragas.SingleTurnSample(
         user_input=case.question,
         response=artifact.answer_text,
@@ -52,13 +48,16 @@ def evaluate_with_ragas(
         .single_turn_score(sample)
     )
 
-    question_tokens = _tokens(case.question)
     answer_tokens = _tokens(artifact.answer_text)
     context_tokens = _tokens(" ".join(artifact.retrieved_contexts))
 
     faithfulness = _coverage(answer_tokens, context_tokens)
-    response_relevance = _symmetric_overlap(question_tokens, answer_tokens)
-    context_relevance = _coverage(question_tokens, context_tokens)
+    response_relevance = _phrase_coverage(
+        _expected_terms(case),
+        artifact.answer_text,
+    )
+    present_sources = {item.source_type for item in artifact.evidence}
+    context_relevance = _set_coverage(set(case.required_sources), present_sources)
     return {
         "faithfulness_lexical": faithfulness,
         "response_relevance_lexical": response_relevance,
@@ -82,8 +81,45 @@ def _coverage(expected: set[str], observed: set[str]) -> float:
     return round(len(expected & observed) / len(expected), 6)
 
 
-def _symmetric_overlap(left: set[str], right: set[str]) -> float:
-    if not left and not right:
+def _set_coverage(expected: set[str], observed: set[str]) -> float:
+    if not expected:
         return 1.0
-    union = left | right
-    return round(len(left & right) / len(union), 6) if union else 0.0
+    return round(len(expected & observed) / len(expected), 6)
+
+
+def _phrase_coverage(expected_terms: list[str], answer_text: str) -> float:
+    if not expected_terms:
+        return 1.0
+    normalized = " ".join(re.findall(r"[a-z0-9]+", answer_text.casefold()))
+    matched = sum(
+        " ".join(re.findall(r"[a-z0-9]+", term.casefold())) in normalized
+        for term in expected_terms
+    )
+    return round(matched / len(expected_terms), 6)
+
+
+def _expected_terms(case: EvaluationCaseDefinition) -> list[str]:
+    if case.expected_answer_terms:
+        return case.expected_answer_terms
+    question = case.question.casefold()
+    if "engagement" in question:
+        focus = "engagement rate"
+    elif "comment" in question:
+        focus = "comments"
+    elif "like" in question:
+        focus = "likes"
+    elif "follower" in question or "subscriber" in question:
+        focus = "follower or subscriber count"
+    elif any(term in question for term in ("hook", "opening", "spoken")):
+        focus = "hook"
+    elif any(term in question for term in ("act", "cta", "call to action")):
+        focus = "call to action"
+    elif "message" in question:
+        focus = "message"
+    elif case.expected_answer_type == "recommendation":
+        return ["recommend", "content 2"]
+    elif case.expected_answer_type == "comparison":
+        focus = "performance"
+    else:
+        focus = "views"
+    return [focus, "content 1", "content 2"]

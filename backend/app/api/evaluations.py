@@ -6,7 +6,12 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.db.repositories.evaluation_repository import EvaluationRepository
 from app.db.session import DatabaseConfigurationError, database_session
-from app.evaluations.fixture_loader import EvaluationFixtureError, list_datasets, load_dataset
+from app.evaluations.fixture_loader import (
+    DATASET_VERSION,
+    EvaluationFixtureError,
+    list_datasets,
+    load_dataset,
+)
 from app.evaluations.regression_runner import run_regression
 from app.schemas.evaluation import (
     EvaluationDatasetSummary,
@@ -34,7 +39,7 @@ def get_evaluation_datasets() -> list[EvaluationDatasetSummary]:
         summaries.append(
             EvaluationDatasetSummary(
                 name=name,
-                version="1.0.0",
+                version=DATASET_VERSION,
                 case_count=len(cases),
                 answer_types=sorted({case.expected_answer_type for case in cases}),
             )

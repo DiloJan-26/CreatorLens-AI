@@ -109,6 +109,7 @@ def evaluate_rubric(
     case: EvaluationCaseDefinition,
     artifact: EvaluationArtifact,
     fixture: EvaluationProjectFixture,
+    metric_scores: dict[str, float] | None = None,
 ) -> dict[str, EvaluationCheckResult]:
     answer_type_passed = artifact.answer_type == case.expected_answer_type
     checks = {
@@ -137,4 +138,31 @@ def evaluate_rubric(
             score=1.0 if passed else 0.0,
             message="Limitations are explicit." if passed else "Limitations are missing.",
         )
+    if metric_scores is not None:
+        thresholds = {
+            "faithfulness_quality": (
+                "faithfulness_lexical",
+                case.rubric.minimum_faithfulness,
+            ),
+            "response_relevance_quality": (
+                "response_relevance_lexical",
+                case.rubric.minimum_response_relevance,
+            ),
+            "context_relevance_quality": (
+                "context_relevance_lexical",
+                case.rubric.minimum_context_relevance,
+            ),
+        }
+        for check_name, (metric_name, minimum) in thresholds.items():
+            score = metric_scores.get(metric_name, 0.0)
+            passed = score >= minimum
+            checks[check_name] = EvaluationCheckResult(
+                passed=passed,
+                score=score,
+                message=(
+                    f"{metric_name} meets the {minimum:.2f} minimum."
+                    if passed
+                    else f"{metric_name} is below the {minimum:.2f} minimum."
+                ),
+            )
     return checks

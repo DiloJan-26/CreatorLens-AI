@@ -345,7 +345,9 @@ cases. A five-case `creatorlens_ci_smoke_v1` subset is intentionally small for
 later CI use. The default runner makes no network or Gemini calls: it validates
 RAGAS samples, executes RAGAS non-LLM context metrics, uses DeepEval test-case
 contracts, and applies deterministic citation, source, forbidden-claim,
-comparison, limitation, and missing-metric checks.
+comparison, limitation, missing-metric, and minimum-quality score checks.
+Question-specific expected terms and independently selected reference evidence
+prevent generic metric answers from passing unrelated cases.
 
 ```powershell
 cd backend

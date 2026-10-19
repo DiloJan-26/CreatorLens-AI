@@ -13,6 +13,9 @@ class EvaluationRubric(BaseModel):
     must_cite_evidence: bool = True
     must_not_estimate_missing_metrics: bool = True
     must_report_limitations: bool = True
+    minimum_faithfulness: float = Field(default=0.25, ge=0.0, le=1.0)
+    minimum_response_relevance: float = Field(default=0.8, ge=0.0, le=1.0)
+    minimum_context_relevance: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 class EvaluationCaseDefinition(BaseModel):
@@ -22,6 +25,7 @@ class EvaluationCaseDefinition(BaseModel):
     expected_answer_type: AnswerType
     required_sources: list[EvidenceSourceType] = Field(default_factory=list)
     forbidden_claims: list[str] = Field(default_factory=list)
+    expected_answer_terms: list[str] = Field(default_factory=list)
     rubric: EvaluationRubric
 
     @model_validator(mode="after")
