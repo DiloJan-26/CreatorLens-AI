@@ -8,6 +8,7 @@ from app.db.models.evaluation import (
     EvaluationRun,
 )
 from app.db.models.ingestion_job import IngestionJob
+from app.db.models.llm_observability import CostEvent, LlmRun
 from app.db.models.metadata_snapshot import MetadataSnapshot
 from app.db.models.metric_source import MetricSource
 from app.db.models.project import Project
@@ -25,6 +26,8 @@ __all__ = [
     "EvaluationResult",
     "EvaluationRun",
     "IngestionJob",
+    "CostEvent",
+    "LlmRun",
     "MetadataSnapshot",
     "MetricSource",
     "Project",

@@ -88,3 +88,26 @@ def test_celery_transport_overrides_are_supported(monkeypatch) -> None:
 
     assert settings.celery_broker_url.endswith("@broker.example.test:6379")
     assert settings.celery_result_backend.endswith("@results.example.test:6379")
+
+
+def test_langsmith_tracing_is_disabled_without_explicit_configuration(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.langsmith_tracing is False
+    assert settings.langsmith_tracing_configured is False
+
+
+def test_langsmith_tracing_requires_enabled_flag_and_key(monkeypatch) -> None:
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_API_KEY", "test-tracing-key")
+    monkeypatch.setenv("LANGSMITH_PROJECT", "creatorlens-test")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.langsmith_tracing_configured is True
+    assert settings.langsmith_project == "creatorlens-test"
