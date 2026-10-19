@@ -7,8 +7,10 @@ The CreatorLens frontend is a Next.js App Router application for the public V1 c
 - `/`: product landing page.
 - `/analyze`: creates a two-content project, queues background ingestion, polls persisted progress, and loads results when the worker reaches a terminal state.
 - `/chat`: opens chat for the active in-memory project.
+- `/evaluations`: provides a read-only view of deployed evaluation datasets,
+  persisted regression runs, aggregate quality metrics, and case-level rubrics.
 
-The active project ID is persisted in browser local storage so `/analyze` can recover the latest ingestion status after a refresh. Chat-session state remains in browser module memory. The frontend calls FastAPI directly; there is no Next.js API proxy.
+The active project ID is persisted in browser local storage so `/analyze` can recover the latest ingestion status after a refresh. Chat-session state remains in browser module memory. The evaluation dashboard intentionally does not trigger runs because the public mutation endpoint is not authenticated or rate limited. The frontend calls FastAPI directly; there is no Next.js API proxy.
 
 ## Environment
 

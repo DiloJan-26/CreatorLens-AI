@@ -291,7 +291,7 @@ CreatorLens AI follows strict evidence rules:
 
 | Area | Files |
 | --- | --- |
-| App routes | `frontend/src/app/page.tsx`, `analyze/page.tsx`, `chat/page.tsx` |
+| App routes | `frontend/src/app/page.tsx`, `analyze/page.tsx`, `chat/page.tsx`, `evaluations/page.tsx` |
 | Main workflow | `frontend/src/components/ComparisonWorkspace.tsx` |
 | Background progress | `frontend/src/components/IngestionProgressPanel.tsx` |
 | Chat | `frontend/src/components/CreatorChatPanel.tsx`, `StructuredAnswerCard.tsx`, `CreatorChatPage.tsx` |
@@ -387,6 +387,7 @@ Local URLs:
 | Frontend | http://localhost:3000 |
 | Analyze | http://localhost:3000/analyze |
 | Chat | http://localhost:3000/chat |
+| Evaluations | http://localhost:3000/evaluations |
 | Backend health | http://localhost:8000/health |
 | API docs | http://localhost:8000/docs |
 

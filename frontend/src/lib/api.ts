@@ -24,12 +24,40 @@ import type {
   TranscriptPreviewResponse,
   VerifiedMetricInput,
 } from "@/types/project";
+import type {
+  EvaluationDatasetSummary,
+  EvaluationRunDetail,
+  EvaluationRunSummary,
+} from "@/types/evaluation";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export async function checkBackend(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
+}
+
+export async function getEvaluationDatasets(): Promise<
+  EvaluationDatasetSummary[]
+> {
+  return request<EvaluationDatasetSummary[]>("/api/evaluations/datasets");
+}
+
+export async function getEvaluationRuns(
+  limit = 20,
+): Promise<EvaluationRunSummary[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return request<EvaluationRunSummary[]>(
+    `/api/evaluations/runs?${params.toString()}`,
+  );
+}
+
+export async function getEvaluationRun(
+  runId: string,
+): Promise<EvaluationRunDetail> {
+  return request<EvaluationRunDetail>(
+    `/api/evaluations/runs/${encodeURIComponent(runId)}`,
+  );
 }
 
 export async function checkLlmHealth(): Promise<LlmHealthResponse> {
