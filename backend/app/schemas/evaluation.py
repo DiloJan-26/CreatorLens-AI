@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -37,6 +38,7 @@ class EvaluationFixtureContent(BaseModel):
     slot: Literal["content_1", "content_2"]
     platform: Literal["youtube", "instagram", "facebook"]
     title: str
+    description: str | None = None
     creator: str
     metadata: dict[str, Any]
     transcript_available: bool
@@ -76,3 +78,103 @@ class EvaluationFixtureCollection(BaseModel):
         if len(fixture_ids) != len(set(fixture_ids)):
             raise ValueError("Fixture IDs must be unique.")
         return self
+
+
+class EvaluationEvidence(BaseModel):
+    citation_label: str = Field(min_length=1)
+    slot: Literal["content_1", "content_2"]
+    platform: str = Field(min_length=1)
+    source_type: EvidenceSourceType
+    text: str = Field(min_length=1)
+
+
+class EvaluationArtifact(BaseModel):
+    answer_type: AnswerType
+    answer_text: str = Field(min_length=1)
+    evidence: list[EvaluationEvidence] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @property
+    def citation_labels(self) -> list[str]:
+        return [item.citation_label for item in self.evidence]
+
+    @property
+    def retrieved_contexts(self) -> list[str]:
+        return [item.text for item in self.evidence]
+
+
+class EvaluationCheckResult(BaseModel):
+    passed: bool
+    score: float = Field(ge=0.0, le=1.0)
+    message: str
+
+
+class EvaluationCaseReport(BaseModel):
+    case_id: str
+    status: Literal["PASSED", "FAILED"]
+    answer_type: AnswerType
+    answer_text: str
+    citation_labels: list[str] = Field(default_factory=list)
+    metric_scores: dict[str, float] = Field(default_factory=dict)
+    rubric_results: dict[str, EvaluationCheckResult] = Field(default_factory=dict)
+    duration_ms: int = Field(ge=0)
+
+
+class EvaluationRunReport(BaseModel):
+    run_id: str
+    dataset: str
+    evaluator: str
+    status: Literal["COMPLETED", "FAILED"]
+    total_cases: int = Field(ge=0)
+    passed_cases: int = Field(ge=0)
+    failed_cases: int = Field(ge=0)
+    aggregate_metrics: dict[str, float] = Field(default_factory=dict)
+    cases: list[EvaluationCaseReport] = Field(default_factory=list)
+    created_at: datetime
+    completed_at: datetime
+    persisted: bool = False
+
+
+class EvaluationRunRequest(BaseModel):
+    dataset: str = Field(
+        default="creatorlens_core_v1",
+        pattern=r"^[a-z0-9][a-z0-9_]+$",
+    )
+
+
+class EvaluationDatasetSummary(BaseModel):
+    name: str
+    version: str
+    case_count: int = Field(ge=0)
+    answer_types: list[AnswerType]
+
+
+class EvaluationRunSummary(BaseModel):
+    id: str
+    dataset_name: str
+    dataset_version: str
+    status: str
+    evaluator: str
+    total_cases: int
+    passed_cases: int
+    failed_cases: int
+    aggregate_metrics: dict[str, Any]
+    error_code: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class EvaluationResultSummary(BaseModel):
+    case_id: str
+    status: str
+    answer_type: str | None = None
+    citation_labels: list[str]
+    metric_scores: dict[str, Any]
+    rubric_results: dict[str, Any]
+    duration_ms: int | None = None
+    error_code: str | None = None
+
+
+class EvaluationRunDetail(BaseModel):
+    run: EvaluationRunSummary
+    results: list[EvaluationResultSummary]

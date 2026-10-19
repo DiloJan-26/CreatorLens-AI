@@ -283,7 +283,7 @@ CreatorLens AI follows strict evidence rules:
 | RAG | `backend/app/rag/chunk_builder.py`, `indexing_service.py`, `retrieval_service.py`, `context_builder.py`, `query_router.py`, `chat_service.py` |
 | Insight scoring | `backend/app/insights/insight_service.py`, `score_service.py`, `hook_analyzer.py` |
 | Persistence | `backend/app/db/models/`, `backend/app/db/repositories/`, Alembic migrations |
-| Evaluation foundation | `backend/app/evaluations/`, `backend/app/schemas/evaluation.py`, `backend/app/db/models/evaluation.py` |
+| RAG evaluation | `backend/app/evaluations/`, `backend/app/api/evaluations.py`, `backend/app/schemas/evaluation.py`, `backend/app/db/models/evaluation.py` |
 | Background workers | `backend/app/workers/celery_app.py`, `ingestion_tasks.py`, `indexing_tasks.py` |
 | Config | `backend/app/core/config.py`, `paths.py` |
 
@@ -333,6 +333,29 @@ Browser state remains lightweight: the active project ID is stored in local stor
 | `DELETE /api/projects/{project_id}/chat/sessions/{session_id}` | Delete a chat session |
 | `POST /api/projects/{project_id}/chat/context-preview` | Inspect the RAG context for a question |
 | `POST /api/projects/{project_id}/chat/stream` | Streaming RAG chat |
+| `GET /api/evaluations/datasets` | List bundled regression datasets |
+| `POST /api/evaluations/runs` | Run and persist bounded deterministic RAG evaluation |
+| `GET /api/evaluations/runs` | List persisted evaluation runs |
+| `GET /api/evaluations/runs/{run_id}` | Inspect case-level metrics and rubric results |
+
+## RAG Evaluation
+
+The bundled core dataset contains 20 metric, comparison, and recommendation
+cases. A five-case `creatorlens_ci_smoke_v1` subset is intentionally small for
+later CI use. The default runner makes no network or Gemini calls: it validates
+RAGAS samples, executes RAGAS non-LLM context metrics, uses DeepEval test-case
+contracts, and applies deterministic citation, source, forbidden-claim,
+comparison, limitation, and missing-metric checks.
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m app.evaluations.regression_runner --dataset creatorlens_core_v1
+```
+
+The command writes the detailed report under
+`backend/storage/evaluation_reports/` and persists the run when `DATABASE_URL`
+is configured. The report labels resource-light overlap scores with a
+`_lexical` suffix; they are not represented as paid LLM-judge scores.
 
 ## Local Setup
 

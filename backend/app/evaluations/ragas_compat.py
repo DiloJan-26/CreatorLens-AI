@@ -3,6 +3,7 @@
 from importlib import import_module, util
 from types import ModuleType
 from typing import Any
+import os
 import sys
 
 
@@ -27,6 +28,10 @@ def load_ragas() -> ModuleType:
     provider placeholder is registered only when that legacy module is absent.
     Remove this boundary after RAGAS publishes its upstream import fix.
     """
+
+    # Evaluation inputs can contain product evidence. Keep third-party analytics
+    # disabled unless an operator explicitly overrides this process setting.
+    os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
 
     if not _module_exists(_REMOVED_VERTEX_MODULE):
         compatibility_module = ModuleType(_REMOVED_VERTEX_MODULE)

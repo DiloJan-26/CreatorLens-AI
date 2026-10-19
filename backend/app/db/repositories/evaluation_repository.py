@@ -41,6 +41,35 @@ class EvaluationRepository:
         self.session.flush()
         return dataset
 
+    def get_dataset(self, *, name: str, version: str) -> EvaluationDataset | None:
+        return self.session.scalar(
+            select(EvaluationDataset).where(
+                EvaluationDataset.name == name,
+                EvaluationDataset.version == version,
+            )
+        )
+
+    def get_or_create_dataset(
+        self,
+        *,
+        name: str,
+        version: str,
+        source_path: str,
+        description: str | None = None,
+    ) -> EvaluationDataset:
+        dataset = self.get_dataset(name=name, version=version)
+        if dataset is not None:
+            dataset.source_path = source_path
+            dataset.description = description
+            dataset.updated_at = utc_now()
+            return dataset
+        return self.create_dataset(
+            name=name,
+            version=version,
+            source_path=source_path,
+            description=description,
+        )
+
     def add_case(
         self,
         dataset_id: str,
@@ -67,6 +96,32 @@ class EvaluationRepository:
         dataset.updated_at = utc_now()
         self.session.flush()
         return evaluation_case
+
+    def sync_cases(
+        self,
+        dataset_id: str,
+        definitions: list[EvaluationCaseDefinition],
+    ) -> dict[str, EvaluationCase]:
+        existing = {case.case_key: case for case in self.list_cases(dataset_id)}
+        for definition in definitions:
+            evaluation_case = existing.get(definition.case_id)
+            if evaluation_case is None:
+                evaluation_case = self.add_case(dataset_id, definition)
+                existing[definition.case_id] = evaluation_case
+                continue
+            evaluation_case.project_fixture = definition.project_fixture
+            evaluation_case.question = definition.question
+            evaluation_case.expected_answer_type = definition.expected_answer_type
+            evaluation_case.required_sources = list(definition.required_sources)
+            evaluation_case.forbidden_claims = list(definition.forbidden_claims)
+            evaluation_case.rubric = definition.rubric.model_dump()
+
+        dataset = self.session.get(EvaluationDataset, dataset_id)
+        if dataset is not None:
+            dataset.case_count = len(existing)
+            dataset.updated_at = utc_now()
+        self.session.flush()
+        return existing
 
     def start_run(
         self,
@@ -171,5 +226,33 @@ class EvaluationRepository:
                 select(EvaluationResult)
                 .where(EvaluationResult.run_id == run_id)
                 .order_by(EvaluationResult.created_at)
+            ).all()
+        )
+
+    def get_run(self, run_id: str) -> EvaluationRun | None:
+        return self.session.get(EvaluationRun, run_id)
+
+    def get_dataset_by_id(self, dataset_id: str) -> EvaluationDataset | None:
+        return self.session.get(EvaluationDataset, dataset_id)
+
+    def get_case_by_id(self, case_id: str) -> EvaluationCase | None:
+        return self.session.get(EvaluationCase, case_id)
+
+    def list_datasets(self) -> list[EvaluationDataset]:
+        return list(
+            self.session.scalars(
+                select(EvaluationDataset).order_by(
+                    EvaluationDataset.name,
+                    EvaluationDataset.version,
+                )
+            ).all()
+        )
+
+    def list_runs(self, *, limit: int = 20) -> list[EvaluationRun]:
+        return list(
+            self.session.scalars(
+                select(EvaluationRun)
+                .order_by(EvaluationRun.created_at.desc())
+                .limit(max(1, min(limit, 100)))
             ).all()
         )
