@@ -21,10 +21,15 @@ def _database_url() -> str:
     if target not in {"default", "test"}:
         raise RuntimeError("Alembic database target must be 'default' or 'test'.")
 
-    url = get_settings().sqlalchemy_database_url(test=target == "test")
+    settings = get_settings()
+    url = settings.sqlalchemy_database_url(test=target == "test")
     variable = "TEST_DATABASE_URL" if target == "test" else "DATABASE_URL"
     if url is None:
         raise RuntimeError(f"{variable} is not configured.")
+    if target == "test" and url == settings.sqlalchemy_database_url():
+        raise RuntimeError(
+            "TEST_DATABASE_URL must not resolve to the configured DATABASE_URL."
+        )
     return url
 
 
