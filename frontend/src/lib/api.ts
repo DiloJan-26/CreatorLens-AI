@@ -29,6 +29,7 @@ import type {
   EvaluationRunDetail,
   EvaluationRunSummary,
 } from "@/types/evaluation";
+import type { CostMetricsResponse } from "@/types/cost";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -57,6 +58,21 @@ export async function getEvaluationRun(
 ): Promise<EvaluationRunDetail> {
   return request<EvaluationRunDetail>(
     `/api/evaluations/runs/${encodeURIComponent(runId)}`,
+  );
+}
+
+export async function getCostMetrics(
+  projectId?: string | null,
+  limit = 50,
+): Promise<CostMetricsResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  if (projectId) {
+    params.set("project_id", projectId);
+  }
+
+  return request<CostMetricsResponse>(
+    `/api/metrics/cost?${params.toString()}`,
   );
 }
 
