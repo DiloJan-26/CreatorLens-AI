@@ -1,12 +1,17 @@
 import json
 import logging
 from collections.abc import AsyncIterator
+from decimal import Decimal
+from time import perf_counter
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.config import get_settings
 from app.llm.prompt_registry import get_prompt
+from app.llm.cost_estimation import estimate_cost_usd
+from app.llm.token_usage import TokenUsage, parse_token_usage
+from app.llm.tracing import build_trace_metadata, trace_span
 from app.llm.structured_output_service import (
     parse_structured_output,
     render_structured_answer,
@@ -39,6 +44,13 @@ from app.services.chat_memory_service import (
 )
 from app.services.llm_service import LLMConfigurationError, get_llm
 from app.services.qdrant_service import QdrantConfigurationError
+from app.services.llm_observability_service import (
+    complete_llm_run,
+    fail_llm_run,
+    get_project_runtime_signals,
+    record_cost_event,
+    start_llm_run,
+)
 from app.services.storage_compat_service import save_chat_citations
 
 
@@ -98,6 +110,13 @@ async def stream_chat_answer(
     session_id = request.session_id
     citations: list[Citation] = []
     settings = get_settings()
+    llm_run_id: str | None = None
+    usage = TokenUsage()
+    llm_latency_ms: int | None = None
+    langsmith_trace_id: str | None = None
+    root_trace_context: Any = None
+    root_trace: Any = None
+    trace_status = "error"
 
     try:
         question = request.message.strip()
@@ -110,6 +129,17 @@ async def stream_chat_answer(
             session_id=session_id,
         )
         session_id = session.session_id
+        root_trace_context = trace_span(
+            "creatorlens.rag_response",
+            inputs={"project_id": project_id, "question_length": len(question)},
+            metadata=build_trace_metadata(
+                project_id=project_id,
+                session_id=session_id,
+                llm_model=settings.llm_model,
+            ),
+        )
+        root_trace = root_trace_context.__enter__()
+        langsmith_trace_id = root_trace.trace_id
 
         add_message(
             project_id=project_id,
@@ -122,11 +152,30 @@ async def stream_chat_answer(
             session_id=session_id,
             limit=10,
         )
-        rag_context = build_rag_context(
-            project_id=project_id,
-            message=question,
-            recent_messages=recent_messages,
-        )
+        with trace_span(
+            "creatorlens.retrieval",
+            run_type="retriever",
+            inputs={"project_id": project_id, "question_length": len(question)},
+            metadata=build_trace_metadata(
+                project_id=project_id,
+                session_id=session_id,
+            ),
+        ) as retrieval_trace:
+            rag_context = build_rag_context(
+                project_id=project_id,
+                message=question,
+                recent_messages=recent_messages,
+            )
+            if langsmith_trace_id is None:
+                langsmith_trace_id = retrieval_trace.trace_id
+            retrieval_trace.set_outputs(
+                {
+                    "retrieval_run_id": rag_context.retrieval_run_id,
+                    "retrieval_latency_ms": rag_context.retrieval_latency_ms,
+                    "retrieved_chunk_count": rag_context.retrieved_chunk_count,
+                    "source_balance": rag_context.source_balance,
+                }
+            )
         direct_answer = build_direct_answer_if_possible(
             project_id=project_id,
             message=question,
@@ -134,6 +183,21 @@ async def stream_chat_answer(
         )
 
         if direct_answer is not None:
+            prompt_name = "deterministic_metric_answer"
+            prompt_version = "1.0.0"
+            runtime_signals = get_project_runtime_signals(project_id)
+            usage = TokenUsage(input_tokens=0, output_tokens=0, total_tokens=0)
+            llm_run_id = start_llm_run(
+                project_id=project_id,
+                session_id=session_id,
+                retrieval_run_id=rag_context.retrieval_run_id,
+                llm_provider="internal",
+                llm_model="deterministic_metric_answer",
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
+                retrieved_chunk_count=rag_context.retrieved_chunk_count,
+                source_balance=rag_context.source_balance,
+            )
             assistant_answer = str(direct_answer["answer"]).strip()
             citations = [
                 citation
@@ -155,15 +219,15 @@ async def stream_chat_answer(
                     recent_messages=recent_messages,
                     citations=citations,
                     structured_answer_type=structured_answer.answer_type,
-                    prompt_name="deterministic_metric_answer",
-                    prompt_version="1.0.0",
+                    prompt_name=prompt_name,
+                    prompt_version=prompt_version,
                     fallback_used=False,
                 ),
             )
             yield _structured_answer_event(
                 structured_answer,
-                prompt_name="deterministic_metric_answer",
-                prompt_version="1.0.0",
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
                 fallback_used=False,
                 warnings=[],
             )
@@ -177,11 +241,47 @@ async def stream_chat_answer(
                 role="assistant",
                 content=assistant_answer,
             )
-            save_chat_citations(
-                message_id=assistant_message.message_id,
+            with trace_span(
+                "creatorlens.citations",
+                inputs={"citation_count": len(citations)},
+                metadata=build_trace_metadata(
+                    project_id=project_id,
+                    session_id=session_id,
+                    intent=rag_context.intent,
+                    retrieval_run_id=rag_context.retrieval_run_id,
+                    prompt_name=prompt_name,
+                    prompt_version=prompt_version,
+                ),
+            ) as citation_trace:
+                save_chat_citations(
+                    message_id=assistant_message.message_id,
+                    project_id=project_id,
+                    session_id=session_id,
+                    citations=[citation.model_dump() for citation in citations],
+                )
+                citation_trace.set_outputs({"persisted": len(citations)})
+            complete_llm_run(
+                llm_run_id,
+                usage=usage,
+                retrieval_latency_ms=rag_context.retrieval_latency_ms,
+                llm_latency_ms=0,
+                retrieved_chunk_count=rag_context.retrieved_chunk_count,
+                source_balance=rag_context.source_balance,
+                cache_hit=runtime_signals.cache_hit,
+                cache_miss=runtime_signals.cache_miss,
+                transcript_provider=runtime_signals.transcript_provider,
+                transcript_fallback_used=runtime_signals.transcript_fallback_used,
+                embedding_reused=runtime_signals.embedding_reused,
+                langsmith_trace_id=langsmith_trace_id,
+            )
+            record_cost_event(
+                llm_run_id=llm_run_id,
                 project_id=project_id,
-                session_id=session_id,
-                citations=[citation.model_dump() for citation in citations],
+                llm_provider="internal",
+                llm_model="deterministic_metric_answer",
+                usage=usage,
+                estimated_cost_usd=Decimal("0"),
+                pricing_source="deterministic-no-llm",
             )
             yield sse_event(
                 "citations",
@@ -194,6 +294,7 @@ async def stream_chat_answer(
                     "status": "complete",
                 },
             )
+            trace_status = "complete"
             return
 
         citations = rag_context.citations
@@ -205,7 +306,36 @@ async def stream_chat_answer(
         )
         target_slot, reference_slot = parse_target_reference_slots(question)
         answer_type = _answer_type_for_intent(rag_context.intent)
-        prompt = get_prompt(answer_type)
+        with trace_span(
+            "creatorlens.prompt",
+            run_type="prompt",
+            inputs={"answer_type": answer_type.value},
+            metadata=build_trace_metadata(
+                project_id=project_id,
+                session_id=session_id,
+                intent=rag_context.intent,
+                retrieval_run_id=rag_context.retrieval_run_id,
+                llm_model=settings.llm_model,
+                retrieved_chunk_count=rag_context.retrieved_chunk_count,
+                source_balance=rag_context.source_balance,
+            ),
+        ) as prompt_trace:
+            prompt = get_prompt(answer_type)
+            prompt_trace.set_outputs(
+                {"prompt_name": prompt.name, "prompt_version": prompt.version}
+            )
+        runtime_signals = get_project_runtime_signals(project_id)
+        llm_run_id = start_llm_run(
+            project_id=project_id,
+            session_id=session_id,
+            retrieval_run_id=rag_context.retrieval_run_id,
+            llm_provider=settings.llm_provider,
+            llm_model=settings.llm_model,
+            prompt_name=prompt.name,
+            prompt_version=prompt.version,
+            retrieved_chunk_count=rag_context.retrieved_chunk_count,
+            source_balance=rag_context.source_balance,
+        )
         llm = get_llm(streaming=False)
         messages = [
             SystemMessage(
@@ -260,7 +390,45 @@ async def stream_chat_answer(
             ),
         )
 
-        response = await llm.ainvoke(messages)
+        llm_started_at = perf_counter()
+        with trace_span(
+            "creatorlens.llm",
+            run_type="llm",
+            inputs={
+                "message_count": len(messages),
+                "prompt_name": prompt.name,
+                "prompt_version": prompt.version,
+            },
+            metadata=build_trace_metadata(
+                project_id=project_id,
+                session_id=session_id,
+                intent=rag_context.intent,
+                retrieval_run_id=rag_context.retrieval_run_id,
+                prompt_name=prompt.name,
+                prompt_version=prompt.version,
+                llm_model=settings.llm_model,
+                retrieved_chunk_count=rag_context.retrieved_chunk_count,
+                source_balance=rag_context.source_balance,
+            ),
+        ) as llm_trace:
+            try:
+                response = await llm.ainvoke(messages)
+            finally:
+                llm_latency_ms = max(
+                    0,
+                    round((perf_counter() - llm_started_at) * 1000),
+                )
+            usage = parse_token_usage(response)
+            if langsmith_trace_id is None and llm_trace.trace_id:
+                langsmith_trace_id = llm_trace.trace_id
+            llm_trace.set_outputs(
+                {
+                    "llm_latency_ms": llm_latency_ms,
+                    "input_tokens": usage.input_tokens,
+                    "output_tokens": usage.output_tokens,
+                    "total_tokens": usage.total_tokens,
+                }
+            )
         parsed = parse_structured_output(
             _chunk_text(response),
             answer_type,
@@ -298,11 +466,56 @@ async def stream_chat_answer(
             content=assistant_answer.strip()
             or "I could not generate a grounded answer from the available context.",
         )
-        save_chat_citations(
-            message_id=assistant_message.message_id,
+        with trace_span(
+            "creatorlens.citations",
+            inputs={"citation_count": len(citations)},
+            metadata=build_trace_metadata(
+                project_id=project_id,
+                session_id=session_id,
+                intent=rag_context.intent,
+                retrieval_run_id=rag_context.retrieval_run_id,
+                prompt_name=prompt.name,
+                prompt_version=prompt.version,
+                llm_model=settings.llm_model,
+            ),
+        ) as citation_trace:
+            save_chat_citations(
+                message_id=assistant_message.message_id,
+                project_id=project_id,
+                session_id=session_id,
+                citations=[citation.model_dump() for citation in citations],
+            )
+            citation_trace.set_outputs({"persisted": len(citations)})
+
+        estimated_cost = estimate_cost_usd(
+            usage,
+            input_cost_per_million_usd=settings.llm_input_cost_per_million_usd,
+            output_cost_per_million_usd=settings.llm_output_cost_per_million_usd,
+        )
+        complete_llm_run(
+            llm_run_id,
+            usage=usage,
+            retrieval_latency_ms=rag_context.retrieval_latency_ms,
+            llm_latency_ms=llm_latency_ms,
+            retrieved_chunk_count=rag_context.retrieved_chunk_count,
+            source_balance=rag_context.source_balance,
+            cache_hit=runtime_signals.cache_hit,
+            cache_miss=runtime_signals.cache_miss,
+            transcript_provider=runtime_signals.transcript_provider,
+            transcript_fallback_used=runtime_signals.transcript_fallback_used,
+            embedding_reused=runtime_signals.embedding_reused,
+            langsmith_trace_id=langsmith_trace_id,
+        )
+        record_cost_event(
+            llm_run_id=llm_run_id,
             project_id=project_id,
-            session_id=session_id,
-            citations=[citation.model_dump() for citation in citations],
+            llm_provider=settings.llm_provider,
+            llm_model=settings.llm_model,
+            usage=usage,
+            estimated_cost_usd=estimated_cost,
+            pricing_source=(
+                "configured-env-per-million" if estimated_cost is not None else None
+            ),
         )
 
         yield sse_event(
@@ -316,30 +529,84 @@ async def stream_chat_answer(
                 "status": "complete",
             },
         )
+        trace_status = "complete"
     except (
         ChatProjectNotFoundError,
         RagContextProjectNotFoundError,
         RetrievalProjectNotFoundError,
     ):
+        fail_llm_run(
+            llm_run_id,
+            error_code="PROJECT_NOT_FOUND",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         yield sse_event("error", {"message": "Project not found."})
     except ChatSessionNotFoundError:
+        fail_llm_run(
+            llm_run_id,
+            error_code="CHAT_SESSION_NOT_FOUND",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         yield sse_event("error", {"message": "Chat session not found."})
     except (
         ChatValidationError,
         RagContextValidationError,
     ) as exc:
+        fail_llm_run(
+            llm_run_id,
+            error_code="CHAT_VALIDATION_FAILED",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         yield sse_event("error", {"message": str(exc)})
     except QdrantConfigurationError:
+        fail_llm_run(
+            llm_run_id,
+            error_code="QDRANT_NOT_CONFIGURED",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         yield sse_event("error", {"message": "Qdrant is not configured."})
     except LLMConfigurationError as exc:
+        fail_llm_run(
+            llm_run_id,
+            error_code="LLM_NOT_CONFIGURED",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         yield sse_event("error", {"message": str(exc)})
     except Exception:
+        fail_llm_run(
+            llm_run_id,
+            error_code="CHAT_STREAM_FAILED",
+            usage=usage,
+            llm_latency_ms=llm_latency_ms,
+            langsmith_trace_id=langsmith_trace_id,
+        )
         logger.exception(
             "Chat stream failed project_id=%s session_id=%s",
             project_id,
             session_id,
         )
         yield sse_event("error", {"message": "Could not stream chat answer."})
+    finally:
+        if root_trace is not None:
+            root_trace.set_outputs(
+                {
+                    "status": trace_status,
+                    "llm_run_id": llm_run_id,
+                    "citation_count": len(citations),
+                }
+            )
+        if root_trace_context is not None:
+            root_trace_context.__exit__(None, None, None)
 
 
 def sse_event(event: str, data: dict) -> str:

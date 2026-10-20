@@ -2,7 +2,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.llm_observability import CostEvent
@@ -63,6 +63,25 @@ class CostRepository:
             .limit(max(1, min(limit, 500)))
         ).all()
         return [self.to_record(event) for event in events]
+
+    def summary(self, *, project_id: str | None = None) -> dict[str, Any]:
+        statement = select(
+            func.count(CostEvent.id),
+            func.coalesce(func.sum(CostEvent.input_tokens), 0),
+            func.coalesce(func.sum(CostEvent.output_tokens), 0),
+            func.coalesce(func.sum(CostEvent.total_tokens), 0),
+            func.sum(CostEvent.estimated_cost_usd),
+        )
+        if project_id is not None:
+            statement = statement.where(CostEvent.project_id == project_id)
+        row = self.session.execute(statement).one()
+        return {
+            "event_count": int(row[0] or 0),
+            "input_tokens": int(row[1] or 0),
+            "output_tokens": int(row[2] or 0),
+            "total_tokens": int(row[3] or 0),
+            "estimated_cost_usd": row[4],
+        }
 
     @staticmethod
     def to_record(event: CostEvent) -> dict[str, Any]:

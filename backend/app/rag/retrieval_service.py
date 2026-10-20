@@ -101,7 +101,12 @@ def retrieve_project_chunks(
     try:
         if mode == RetrievalMode.METRIC_DIRECT:
             response = _metric_direct_response(project_id, query, run_id)
-            _complete_run(run_id, started_at, candidate_count=0, results=[])
+            response.retrieval_latency_ms = _complete_run(
+                run_id,
+                started_at,
+                candidate_count=0,
+                results=[],
+            )
             return response
 
         evidence_records = _filtered_evidence_records(
@@ -132,7 +137,7 @@ def retrieve_project_chunks(
             },
         )
         results = [_retrieved_chunk(item) for item in ranked]
-        _complete_run(
+        duration_ms = _complete_run(
             run_id,
             started_at,
             candidate_count=len(candidates),
@@ -151,6 +156,7 @@ def retrieve_project_chunks(
             query=query,
             retrieval_mode=mode,
             retrieval_run_id=run_id,
+            retrieval_latency_ms=duration_ms,
             structured_metadata_used=False,
             applied_platform=request.platform,
             applied_slot=request.slot,
@@ -318,13 +324,15 @@ def _complete_run(
     *,
     candidate_count: int,
     results: list[RetrievedChunk],
-) -> None:
+) -> int:
+    duration_ms = _duration_ms(started_at)
     complete_retrieval_run(
         run_id,
         candidate_count=candidate_count,
         result_chunk_ids=[chunk.chunk_id for chunk in results if chunk.chunk_id],
-        duration_ms=_duration_ms(started_at),
+        duration_ms=duration_ms,
     )
+    return duration_ms
 
 
 def _duration_ms(started_at: float) -> int:

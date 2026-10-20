@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 ChatRole = Literal["user", "assistant", "system"]
@@ -91,6 +91,10 @@ class RagContext(BaseModel):
     structured_context: str
     retrieved_context: str
     citations: list[Citation]
+    retrieval_run_id: str | None = None
+    retrieval_latency_ms: int | None = None
+    retrieved_chunk_count: int = 0
+    source_balance: dict[str, int] = Field(default_factory=dict)
 
 
 class ChatStreamEvent(BaseModel):

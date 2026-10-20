@@ -44,6 +44,7 @@ def test_valid_cache_hit_skips_extraction(monkeypatch) -> None:
     )
     monkeypatch.setattr(project_service, "replace_transcript_segments", lambda **_: None)
     monkeypatch.setattr(project_service, "update_content_cache_identity", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(project_service, "update_content_cache_observation", lambda *_args, **_kwargs: None)
 
     status = project_service._extract_and_store_platform(
         project_id="project-2",
@@ -98,6 +99,7 @@ def test_compatible_embedding_cache_skips_embedding_and_qdrant(monkeypatch) -> N
         "upsert_chunk_vectors",
         lambda **_: (_ for _ in ()).throw(AssertionError("Qdrant upsert was called")),
     )
+    monkeypatch.setattr(indexing_service, "update_project_embedding_observation", lambda *_args, **_kwargs: None)
 
     response = indexing_service.index_project("project-1", rebuild_chunks=False)
 
@@ -162,6 +164,7 @@ def test_cached_vector_skips_embedding_for_a_new_project(monkeypatch) -> None:
 
     monkeypatch.setattr(indexing_service, "upsert_chunk_vectors", upsert)
     monkeypatch.setattr(indexing_service, "update_rag_chunk_qdrant_point_id", lambda **_: None)
+    monkeypatch.setattr(indexing_service, "update_project_embedding_observation", lambda *_args, **_kwargs: None)
 
     response = indexing_service.index_project("new-project", rebuild_chunks=False)
 

@@ -24,6 +24,7 @@ def test_cache_miss_runs_extraction(monkeypatch) -> None:
     monkeypatch.setattr(project_service, "upsert_video_metadata", lambda **_: {"id": "item-1"})
     monkeypatch.setattr(project_service, "replace_transcript_segments", lambda **_: None)
     monkeypatch.setattr(project_service, "update_content_cache_identity", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(project_service, "update_content_cache_observation", lambda *_args, **_kwargs: None)
 
     status = project_service._extract_and_store_platform(
         project_id="project-1",

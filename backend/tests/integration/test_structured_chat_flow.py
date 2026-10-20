@@ -118,6 +118,20 @@ def test_comparison_chat_emits_validated_structure_and_citations(monkeypatch) ->
         "save_chat_citations",
         lambda **kwargs: saved_citations.extend(kwargs["citations"]),
     )
+    monkeypatch.setattr(
+        chat_service,
+        "get_project_runtime_signals",
+        lambda _project_id: SimpleNamespace(
+            cache_hit=None,
+            cache_miss=None,
+            transcript_provider=None,
+            transcript_fallback_used=None,
+            embedding_reused=None,
+        ),
+    )
+    monkeypatch.setattr(chat_service, "start_llm_run", lambda **_kwargs: None)
+    monkeypatch.setattr(chat_service, "complete_llm_run", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(chat_service, "record_cost_event", lambda **_kwargs: False)
 
     async def _collect_events() -> list[str]:
         return [

@@ -80,6 +80,16 @@ class Settings(BaseSettings):
         default=2200,
         alias="LLM_MAX_OUTPUT_TOKENS",
     )
+    llm_input_cost_per_million_usd: float | None = Field(
+        default=None,
+        alias="LLM_INPUT_COST_PER_MILLION_USD",
+        ge=0,
+    )
+    llm_output_cost_per_million_usd: float | None = Field(
+        default=None,
+        alias="LLM_OUTPUT_COST_PER_MILLION_USD",
+        ge=0,
+    )
     debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")
 
     langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")

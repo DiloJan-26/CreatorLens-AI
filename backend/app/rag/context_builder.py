@@ -161,7 +161,19 @@ def build_rag_context(
         structured_context=structured_context,
         retrieved_context=retrieved_context,
         citations=citations,
+        retrieval_run_id=retrieval_response.retrieval_run_id,
+        retrieval_latency_ms=retrieval_response.retrieval_latency_ms,
+        retrieved_chunk_count=retrieval_response.total_results,
+        source_balance=_source_balance(retrieval_response.results),
     )
+
+
+def _source_balance(results: list[RetrievedChunk]) -> dict[str, int]:
+    balance: dict[str, int] = {}
+    for result in results:
+        if result.slot:
+            balance[result.slot] = balance.get(result.slot, 0) + 1
+    return dict(sorted(balance.items()))
 
 
 def build_grounded_prompt_inputs(

@@ -120,6 +120,7 @@ class RetrieveResponse(BaseModel):
     query: str
     retrieval_mode: RetrievalMode = RetrievalMode.TRANSCRIPT_DEEP
     retrieval_run_id: str | None = None
+    retrieval_latency_ms: int | None = None
     structured_metadata_used: bool = False
     applied_platform: RagPlatform | None = None
     applied_slot: RagSlot | None = None

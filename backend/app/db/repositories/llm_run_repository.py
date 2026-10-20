@@ -142,6 +142,22 @@ class LlmRunRepository:
         ).all()
         return [self.to_record(run) for run in runs]
 
+    def list_recent(
+        self,
+        *,
+        project_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        statement = select(LlmRun)
+        if project_id is not None:
+            statement = statement.where(LlmRun.project_id == project_id)
+        runs = self.session.scalars(
+            statement.order_by(LlmRun.created_at.desc()).limit(
+                max(1, min(limit, 200))
+            )
+        ).all()
+        return [self.to_record(run) for run in runs]
+
     @staticmethod
     def _apply_observability(
         run: LlmRun,

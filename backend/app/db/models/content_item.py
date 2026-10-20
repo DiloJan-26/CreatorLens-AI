@@ -24,6 +24,8 @@ class ContentItem(Base):
     content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     metadata_hash: Mapped[str | None] = mapped_column(String(64))
     transcript_hash: Mapped[str | None] = mapped_column(String(64))
+    last_extraction_cache_hit: Mapped[bool | None] = mapped_column(Boolean)
+    last_embedding_reused: Mapped[bool | None] = mapped_column(Boolean)
     extraction_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending"
     )
