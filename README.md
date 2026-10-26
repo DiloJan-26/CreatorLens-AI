@@ -1,8 +1,8 @@
 # CreatorLens AI
 
-[![Backend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml)
-[![Frontend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml)
-[![Docker Build CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml)
+[![Backend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml)
+[![Docker Build CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml)
 
 ### Evidence-grounded, multi-cloud RAG intelligence for short-form content
 
@@ -21,6 +21,19 @@ Most content-analysis demos send a transcript to an LLM and display unverified p
 The platform normalizes two public content URLs, runs extraction asynchronously, records confirmed metadata and timed transcript evidence, builds typed retrieval chunks, indexes them in Qdrant, and routes each question through the appropriate retrieval strategy. Metric questions bypass vector search when structured data can answer them directly; comparison questions balance evidence across both contents; hook questions prioritize early transcript segments. Gemini produces internally structured answers that are validated, citation-checked, and streamed to the UI.
 
 The same workflow is observable end to end through persisted retrieval and LLM runs, LangSmith traces, token and latency telemetry, regression datasets, and a deployed evaluation dashboard.
+
+## Project status
+
+**The planned CreatorLens AI V2 implementation is complete and deployed.** Backend, frontend, ingestion workers, structured RAG, evaluation, LLM observability, and CI/CD reliability controls have completed local, GitHub-hosted, and deployed smoke acceptance.
+
+| Delivery area | Accepted state |
+| --- | --- |
+| Product experience | Deployed analysis, evidence, structured chat, evaluation, and LLMOps views |
+| Backend platform | FastAPI APIs, durable PostgreSQL state, hybrid retrieval, structured generation, and observability |
+| Async ingestion | Redis-backed Celery processing on Azure Container Apps with persisted progress and graceful partial readiness |
+| Quality engineering | 114 unit tests, eight integration tests, deterministic evaluation smoke suite, and migration validation |
+| Delivery controls | Required backend, frontend, evaluation, and Docker checks enforced on production pull requests |
+| Protection acceptance | Successful changes are admitted; intentional backend and frontend failures are confirmed to block merging |
 
 ## Engineering highlights
 
@@ -540,7 +553,7 @@ SQLAlchemy repositories keep persistence out of API routes, while Alembic provid
 | Structured output | Pydantic schemas + YAML prompt registry |
 | Evaluation | RAGAS, DeepEval, deterministic rubric checks |
 | Observability | LangSmith, persisted LLM/retrieval runs, Azure Log Analytics |
-| Delivery | Vercel, Render, GitHub Actions worker-image workflows |
+| Delivery | Vercel, Render, GitHub Actions CI, protected production promotion, and worker-image workflows |
 
 ### Redis deployment note
 
@@ -571,7 +584,7 @@ CreatorLens-AI/
 │       ├── components/          # Analysis, chat, evaluation, LLMOps UI
 │       ├── lib/                 # API/SSE client
 │       └── types/               # Frontend contracts
-└── .github/workflows/           # ACR worker-image delivery workflows
+└── .github/workflows/           # CI quality gates and worker-image delivery
 ```
 
 ## Validation evidence
@@ -579,13 +592,16 @@ CreatorLens-AI/
 The latest accepted validation baseline includes:
 
 - backend compile/import validation
-- **112 backend unit tests**
-- **7 backend integration tests**
+- **114 backend unit tests**
+- **8 backend integration tests**
 - deterministic five-case and 20-case evaluation runs
 - Alembic upgrade validation through migration head
 - frontend ESLint, TypeScript, and optimized Next.js production build
+- GitHub-hosted backend, frontend, evaluation-smoke, and Docker-image checks on `main`
+- enforced production pull requests with confirmed backend and frontend failure rejection
 - deployed ingestion acceptance across Render → Redis Cloud → Azure Container Apps → Neon/Qdrant
 - deployed structured-chat, LangSmith trace, evaluation-dashboard, and LLMOps-dashboard acceptance
+- final deployed application smoke acceptance after production promotion
 
 Representative non-runtime checks:
 
@@ -600,6 +616,7 @@ python -m alembic -x database=test upgrade head
 
 # Frontend
 cd ../frontend
+npm ci
 npm run lint
 npx tsc --noEmit
 npm run build
@@ -611,18 +628,18 @@ docker build -t creatorlens-backend ./backend
 
 ### CI checks
 
-| Workflow | Required check candidates | Validation scope |
+| Workflow | Required production check | Validation scope |
 | --- | --- | --- |
 | Backend CI | `Backend compile, tests, and migrations` | Compile, unit tests, integration tests, and Alembic against disposable PostgreSQL 16 |
 | Backend CI | `Deterministic RAG evaluation smoke` | Five-case offline regression subset with no model or external-service calls |
 | Frontend CI | `Frontend lint, typecheck, and build` | ESLint, TypeScript, and optimized Next.js build |
 | Docker Build CI | `Backend Docker image build` | Multi-stage backend image build without registry push |
 
-The baseline CI workflows use GitHub-hosted Ubuntu runners with read-only repository permissions. They do not consume Gemini, LangSmith, Neon, Qdrant, Redis, Render, Vercel, or Azure credentials. PostgreSQL credentials declared in CI belong only to the disposable service container.
+The CI workflows use GitHub-hosted Ubuntu runners with read-only repository permissions. They do not consume Gemini, LangSmith, Neon, Qdrant, Redis, Render, Vercel, or Azure credentials. PostgreSQL credentials declared in CI belong only to the disposable service container.
 
 ### Reliability status
 
-The functional platform, worker-image delivery, unit/integration suites, deterministic evaluation subset, and backend/frontend/Docker CI definitions are implemented. The new checks must run successfully on GitHub before they can be selected in the `Dev-Staging` ruleset. This repository does not claim that required-check enforcement is active until that platform validation is completed.
+The planned V2 reliability scope is implemented and accepted. GitHub protects `main` as the production branch and requires pull-request promotion from `Dev-Staging`. Backend compilation/tests/migrations, deterministic RAG evaluation, frontend lint/type/build validation, and backend Docker construction are mandatory checks. Positive merge acceptance and intentional backend/frontend failure rejection have both been verified. The deployed application was smoke-tested after promotion and remained operational.
 
 ## Design principles
 
