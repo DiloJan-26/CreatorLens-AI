@@ -1,3 +1,7 @@
+from copy import deepcopy
+import json
+from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
@@ -5,6 +9,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 import app.db.models  # noqa: F401
+
+
+FIXTURE_DIRECTORY = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def comparison_project_fixture() -> dict[str, object]:
+    fixture_path = FIXTURE_DIRECTORY / "comparison_project.json"
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    return deepcopy(payload)
 
 
 @pytest.fixture

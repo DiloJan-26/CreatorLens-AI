@@ -1,0 +1,92 @@
+{
+  "project": {
+    "id": "fixture-project",
+    "status": "ready",
+    "content_items": [
+      {
+        "id": "fixture-content-1",
+        "content_id": "fixture-content-1",
+        "slot": "content_1",
+        "platform": "youtube",
+        "url": "https://www.youtube.com/watch?v=fixture1",
+        "title": "Three practical ways creators can improve retention",
+        "creator": "Creator One",
+        "description": "Creators lose viewers when the payoff is delayed. Use these three fixes and comment with your strongest hook.",
+        "caption": null,
+        "views": 100000,
+        "likes": 6000,
+        "reactions": null,
+        "comments": 1000,
+        "shares": null,
+        "engagement_rate": 7.0,
+        "follower_count": null,
+        "subscriber_count": 10000,
+        "duration_seconds": 42,
+        "upload_date": "2026-10-01",
+        "hashtags": ["creatortips", "retention"],
+        "transcript_available": true,
+        "transcript_language": "en",
+        "detected_language": "en",
+        "transcript_source": "platform_captions",
+        "missing_fields": []
+      },
+      {
+        "id": "fixture-content-2",
+        "content_id": "fixture-content-2",
+        "slot": "content_2",
+        "platform": "instagram",
+        "url": "https://www.instagram.com/reel/fixture2/",
+        "title": "A day creating content",
+        "creator": "Creator Two",
+        "description": null,
+        "caption": "A look at today. Follow for more.",
+        "views": 50000,
+        "likes": 2000,
+        "reactions": null,
+        "comments": 500,
+        "shares": null,
+        "engagement_rate": 5.0,
+        "follower_count": 20000,
+        "subscriber_count": null,
+        "duration_seconds": 38,
+        "upload_date": "2026-10-02",
+        "hashtags": ["creatorlife"],
+        "transcript_available": true,
+        "transcript_language": "en",
+        "detected_language": "en",
+        "transcript_source": "deepgram_multilingual",
+        "missing_fields": []
+      }
+    ]
+  },
+  "transcripts": {
+    "content_1": [
+      {
+        "segment_index": 0,
+        "start_time": 0.0,
+        "end_time": 4.5,
+        "text": "Creators, are viewers leaving before your payoff? Here are three practical fixes."
+      },
+      {
+        "segment_index": 1,
+        "start_time": 4.5,
+        "end_time": 18.0,
+        "text": "Show the result first, remove repeated context, and make the benefit specific."
+      }
+    ],
+    "content_2": [
+      {
+        "segment_index": 0,
+        "start_time": 0.0,
+        "end_time": 5.0,
+        "text": "Hi everyone, welcome back. Today I am sharing a normal day."
+      },
+      {
+        "segment_index": 1,
+        "start_time": 5.0,
+        "end_time": 20.0,
+        "text": "I prepare the camera and then decide what content to record."
+      }
+    ]
+  }
+}

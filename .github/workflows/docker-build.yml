@@ -1,0 +1,48 @@
+name: Docker Build CI
+
+on:
+  pull_request:
+    branches:
+      - Dev-Staging
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/docker-build.yml"
+  push:
+    branches:
+      - Dev-Staging
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-image:
+    name: Backend Docker image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image without pushing
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: creatorlens-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
