@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.metrics import (
     MetricSummaryResponse,
@@ -13,12 +13,35 @@ from app.services.metric_source_service import (
     get_metric_summary,
     save_verified_metrics_with_summary,
 )
+from app.schemas.cost import CostMetricsResponse
+from app.services.llm_observability_service import get_cost_metrics
 
 
 router = APIRouter(
     prefix="/api/projects/{project_id}/metrics",
     tags=["6. Verified Metrics"],
 )
+
+cost_router = APIRouter(
+    prefix="/api/metrics",
+    tags=["11. LLM Operations"],
+)
+
+
+@cost_router.get(
+    "/cost",
+    response_model=CostMetricsResponse,
+    summary="Inspect LLM cost and latency telemetry",
+    description=(
+        "Returns persisted token, configured cost-estimate, latency, cache, "
+        "retrieval, transcript, and prompt-version signals."
+    ),
+)
+def get_cost_metrics_endpoint(
+    project_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> CostMetricsResponse:
+    return get_cost_metrics(project_id=project_id, limit=limit)
 
 
 @router.get(

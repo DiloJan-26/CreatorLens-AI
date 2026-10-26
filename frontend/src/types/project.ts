@@ -180,7 +180,11 @@ export type ChatCitation = {
 };
 
 export type ChatTrace = {
-  mode: "direct_metric_answer" | "gemini_rag_answer" | string;
+  mode:
+    | "direct_metric_answer"
+    | "gemini_rag_answer"
+    | "gemini_structured_answer"
+    | string;
   model: string;
   intent?: string | null;
   retrieved_sources?: number | null;
@@ -194,6 +198,77 @@ export type ChatTrace = {
     history_message_count?: number;
     citation_count?: number;
   } | null;
+  structured_answer_type?: StructuredAnswerType | null;
+  prompt_name?: string | null;
+  prompt_version?: string | null;
+  fallback_used?: boolean | null;
+};
+
+export type StructuredAnswerType = "metric" | "comparison" | "recommendation";
+
+export type StructuredEvidenceItem = {
+  citation_label: string;
+  claim: string;
+  slot?: ContentSlot | null;
+  platform?: string | null;
+  source_type?: string | null;
+  excerpt?: string | null;
+};
+
+export type StructuredMetricItem = {
+  name: string;
+  slot: ContentSlot;
+  value?: string | number | null;
+  availability: "confirmed" | "unavailable";
+  citation_label?: string | null;
+};
+
+export type StructuredRecommendationItem = {
+  recommendation: string;
+  rationale: string;
+  priority: "high" | "medium" | "low";
+  citation_labels: string[];
+};
+
+export type MetricStructuredAnswer = {
+  answer_type: "metric";
+  summary: string;
+  metrics: StructuredMetricItem[];
+  evidence: StructuredEvidenceItem[];
+  limitations: string[];
+};
+
+export type ComparisonStructuredAnswer = {
+  answer_type: "comparison";
+  winner: "content_1" | "content_2" | "tie" | "insufficient_evidence";
+  confidence: number;
+  key_reasons: string[];
+  evidence: StructuredEvidenceItem[];
+  limitations: string[];
+  recommendations: StructuredRecommendationItem[];
+};
+
+export type RecommendationStructuredAnswer = {
+  answer_type: "recommendation";
+  summary: string;
+  recommendations: StructuredRecommendationItem[];
+  evidence: StructuredEvidenceItem[];
+  limitations: string[];
+};
+
+export type StructuredAnswer =
+  | MetricStructuredAnswer
+  | ComparisonStructuredAnswer
+  | RecommendationStructuredAnswer;
+
+export type StructuredAnswerPayload = {
+  answer: StructuredAnswer;
+  prompt: {
+    name: string;
+    version: string;
+  };
+  fallback_used: boolean;
+  warnings: string[];
 };
 
 export type ChatMessage = {
@@ -201,6 +276,7 @@ export type ChatMessage = {
   content: string;
   citations?: ChatCitation[];
   trace?: ChatTrace | null;
+  structuredAnswer?: StructuredAnswerPayload | null;
 };
 
 export type StoredChatMessage = {

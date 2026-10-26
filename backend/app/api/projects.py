@@ -23,8 +23,10 @@ from app.rag.retrieval_service import (
     RetrievalProjectNotFoundError,
     RetrievalValidationError,
     list_project_chunks,
+    list_retrieval_runs,
     retrieve_project_chunks,
 )
+from app.schemas.retrieval import RetrievalRunListResponse
 from app.services.qdrant_service import QdrantConfigurationError
 from app.services.project_service import (
     build_and_store_project_chunks,
@@ -186,8 +188,8 @@ def index_project_endpoint(project_id: str) -> IndexProjectResponse:
     tags=["5. Retrieval & Context"],
     summary="7. Test evidence retrieval",
     description=(
-        "Runs semantic retrieval over indexed evidence. Use this to validate results "
-        "before testing cited chat."
+        "Routes the query, combines semantic and keyword evidence, and applies "
+        "deterministic reranking before cited chat."
     ),
 )
 def retrieve_project_chunks_endpoint(
@@ -214,5 +216,28 @@ def retrieve_project_chunks_endpoint(
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not retrieve chunks from Qdrant.",
+            detail="Could not retrieve project evidence.",
+        ) from None
+
+
+@router.get(
+    "/{project_id}/retrieval-runs",
+    response_model=RetrievalRunListResponse,
+    tags=["5. Retrieval & Context"],
+    summary="Inspect retrieval runs",
+    description=(
+        "Lists recent persisted retrieval modes, filters, result identifiers, "
+        "durations, and safe failure codes for this project."
+    ),
+)
+def list_retrieval_runs_endpoint(
+    project_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> RetrievalRunListResponse:
+    try:
+        return list_retrieval_runs(project_id, limit)
+    except RetrievalProjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found.",
         ) from None

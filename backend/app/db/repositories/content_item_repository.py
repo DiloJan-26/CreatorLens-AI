@@ -55,6 +55,7 @@ class ContentItemRepository:
             item.content_hash = None
             item.metadata_hash = None
             item.transcript_hash = None
+            item.last_embedding_reused = None
             item.extraction_status = extraction_status
             item.transcript_available = transcript_available
             item.transcript_segment_count = transcript_segment_count
@@ -94,6 +95,34 @@ class ContentItemRepository:
         item.metadata_hash = metadata_hash
         item.transcript_hash = transcript_hash
         item.updated_at = utc_now()
+        self.session.flush()
+
+    def set_cache_observation(
+        self,
+        content_item_id: str,
+        *,
+        extraction_cache_hit: bool | None = None,
+        embedding_reused: bool | None = None,
+    ) -> None:
+        item = self.session.get(ContentItem, content_item_id)
+        if item is None:
+            raise LookupError("Content item not found.")
+        if extraction_cache_hit is not None:
+            item.last_extraction_cache_hit = extraction_cache_hit
+        if embedding_reused is not None:
+            item.last_embedding_reused = embedding_reused
+        item.updated_at = utc_now()
+        self.session.flush()
+
+    def set_project_embedding_observation(
+        self,
+        project_id: str,
+        *,
+        embedding_reused: bool,
+    ) -> None:
+        for item in self.list_models(project_id):
+            item.last_embedding_reused = embedding_reused
+            item.updated_at = utc_now()
         self.session.flush()
 
     def get_model_by_slot(self, project_id: str, slot: str) -> ContentItem | None:
@@ -149,6 +178,8 @@ class ContentItemRepository:
             "content_hash": item.content_hash,
             "metadata_hash": item.metadata_hash,
             "transcript_hash": item.transcript_hash,
+            "last_extraction_cache_hit": item.last_extraction_cache_hit,
+            "last_embedding_reused": item.last_embedding_reused,
             "extraction_status": item.extraction_status,
             "transcript_available": item.transcript_available,
             "transcript_segment_count": item.transcript_segment_count,

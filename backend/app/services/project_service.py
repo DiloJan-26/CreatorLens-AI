@@ -43,6 +43,7 @@ from app.services.storage_compat_service import (
     replace_transcript_segments,
     update_project_status,
     update_content_cache_identity,
+    update_content_cache_observation,
     upsert_video_metadata,
 )
 from app.services.url_normalization_service import (
@@ -297,6 +298,7 @@ def _extract_and_store_platform(
 ) -> str:
     normalized_url = _normalized_cache_url(url)
     extraction_result = _cached_extraction_result(normalized_url)
+    cached_result_used = extraction_result is not None
 
     if extraction_result is not None:
         logger.info(
@@ -356,6 +358,19 @@ def _extract_and_store_platform(
             metadata_hash=metadata_hash,
             transcript_hash=transcript_hash,
         )
+        try:
+            update_content_cache_observation(
+                str(video_record["id"]),
+                extraction_cache_hit=cached_result_used,
+            )
+        except Exception:
+            logger.warning(
+                "Could not persist extraction cache observation "
+                "project_id=%s slot=%s",
+                project_id,
+                slot,
+                exc_info=True,
+            )
     except Exception:
         return "failed"
 

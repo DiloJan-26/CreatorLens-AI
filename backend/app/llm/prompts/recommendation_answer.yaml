@@ -1,0 +1,30 @@
+name: recommendation_answer
+version: 1.0.0
+answer_type: recommendation
+system_prompt: >-
+  Return one valid JSON object only. Recommendations must distinguish retrieved
+  evidence from general strategy. Never fabricate facts or citation labels, and
+  report missing evidence in limitations.
+user_template: |-
+  Question:
+  {question}
+
+  Question intent:
+  {intent}
+
+  Recent conversation:
+  {history_text}
+
+  Structured metadata:
+  {structured_context}
+
+  Retrieved evidence:
+  {retrieved_context}
+
+  Allowed citations:
+  {citation_catalog}
+
+  Additional answer requirements:
+  {style_instructions}
+
+  Return the recommendation answer schema with prioritized actionable recommendations.

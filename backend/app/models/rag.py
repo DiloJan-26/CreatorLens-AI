@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.retrieval import RetrievalMode
+
 
 RagPlatform = Literal["youtube", "instagram", "facebook"]
 RagSlot = Literal["content_1", "content_2"]
@@ -94,9 +96,11 @@ class RetrieveRequest(BaseModel):
     platform: RagPlatform | None = None
     slot: RagSlot | None = None
     source_type: RagSourceType | None = None
+    retrieval_mode: RetrievalMode | None = None
 
 
 class RetrievedChunk(BaseModel):
+    chunk_id: str | None = None
     content_id: str | None = None
     slot: str | None = None
     platform: str
@@ -114,6 +118,10 @@ class RetrievedChunk(BaseModel):
 class RetrieveResponse(BaseModel):
     project_id: str
     query: str
+    retrieval_mode: RetrievalMode = RetrievalMode.TRANSCRIPT_DEEP
+    retrieval_run_id: str | None = None
+    retrieval_latency_ms: int | None = None
+    structured_metadata_used: bool = False
     applied_platform: RagPlatform | None = None
     applied_slot: RagSlot | None = None
     applied_source_type: RagSourceType | None = None

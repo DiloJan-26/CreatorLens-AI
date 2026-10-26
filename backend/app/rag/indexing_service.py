@@ -21,6 +21,7 @@ from app.services.storage_compat_service import (
     get_project_record,
     replace_rag_chunks,
     update_rag_chunk_qdrant_point_id,
+    update_project_embedding_observation,
 )
 
 
@@ -71,6 +72,7 @@ def index_project(
             project_id,
             len(chunks),
         )
+        _record_embedding_observation(project_id, reused=True)
         return _indexed_response(
             project_id=project_id,
             chunks=chunks,
@@ -133,6 +135,11 @@ def index_project(
             qdrant_point_id=qdrant_point_id,
         )
 
+    _record_embedding_observation(
+        project_id,
+        reused=reused_embedding_vectors,
+    )
+
     return _indexed_response(
         project_id=project_id,
         chunks=chunks,
@@ -178,6 +185,20 @@ def _has_reusable_embeddings(chunks: list[RagChunk]) -> bool:
         if chunk.embedding_hash != expected:
             return False
     return bool(chunks)
+
+
+def _record_embedding_observation(project_id: str, *, reused: bool) -> None:
+    try:
+        update_project_embedding_observation(
+            project_id,
+            embedding_reused=reused,
+        )
+    except Exception:
+        logger.warning(
+            "Could not persist embedding cache observation project_id=%s",
+            project_id,
+            exc_info=True,
+        )
 
 
 def _stored_points_exist(chunks: list[RagChunk]) -> bool:

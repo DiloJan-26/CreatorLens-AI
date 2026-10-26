@@ -5,10 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
+from app.api.evaluations import router as evaluations_router
 from app.api.health import router as health_router
 from app.api.ingestion import router as ingestion_router
 from app.api.insights import router as insights_router
-from app.api.metrics import router as metrics_router
+from app.api.metrics import cost_router, router as metrics_router
 from app.api.projects import router as projects_router
 from app.core.config import get_settings
 from app.services.storage_compat_service import init_db
@@ -30,6 +31,7 @@ creator insights through metadata extraction, retrieval, and AI-assisted analysi
 5. Inspect retrieval/context under **5. Retrieval & Context**.
 6. Review verified metrics and deterministic insights under sections **6–7**.
 7. Create a session and ask cited questions under sections **8–9**.
+8. Run bounded regression checks under **10. RAG Evaluation**.
 
 Use the `project_id` returned when creating a project in all subsequent project
 routes. Evidence must be built and indexed before retrieval-backed chat can
@@ -127,6 +129,20 @@ OPENAPI_TAGS = [
             "and index project evidence first. The stream uses Server-Sent Events."
         ),
     },
+    {
+        "name": "10. RAG Evaluation",
+        "description": (
+            "Run bounded regression datasets and inspect persisted faithfulness, "
+            "relevance, context, citation, and missing-evidence results."
+        ),
+    },
+    {
+        "name": "11. LLM Operations",
+        "description": (
+            "Inspect persisted prompt-version, token, configured cost, latency, "
+            "cache, transcript, and LangSmith correlation metadata."
+        ),
+    },
 ]
 
 
@@ -162,4 +178,6 @@ app.include_router(projects_router)
 app.include_router(ingestion_router)
 app.include_router(chat_router)
 app.include_router(metrics_router)
+app.include_router(cost_router)
 app.include_router(insights_router)
+app.include_router(evaluations_router)

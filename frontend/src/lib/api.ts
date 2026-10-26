@@ -20,15 +20,60 @@ import type {
   RetrieveProjectChunksRequest,
   RetrieveResponse,
   SaveVerifiedMetricsResponse,
+  StructuredAnswerPayload,
   TranscriptPreviewResponse,
   VerifiedMetricInput,
 } from "@/types/project";
+import type {
+  EvaluationDatasetSummary,
+  EvaluationRunDetail,
+  EvaluationRunSummary,
+} from "@/types/evaluation";
+import type { CostMetricsResponse } from "@/types/cost";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export async function checkBackend(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
+}
+
+export async function getEvaluationDatasets(): Promise<
+  EvaluationDatasetSummary[]
+> {
+  return request<EvaluationDatasetSummary[]>("/api/evaluations/datasets");
+}
+
+export async function getEvaluationRuns(
+  limit = 20,
+): Promise<EvaluationRunSummary[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return request<EvaluationRunSummary[]>(
+    `/api/evaluations/runs?${params.toString()}`,
+  );
+}
+
+export async function getEvaluationRun(
+  runId: string,
+): Promise<EvaluationRunDetail> {
+  return request<EvaluationRunDetail>(
+    `/api/evaluations/runs/${encodeURIComponent(runId)}`,
+  );
+}
+
+export async function getCostMetrics(
+  projectId?: string | null,
+  limit = 50,
+): Promise<CostMetricsResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  if (projectId) {
+    params.set("project_id", projectId);
+  }
+
+  return request<CostMetricsResponse>(
+    `/api/metrics/cost?${params.toString()}`,
+  );
 }
 
 export async function checkLlmHealth(): Promise<LlmHealthResponse> {
@@ -197,6 +242,7 @@ type StreamChatHandlers = {
   onToken?: (text: string) => void;
   onCitations?: (citations: ChatCitation[]) => void;
   onTrace?: (trace: ChatTrace) => void;
+  onStructuredAnswer?: (payload: StructuredAnswerPayload) => void;
   onDone?: () => void;
   onError?: (message: string) => void;
 };
@@ -409,6 +455,14 @@ function handleStreamEvent(
     return;
   }
 
+  if (event.event === "structured_answer") {
+    if (isStructuredAnswerPayload(data)) {
+      handlers.onStructuredAnswer?.(data);
+    }
+
+    return;
+  }
+
   if (event.event === "done") {
     const sessionId = objectValue(data, "session_id");
 
@@ -439,10 +493,63 @@ function isChatTrace(data: unknown): data is ChatTrace {
   return typeof trace.mode === "string" && typeof trace.model === "string";
 }
 
+function isStructuredAnswerPayload(
+  data: unknown,
+): data is StructuredAnswerPayload {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  const answer = data.answer;
+  const prompt = data.prompt;
+
+  if (!isRecord(answer) || !isRecord(prompt)) {
+    return false;
+  }
+
+  if (
+    typeof prompt.name !== "string" ||
+    typeof prompt.version !== "string" ||
+    typeof data.fallback_used !== "boolean" ||
+    !isStringArray(data.warnings) ||
+    !Array.isArray(answer.evidence) ||
+    !isStringArray(answer.limitations)
+  ) {
+    return false;
+  }
+
+  if (answer.answer_type === "metric") {
+    return typeof answer.summary === "string" && Array.isArray(answer.metrics);
+  }
+
+  if (answer.answer_type === "comparison") {
+    return (
+      typeof answer.winner === "string" &&
+      typeof answer.confidence === "number" &&
+      isStringArray(answer.key_reasons) &&
+      Array.isArray(answer.recommendations)
+    );
+  }
+
+  return (
+    answer.answer_type === "recommendation" &&
+    typeof answer.summary === "string" &&
+    Array.isArray(answer.recommendations)
+  );
+}
+
 function objectValue(data: unknown, key: string): unknown {
   if (!data || typeof data !== "object") {
     return null;
   }
 
   return (data as Record<string, unknown>)[key];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }

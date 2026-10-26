@@ -226,7 +226,7 @@ def search_project_chunks(
         slot=slot,
         source_type=source_type,
     )
-    safe_limit = max(1, min(top_k, 12))
+    safe_limit = max(1, min(top_k, 50))
 
     if hasattr(client, "query_points"):
         response = client.query_points(
@@ -266,6 +266,7 @@ def make_qdrant_point_id(chunk: RagChunk) -> str:
 
 def _chunk_payload(chunk: RagChunk) -> dict[str, Any]:
     return {
+        "chunk_id": _payload_value(chunk.chunk_id),
         "project_id": _payload_value(chunk.project_id),
         "content_id": _payload_value(chunk.content_id),
         "slot": _payload_value(chunk.slot),
@@ -357,6 +358,7 @@ def _point_to_search_result(point: Any) -> dict[str, Any]:
     score = getattr(point, "score", 0.0)
 
     return {
+        "point_id": str(getattr(point, "id", "")),
         "payload": payload if isinstance(payload, dict) else {},
         "score": float(score) if isinstance(score, int | float) else 0.0,
     }

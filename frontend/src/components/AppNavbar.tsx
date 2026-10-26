@@ -23,6 +23,8 @@ export function AppNavbar() {
     { label: "Insights", href: "/analyze#insights" },
     { label: "Chat", href: "/chat" },
     { label: "Evidence", href: "/analyze#evidence" },
+    { label: "Evaluations", href: "/evaluations" },
+    { label: "LLMOps", href: "/dashboard" },
   ];
 
   useEffect(() => {

@@ -41,6 +41,8 @@ def init_db() -> None:
                 content_hash TEXT,
                 metadata_hash TEXT,
                 transcript_hash TEXT,
+                last_extraction_cache_hit INTEGER,
+                last_embedding_reused INTEGER,
                 title TEXT,
                 description TEXT,
                 caption TEXT,
@@ -475,7 +477,8 @@ def upsert_video_metadata(
             """
             UPDATE videos
             SET normalized_url = ?, content_hash = NULL,
-                metadata_hash = NULL, transcript_hash = NULL
+                metadata_hash = NULL, transcript_hash = NULL,
+                last_embedding_reused = NULL
             WHERE id = ?
             """,
             (normalized_url, video_id),
@@ -553,6 +556,51 @@ def update_content_cache_identity(
                 _utc_timestamp(),
                 content_item_id,
             ),
+        )
+        connection.commit()
+
+
+def update_content_cache_observation(
+    content_item_id: str,
+    *,
+    extraction_cache_hit: bool | None = None,
+    embedding_reused: bool | None = None,
+) -> None:
+    init_db()
+    assignments: list[str] = []
+    values: list[Any] = []
+    if extraction_cache_hit is not None:
+        assignments.append("last_extraction_cache_hit = ?")
+        values.append(int(extraction_cache_hit))
+    if embedding_reused is not None:
+        assignments.append("last_embedding_reused = ?")
+        values.append(int(embedding_reused))
+    if not assignments:
+        return
+    assignments.append("updated_at = ?")
+    values.extend((_utc_timestamp(), content_item_id))
+    with _connect() as connection:
+        connection.execute(
+            f"UPDATE videos SET {', '.join(assignments)} WHERE id = ?",
+            values,
+        )
+        connection.commit()
+
+
+def update_project_embedding_observation(
+    project_id: str,
+    *,
+    embedding_reused: bool,
+) -> None:
+    init_db()
+    with _connect() as connection:
+        connection.execute(
+            """
+            UPDATE videos
+            SET last_embedding_reused = ?, updated_at = ?
+            WHERE project_id = ?
+            """,
+            (int(embedding_reused), _utc_timestamp(), project_id),
         )
         connection.commit()
 
@@ -1613,6 +1661,9 @@ def _video_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     record["hashtags"] = json.loads(record.pop("hashtags_json") or "[]")
     record["missing_fields"] = json.loads(record.pop("missing_fields_json") or "[]")
     record["transcript_available"] = bool(record["transcript_available"])
+    for field in ("last_extraction_cache_hit", "last_embedding_reused"):
+        if record.get(field) is not None:
+            record[field] = bool(record[field])
     return record
 
 
@@ -1658,6 +1709,8 @@ def _metadata_from_video_record(
         "error_message": record["error_message"],
         "metric_source_note": record["metric_source_note"],
         "transcript_source_note": record["transcript_source_note"],
+        "last_extraction_cache_hit": record.get("last_extraction_cache_hit"),
+        "last_embedding_reused": record.get("last_embedding_reused"),
     }
 
 
@@ -1688,6 +1741,8 @@ def _ensure_video_columns(connection: sqlite3.Connection) -> None:
         "content_hash": "TEXT",
         "metadata_hash": "TEXT",
         "transcript_hash": "TEXT",
+        "last_extraction_cache_hit": "INTEGER",
+        "last_embedding_reused": "INTEGER",
     }
 
     for column_name, column_type in required_columns.items():

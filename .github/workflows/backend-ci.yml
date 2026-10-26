@@ -1,0 +1,115 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches:
+      - Dev-Staging
+      - main
+  push:
+    branches:
+      - Dev-Staging
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-quality:
+    name: Backend compile, tests, and migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: creatorlens_test
+          POSTGRES_USER: creatorlens_test
+          POSTGRES_PASSWORD: creatorlens_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U creatorlens_test -d creatorlens_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      ENVIRONMENT: test
+      TEST_DATABASE_URL: postgresql+psycopg://creatorlens_test:creatorlens_test@localhost:5432/creatorlens_test
+      LANGSMITH_TRACING: "false"
+      PYTHONHASHSEED: "0"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile backend and tests
+        run: python -m compileall app tests
+
+      - name: Run backend unit tests
+        run: python -m pytest tests/unit -q
+
+      - name: Run backend integration tests
+        run: python -m pytest tests/integration -q
+
+      - name: Upgrade disposable PostgreSQL schema
+        run: python -m alembic -x database=test upgrade head
+
+      - name: Confirm disposable PostgreSQL migration head
+        run: python -m alembic -x database=test current
+
+  evaluation-smoke:
+    name: Deterministic RAG evaluation smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      LANGSMITH_TRACING: "false"
+      PYTHONHASHSEED: "0"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run bounded deterministic evaluation
+        run: >-
+          python -m app.evaluations.regression_runner
+          --dataset creatorlens_ci_smoke_v1
+          --no-persist

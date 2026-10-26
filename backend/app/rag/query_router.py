@@ -1,8 +1,9 @@
 from typing import TypedDict
 
 from app.models.chat import QuestionIntent
+from app.schemas.retrieval import RetrievalMode
 
-# Intents that require evidence from both content slots.
+
 MULTI_SOURCE_INTENTS: frozenset[QuestionIntent] = frozenset(
     {
         "performance_reasoning",
@@ -16,6 +17,7 @@ MULTI_SOURCE_INTENTS: frozenset[QuestionIntent] = frozenset(
 
 
 class RetrievalPlan(TypedDict):
+    mode: RetrievalMode
     use_structured_metadata: bool
     retrieve: bool
     source_type: str | None
@@ -30,36 +32,16 @@ def classify_question(message: str) -> QuestionIntent:
 
     if _contains_any(
         normalized_message,
-        [
-            "missing",
-            "unavailable",
-            "metadata",
-            "metadata availability",
-        ],
+        ["missing", "unavailable", "metadata", "metadata availability"],
     ):
         return "metadata_missing"
-
     if _contains_any(
         normalized_message,
-        [
-            "score",
-            "insight summary",
-            "creator insight summary",
-            "creator insight score",
-        ],
+        ["score", "insight summary", "creator insight summary", "creator insight score"],
     ):
         return "insight_summary"
-
-    if _contains_any(
-        normalized_message,
-        [
-            "rewrite",
-            "caption",
-            "opening line",
-        ],
-    ):
+    if _contains_any(normalized_message, ["rewrite", "caption", "opening line"]):
         return "rewrite_request"
-
     if _contains_any(
         normalized_message,
         [
@@ -72,7 +54,21 @@ def classify_question(message: str) -> QuestionIntent:
         ],
     ):
         return "hook_analysis"
-
+    if (
+        _contains_any(
+            normalized_message,
+            [
+                "engagement rate",
+                "views",
+                "likes",
+                "comments",
+                "metrics",
+                "follower count",
+            ],
+        )
+        and not _contains_any(normalized_message, ["why", "explain", "reason"])
+    ):
+        return "metrics"
     if _contains_any(
         normalized_message,
         [
@@ -82,11 +78,11 @@ def classify_question(message: str) -> QuestionIntent:
             "stronger engagement",
             "more engagement",
             "compare performance",
+            "compare",
             "performance",
         ],
     ):
         return "performance_reasoning"
-
     if _contains_any(
         normalized_message,
         [
@@ -101,7 +97,6 @@ def classify_question(message: str) -> QuestionIntent:
         ],
     ):
         return "improvement_suggestions"
-
     if _contains_any(
         normalized_message,
         [
@@ -114,13 +109,6 @@ def classify_question(message: str) -> QuestionIntent:
             "verified metrics",
             "metric completeness",
             "follower count",
-        ],
-    ):
-        return "metrics"
-
-    if _contains_any(
-        normalized_message,
-        [
             "engagement rate",
             "views",
             "likes",
@@ -129,33 +117,16 @@ def classify_question(message: str) -> QuestionIntent:
         ],
     ):
         return "metrics"
-
     if _contains_any(
         normalized_message,
-        [
-            "creator",
-            "follower count",
-            "followers",
-            "who is",
-            "upload date",
-            "duration",
-            "posted",
-        ],
+        ["creator", "followers", "who is", "upload date", "duration", "posted"],
     ):
         return "creator_info"
-
     if _contains_any(
         normalized_message,
-        [
-            "story",
-            "topic",
-            "about",
-            "summarize",
-            "summary",
-        ],
+        ["story", "topic", "about", "summarize", "summary"],
     ):
         return "content_summary"
-
     return "general"
 
 
@@ -163,34 +134,44 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
     inferred_platform = _infer_platform(message)
     inferred_slot = _infer_slot(message)
 
-    if intent == "metrics":
-        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
-
-    if intent == "creator_info":
-        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
-
-    if intent == "metadata_missing":
-        return _plan(retrieve=False, source_type=None, platform=None, top_k=4)
-
+    if intent in {"metrics", "creator_info", "metadata_missing"}:
+        return _plan(
+            mode=RetrievalMode.METRIC_DIRECT,
+            retrieve=False,
+            source_type=None,
+            platform=None,
+            top_k=4,
+        )
     if intent == "insight_summary":
-        return _plan(retrieve=True, source_type=None, platform=None, top_k=10, multi_source=True)
-
+        return _plan(
+            mode=RetrievalMode.STRATEGY_RECOMMENDATION,
+            retrieve=True,
+            source_type=None,
+            platform=None,
+            top_k=10,
+            multi_source=True,
+        )
     if intent == "hook_analysis":
-        # Retrieve all source types from BOTH slots — balanced retrieval handles hook priority.
-        return _plan(retrieve=True, source_type=None, platform=None, top_k=10, multi_source=True)
-
+        return _plan(
+            mode=RetrievalMode.HOOK_FOCUSED,
+            retrieve=True,
+            source_type=None,
+            platform=None,
+            top_k=10,
+            multi_source=True,
+        )
     if intent == "content_summary":
         return _plan(
+            mode=RetrievalMode.TRANSCRIPT_DEEP,
             retrieve=True,
             source_type=None,
             platform=inferred_platform,
             slot=inferred_slot,
             top_k=6,
         )
-
     if intent == "performance_reasoning":
-        # Never infer a single slot — reasoning needs both sides.
         return _plan(
+            mode=RetrievalMode.BALANCED_COMPARE,
             retrieve=True,
             source_type=None,
             platform=None,
@@ -198,9 +179,9 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
             top_k=12,
             multi_source=True,
         )
-
     if intent == "improvement_suggestions":
         return _plan(
+            mode=RetrievalMode.STRATEGY_RECOMMENDATION,
             retrieve=True,
             source_type=None,
             platform=None,
@@ -208,10 +189,9 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
             top_k=12,
             multi_source=True,
         )
-
     if intent == "rewrite_request":
-        # Need hook + description/caption from target AND reference — no source_type filter.
         return _plan(
+            mode=RetrievalMode.HOOK_FOCUSED,
             retrieve=True,
             source_type=None,
             platform=None,
@@ -219,8 +199,8 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
             top_k=10,
             multi_source=True,
         )
-
     return _plan(
+        mode=RetrievalMode.TRANSCRIPT_DEEP,
         retrieve=True,
         source_type=None,
         platform=inferred_platform,
@@ -231,18 +211,12 @@ def get_retrieval_plan(intent: QuestionIntent, message: str) -> RetrievalPlan:
 
 
 def parse_target_reference_slots(message: str) -> tuple[str | None, str | None]:
-    """
-    Parse (target_slot, reference_slot) from improvement/rewrite messages.
-    E.g. "improve Content 1 from Content 2" → ("content_1", "content_2").
-    """
     normalized = _normalize(message)
-    has_c1 = "content 1" in normalized or "content one" in normalized
-    has_c2 = "content 2" in normalized or "content two" in normalized
-
-    if not has_c1 and not has_c2:
+    has_content_1 = "content 1" in normalized or "content one" in normalized
+    has_content_2 = "content 2" in normalized or "content two" in normalized
+    if not has_content_1 and not has_content_2:
         return None, None
 
-    # "... from/based on/using Content X" → X is the reference.
     reference_markers = [
         "from content 1",
         "based on content 1",
@@ -254,25 +228,24 @@ def parse_target_reference_slots(message: str) -> tuple[str | None, str | None]:
         "like content 2",
     ]
     for marker in reference_markers:
-        if marker in normalized:
-            if marker.endswith("1"):
-                return ("content_2" if has_c2 else None), "content_1"
-            else:
-                return ("content_1" if has_c1 else None), "content_2"
+        if marker not in normalized:
+            continue
+        if marker.endswith("1"):
+            return ("content_2" if has_content_2 else None), "content_1"
+        return ("content_1" if has_content_1 else None), "content_2"
 
-    # "improve/rewrite/fix Content X" without explicit reference — first mention is target.
     if _contains_any(normalized, ["improve", "rewrite", "fix", "for", "of"]):
-        c1_idx = normalized.find("content 1") if has_c1 else 9999
-        c2_idx = normalized.find("content 2") if has_c2 else 9999
-        if c1_idx < c2_idx:
-            return "content_1", ("content_2" if has_c2 else None)
-        if c2_idx < c1_idx:
-            return "content_2", ("content_1" if has_c1 else None)
-
+        content_1_index = normalized.find("content 1") if has_content_1 else 9999
+        content_2_index = normalized.find("content 2") if has_content_2 else 9999
+        if content_1_index < content_2_index:
+            return "content_1", ("content_2" if has_content_2 else None)
+        if content_2_index < content_1_index:
+            return "content_2", ("content_1" if has_content_1 else None)
     return None, None
 
 
 def _plan(
+    mode: RetrievalMode,
     retrieve: bool,
     source_type: str | None,
     platform: str | None,
@@ -281,6 +254,7 @@ def _plan(
     multi_source: bool = False,
 ) -> RetrievalPlan:
     return {
+        "mode": mode,
         "use_structured_metadata": True,
         "retrieve": retrieve,
         "source_type": source_type,
@@ -293,49 +267,22 @@ def _plan(
 
 def _infer_platform(message: str) -> str | None:
     normalized_message = _normalize(message)
-    mentions_youtube = "youtube" in normalized_message
-    mentions_instagram = "instagram" in normalized_message
-    mentions_facebook = "facebook" in normalized_message
-
     mentioned_platforms = [
         platform
-        for platform, mentioned in (
-            ("youtube", mentions_youtube),
-            ("instagram", mentions_instagram),
-            ("facebook", mentions_facebook),
-        )
-        if mentioned
+        for platform in ("youtube", "instagram", "facebook")
+        if platform in normalized_message
     ]
-
-    if len(mentioned_platforms) == 1:
-        return mentioned_platforms[0]
-
-    if mentions_youtube and not mentions_instagram and not mentions_facebook:
-        return "youtube"
-
-    if mentions_instagram and not mentions_youtube and not mentions_facebook:
-        return "instagram"
-
-    return None
+    return mentioned_platforms[0] if len(mentioned_platforms) == 1 else None
 
 
 def _infer_slot(message: str) -> str | None:
     normalized_message = _normalize(message)
-    mentions_content_1 = (
-        "content 1" in normalized_message
-        or "content one" in normalized_message
-    )
-    mentions_content_2 = (
-        "content 2" in normalized_message
-        or "content two" in normalized_message
-    )
-
-    if mentions_content_1 and not mentions_content_2:
+    content_1 = "content 1" in normalized_message or "content one" in normalized_message
+    content_2 = "content 2" in normalized_message or "content two" in normalized_message
+    if content_1 and not content_2:
         return "content_1"
-
-    if mentions_content_2 and not mentions_content_1:
+    if content_2 and not content_1:
         return "content_2"
-
     return None
 
 

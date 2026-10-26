@@ -122,6 +122,32 @@ def update_content_cache_identity(
         )
 
 
+def update_content_cache_observation(
+    content_item_id: str,
+    *,
+    extraction_cache_hit: bool | None = None,
+    embedding_reused: bool | None = None,
+) -> None:
+    with database_session() as session:
+        ContentItemRepository(session).set_cache_observation(
+            content_item_id,
+            extraction_cache_hit=extraction_cache_hit,
+            embedding_reused=embedding_reused,
+        )
+
+
+def update_project_embedding_observation(
+    project_id: str,
+    *,
+    embedding_reused: bool,
+) -> None:
+    with database_session() as session:
+        ContentItemRepository(session).set_project_embedding_observation(
+            project_id,
+            embedding_reused=embedding_reused,
+        )
+
+
 def get_video_by_project_platform(
     project_id: str, platform: str
 ) -> dict[str, Any] | None:

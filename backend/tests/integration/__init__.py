@@ -1,1 +1,1 @@
-"""Phase-owned integration tests."""
+"""Integration tests for cross-component backend behavior."""

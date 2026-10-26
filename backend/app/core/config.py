@@ -80,7 +80,32 @@ class Settings(BaseSettings):
         default=2200,
         alias="LLM_MAX_OUTPUT_TOKENS",
     )
+    llm_input_cost_per_million_usd: float | None = Field(
+        default=None,
+        alias="LLM_INPUT_COST_PER_MILLION_USD",
+        ge=0,
+    )
+    llm_output_cost_per_million_usd: float | None = Field(
+        default=None,
+        alias="LLM_OUTPUT_COST_PER_MILLION_USD",
+        ge=0,
+    )
     debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")
+
+    langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")
+    langsmith_api_key: str | None = Field(default=None, alias="LANGSMITH_API_KEY")
+    langsmith_project: str = Field(
+        default="creatorlens-local",
+        alias="LANGSMITH_PROJECT",
+    )
+    langsmith_endpoint: str | None = Field(
+        default=None,
+        alias="LANGSMITH_ENDPOINT",
+    )
+    langsmith_workspace_id: str | None = Field(
+        default=None,
+        alias="LANGSMITH_WORKSPACE_ID",
+    )
 
     qdrant_url: str | None = Field(default=None, alias="QDRANT_URL")
     qdrant_api_key: str | None = Field(default=None, alias="QDRANT_API_KEY")
@@ -154,6 +179,12 @@ class Settings(BaseSettings):
             for language in self.transcript_fallback_languages.split(",")
             if language.strip()
         ]
+
+    @property
+    def langsmith_tracing_configured(self) -> bool:
+        return self.langsmith_tracing and bool(
+            (self.langsmith_api_key or "").strip()
+        )
 
     def sqlalchemy_database_url(self, *, test: bool = False) -> str | None:
         value = self.test_database_url if test else self.database_url
