@@ -189,9 +189,8 @@ export function AppNavbar({ children }: { children: ReactNode }) {
         title="Explore without an account"
       >
         <p className="muted">
-          CreatorLens is currently an open demo. Google sign-in is planned, but
-          is not available yet. You can use the existing workspace without
-          signing in.
+          CreatorLens is currently an open demo. You can use the existing
+          workspace without signing in.
         </p>
         <Link
           href="/analyze"
