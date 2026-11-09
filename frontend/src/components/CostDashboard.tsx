@@ -396,7 +396,7 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
           </p>
           <h2 className="mt-2 text-xl font-semibold">Run telemetry</h2>
         </div>
-        <span className="font-mono text-[11px] text-slate-500">
+        <span className="font-mono text-[14px] text-slate-500">
           {shortId(run.id)}
         </span>
       </div>
@@ -539,7 +539,7 @@ function TelemetryValue({
           : "min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4"
       }
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+      <p className="text-[14px] font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
       <p

@@ -427,7 +427,7 @@ function CaseResults({
           <h2 className="mt-2 text-xl font-semibold">Case-level results</h2>
         </div>
         {detail ? (
-          <span className="font-mono text-[11px] text-slate-500">
+          <span className="font-mono text-[14px] text-slate-500">
             {shortId(detail.run.id)}
           </span>
         ) : null}
@@ -544,7 +544,7 @@ function CheckRow({
           {check.passed ? "✓" : "×"}
         </span>
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-slate-500">
+      <p className="mt-2 text-[14px] leading-5 text-slate-500">
         {check.message}
       </p>
     </div>

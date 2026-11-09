@@ -12,7 +12,12 @@ import type {
 
 type PlatformFilter = ContentPlatform | null;
 type SlotFilter = ContentSlot | null;
-type SourceTypeFilter = "metadata" | "description" | "hook" | "transcript" | null;
+type SourceTypeFilter =
+  | "metadata"
+  | "description"
+  | "hook"
+  | "transcript"
+  | null;
 
 type SuggestedQuery = {
   label: string;
@@ -113,7 +118,7 @@ export function RetrievalTestPanel({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
@@ -269,15 +274,21 @@ export function RetrievalTestPanel({
 
 function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
   return (
-    <li className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+    <li
+      className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3"
+      data-content-slot={chunk.slot}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-950">
             {chunk.citation_label}
           </p>
           <p className="mt-1 text-xs font-medium uppercase text-slate-500">
-            {platformLabel(chunk.platform)} / {sourceTypeLabel(chunk.source_type)}
-            {chunk.slot ? ` / ${slotFilterLabel(chunk.slot as SlotFilter)}` : ""}
+            {platformLabel(chunk.platform)} /{" "}
+            {sourceTypeLabel(chunk.source_type)}
+            {chunk.slot
+              ? ` / ${slotFilterLabel(chunk.slot as SlotFilter)}`
+              : ""}
           </p>
         </div>
         <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700">
