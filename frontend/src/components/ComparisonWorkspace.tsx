@@ -5,17 +5,17 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  AnalysisProgress,
   type AnalysisProgressStep,
   type ProgressStatus,
 } from "@/components/AnalysisProgress";
+import { AiReasoningStatus } from "./AiReasoningStatus";
 import { ContentCard } from "@/components/ContentCard";
 import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
 import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
 import { ExecutiveInsightSnapshot } from "@/components/ExecutiveInsightSnapshot";
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
 import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
-import { SectionHeader } from "@/components/SectionHeader";
+import { PageHeading, Notice } from "./ui";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import {
@@ -50,13 +50,29 @@ const INITIAL_PROGRESS_STEPS: AnalysisProgressStep[] = [
 
 export function ComparisonWorkspace() {
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("overview");
+  useEffect(() => {
+    const sync = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveTab(
+        ["overview", "insights", "evidence", "transcript", "chat"].includes(
+          hash,
+        )
+          ? hash
+          : "overview",
+      );
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const startNew = searchParams.get("new") === "1";
   const [content1Url, setContent1Url] = useState("");
   const [content2Url, setContent2Url] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRestoringProject, setIsRestoringProject] = useState(false);
-  const [progressSteps, setProgressSteps] = useState(INITIAL_PROGRESS_STEPS);
-  const [showProgress, setShowProgress] = useState(false);
+  const [, setProgressSteps] = useState(INITIAL_PROGRESS_STEPS);
+  const [, setShowProgress] = useState(false);
   const [createdProject, setCreatedProject] =
     useState<ProjectCreateResponse | null>(null);
   const [projectDetail, setProjectDetail] =
@@ -145,7 +161,7 @@ export function ComparisonWorkspace() {
         setShowProgress(false);
       }
     } catch (caughtError) {
-      clearLatestProject();
+      clearActiveProjectId();
       setProjectDetail(null);
       setInsightSummary(null);
       setCreatedProject(null);
@@ -261,8 +277,10 @@ export function ComparisonWorkspace() {
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
       if (startNew) {
-        clearLatestProject();
+        clearActiveProjectId();
         resetWorkspaceState();
+        // Consume this one-time action so a later reload restores the new project.
+        window.history.replaceState(null, "", "/analyze");
         setIsRestoringProject(false);
         return;
       }
@@ -279,27 +297,6 @@ export function ComparisonWorkspace() {
 
     return () => window.clearTimeout(restoreTimer);
   }, [resetWorkspaceState, restoreProject, startNew]);
-
-  useEffect(() => {
-    if (!projectDetail) {
-      return;
-    }
-
-    const hash = window.location.hash;
-
-    if (!hash) {
-      return;
-    }
-
-    const scrollTimer = window.setTimeout(() => {
-      document.querySelector(hash)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
-
-    return () => window.clearTimeout(scrollTimer);
-  }, [projectDetail]);
 
   async function handleAnalyzeContent() {
     setIsSubmitting(true);
@@ -353,33 +350,33 @@ export function ComparisonWorkspace() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <section className="mx-auto max-w-7xl px-6 py-12 sm:px-8 lg:px-10">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_430px]">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
-              Analyze
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold leading-tight text-slate-950 dark:text-slate-50">
-              Analyze two pieces of short-form content
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
-              Paste any supported YouTube, Instagram, or Facebook short-form URLs.
-              CreatorLens AI will detect platforms, extract public metadata,
-              build evidence, and prepare creator insights.
-            </p>
-
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">
-                Best-effort extraction with clear limits
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Confirmed public metrics are shown when available. Unavailable
-                fields are not estimated.
-              </p>
-            </div>
-          </div>
-
+    <main className="page-container comparison-workspace">
+      <PageHeading
+        eyebrow="Creator workspace"
+        title={hasResults ? "Your comparison" : "Compare two videos"}
+        description={
+          hasResults
+            ? "Review the evidence, understand the differences, and decide what to test next."
+            : "Bring two public videos. We'll bring the evidence."
+        }
+        action={
+          hasResults ? (
+            <button
+              className="button-secondary"
+              onClick={() => {
+                clearLatestProject();
+                resetWorkspaceState();
+                setActiveTab("overview");
+                window.history.replaceState(null, "", "/analyze?new=1");
+              }}
+            >
+              New comparison
+            </button>
+          ) : undefined
+        }
+      />
+      {!hasResults && !isRestoringProject && (
+        <>
           <VideoUrlForm
             content1Url={content1Url}
             content2Url={content2Url}
@@ -388,162 +385,157 @@ export function ComparisonWorkspace() {
             onSubmit={handleAnalyzeContent}
             isSubmitting={isSubmitting}
           />
-        </div>
-
-        <div className="mt-8 grid gap-4">
-          <AnalysisProgress steps={progressSteps} isVisible={showProgress} />
+          <p className="muted text-sm mt-5 max-w-3xl">
+            Extraction is best-effort. Missing public metrics are never
+            estimated. Comparing different platforms or audiences provides
+            context, not proof of what caused performance.
+          </p>
+        </>
+      )}
+      <div className="grid gap-4 my-6">
+        {isRestoringProject && <Notice>Restoring your comparison...</Notice>}
+        {createdProject && !hasResults && !ingestionStatus && (
+          <Notice>Comparison created. Waiting for processing status...</Notice>
+        )}
+        {hasResults && ingestionStatus?.status === "READY" ? (
+          <details className="text-sm muted">
+            <summary>Analysis ready / Processing details</summary>
+            <IngestionProgressPanel
+              status={ingestionStatus}
+              isPolling={false}
+            />
+          </details>
+        ) : (
           <IngestionProgressPanel
             status={ingestionStatus}
             isPolling={Boolean(activeIngestion)}
           />
-
-          {isRestoringProject ? (
-            <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-100">
-              Restoring the current analysis session...
-            </p>
-          ) : null}
-
-          {createdProject ? (
-            <p className="rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-100">
-              {hasResults
-                ? "Current analysis session is loaded from your analyzed URLs."
-                : "Comparison created. CreatorLens AI is organizing public evidence for Content 1 and Content 2."}
-            </p>
-          ) : null}
-
-          {partialNotice ? (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-              {partialNotice}
-            </p>
-          ) : null}
-
-          {error ? (
-            <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-100">
-              {error}
-            </p>
-          ) : null}
-        </div>
-
-        <section className="mt-10 grid gap-4">
-          <ExecutiveInsightSnapshot
-            summary={insightSummary}
-            isLoading={isSubmitting}
-          />
-        </section>
-
-        <section className="mt-8">
-          <SectionHeader
-            eyebrow="Content overview"
-            title="Extracted public metadata and transcript signals"
-            text="Each card separates confirmed public metrics from unavailable fields so the comparison stays honest."
-          />
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <ContentCard
-              label="Content 1"
-              item={contentItem(projectDetail, "content_1")}
-              isPending={isSubmitting}
-            />
-            <ContentCard
-              label="Content 2"
-              item={contentItem(projectDetail, "content_2")}
-              isPending={isSubmitting}
-            />
-          </div>
-        </section>
-
-        {hasResults ? (
-          <>
-            <section className="mt-4 grid gap-4">
-              <MetadataAvailabilityPanel projectId={projectDetail?.project_id ?? null} />
-            </section>
-
-            <section id="insights" className="mt-4 grid gap-4">
-              <CreatorInsightSummaryPanel
-                projectId={projectDetail?.project_id ?? null}
-                indexReady={indexReady}
-                initialSummary={insightSummary}
-                onSummaryLoaded={setInsightSummary}
-              />
-            </section>
-
-            <section id="chat" className="mt-4 rounded-2xl border border-teal-200 bg-white p-6 shadow-md shadow-teal-900/5 dark:border-teal-900 dark:bg-slate-900">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
-                    Streaming creator chat
-                  </p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">
-                    Continue in the dedicated assistant workspace
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    Ask performance, hook, rewrite, and improvement questions
-                    grounded in cited metadata, transcripts, and creator insights.
-                  </p>
-                </div>
-                <Link
-                  href="/chat"
-                  className="inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-teal-400 dark:text-slate-950 dark:hover:bg-teal-300"
-                >
-                  Open Creator Chat
-                </Link>
-              </div>
-            </section>
-
-            <section id="evidence" className="mt-4 grid gap-4">
-              <EvidenceSystemDetails
-                projectId={projectDetail?.project_id ?? null}
-                indexResult={indexResult}
-                indexReady={indexReady}
-                onIndexed={setIndexResult}
-              />
-            </section>
-
-            <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <summary className="cursor-pointer list-none">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
-                  Transcript Evidence
-                </p>
-                <h2 className="mt-2 text-base font-semibold text-slate-950 dark:text-slate-50">
-                  Preview extracted transcript segments
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  Optional evidence review for multilingual captions and
-                  best-effort transcription.
-                </p>
-              </summary>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <TranscriptPreviewPanel
-                  projectId={projectDetail?.project_id ?? null}
-                  item={contentItem(projectDetail, "content_1")}
-                  label="Content 1"
-                />
-                <TranscriptPreviewPanel
-                  projectId={projectDetail?.project_id ?? null}
-                  item={contentItem(projectDetail, "content_2")}
-                  label="Content 2"
-                />
-              </div>
-            </details>
-          </>
-        ) : (
-          <EmptyState />
         )}
-      </section>
+        {partialNotice && <Notice tone="warning">{partialNotice}</Notice>}
+        {error && <Notice tone="error">{error}</Notice>}
+      </div>
+      {hasResults && (
+        <>
+          <nav className="section-tabs" aria-label="Comparison sections">
+            {[
+              ["overview", "Overview"],
+              ["insights", "Insights"],
+              ["evidence", "Evidence"],
+              ["transcript", "Transcript"],
+              ["chat", "Ask AI"],
+            ].map(([id, label]) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                aria-current={activeTab === id ? "location" : undefined}
+                onClick={(event) => {
+                  event.preventDefault();
+                  window.history.pushState(null, "", `#${id}`);
+                  setActiveTab(id);
+                }}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+          <section
+            id="overview"
+            hidden={activeTab !== "overview"}
+            className="section-panel"
+          >
+            <ExecutiveInsightSnapshot
+              summary={insightSummary}
+              isLoading={isSubmitting}
+            />
+            <div className="grid gap-5 mt-6 xl:grid-cols-2">
+              <ContentCard
+                label="Content 1"
+                item={contentItem(projectDetail, "content_1")}
+                isPending={isSubmitting}
+              />
+              <ContentCard
+                label="Content 2"
+                item={contentItem(projectDetail, "content_2")}
+                isPending={isSubmitting}
+              />
+            </div>
+          </section>
+          <section
+            id="insights"
+            hidden={activeTab !== "insights"}
+            className="section-panel"
+          >
+            <CreatorInsightSummaryPanel
+              projectId={projectDetail?.project_id ?? null}
+              indexReady={indexReady}
+              initialSummary={insightSummary}
+              onSummaryLoaded={setInsightSummary}
+            />
+            <details className="technical-details">
+              <summary>AI connection diagnostic</summary>
+              <p className="muted text-xs mb-3">
+                The Check action sends a model test request. It may consume
+                provider quota.
+              </p>
+              <AiReasoningStatus />
+            </details>
+          </section>
+          <section
+            id="evidence"
+            hidden={activeTab !== "evidence"}
+            className="section-panel grid gap-5"
+          >
+            <EvidenceSystemDetails
+              projectId={projectDetail?.project_id ?? null}
+              indexResult={indexResult}
+              indexReady={indexReady}
+              onIndexed={setIndexResult}
+            />
+            <MetadataAvailabilityPanel
+              projectId={projectDetail?.project_id ?? null}
+            />
+          </section>
+          <section
+            id="transcript"
+            hidden={activeTab !== "transcript"}
+            className="section-panel"
+          >
+            <h2 className="text-xl mb-2">Read the original evidence</h2>
+            <p className="muted mb-5">
+              Captions and transcriptions may contain errors. Review language,
+              source and timestamps before interpreting a passage.
+            </p>
+            <div className="grid gap-5 xl:grid-cols-2">
+              <TranscriptPreviewPanel
+                projectId={projectDetail?.project_id ?? null}
+                item={contentItem(projectDetail, "content_1")}
+                label="Content 1"
+              />
+              <TranscriptPreviewPanel
+                projectId={projectDetail?.project_id ?? null}
+                item={contentItem(projectDetail, "content_2")}
+                label="Content 2"
+              />
+            </div>
+          </section>
+          <section
+            id="chat"
+            hidden={activeTab !== "chat"}
+            className="section-panel ui-panel"
+          >
+            <h2 className="text-xl">Ask the evidence a question</h2>
+            <p className="muted mt-3 mb-5">
+              Compare opening hooks, explore the metrics, or ask what to
+              improve. The assistant uses this active comparison and returns
+              supporting citations.
+            </p>
+            <Link href="/chat" className="button-primary">
+              Open AI Assistant
+            </Link>
+          </section>
+        </>
+      )}
     </main>
-  );
-}
-
-function EmptyState() {
-  return (
-    <section className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900">
-      <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">
-        Your comparison workspace is ready.
-      </p>
-      <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-        Paste Content URL 1 and Content URL 2, then analyze to see content cards,
-        metadata availability, cited insights, and advanced evidence controls.
-      </p>
-    </section>
   );
 }
 
@@ -562,7 +554,9 @@ function restoredProgressSteps(): AnalysisProgressStep[] {
 }
 
 function isTerminalStatus(status: IngestionJobStatus): boolean {
-  return status === "READY" || status === "PARTIAL_READY" || status === "FAILED";
+  return (
+    status === "READY" || status === "PARTIAL_READY" || status === "FAILED"
+  );
 }
 
 function progressStepsForIngestion(

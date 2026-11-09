@@ -27,7 +27,7 @@ const FEATURES = [
 
 export function FeatureGrid() {
   return (
-    <section id="insights" className="border-b border-slate-200 bg-white py-16 dark:border-slate-800 dark:bg-slate-950">
+    <section id="insights" className="border-b border-slate-200 bg-white py-16">
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -46,7 +46,7 @@ export function FeatureGrid() {
           {FEATURES.map((feature) => (
             <article
               key={feature.title}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm"
             >
               <h3 className="text-base font-semibold text-slate-950">
                 {feature.title}

@@ -1,81 +1,200 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-
-import {
-  getActiveProjectId,
-  subscribeToActiveProject,
-} from "@/lib/app-session";
-
-import { AiReasoningStatus } from "./AiReasoningStatus";
-import { ThemeToggle } from "./ThemeToggle";
-
-export function AppNavbar() {
-  const pathname = usePathname();
-  const [latestProjectId, setLatestProjectId] = useState(() =>
-    getActiveProjectId(),
-  );
-  const navLinks = [
-    { label: "Home", href: "/" },
-    { label: "Analyze", href: "/analyze" },
-    { label: "Insights", href: "/analyze#insights" },
-    { label: "Chat", href: "/chat" },
-    { label: "Evidence", href: "/analyze#evidence" },
-    { label: "Evaluations", href: "/evaluations" },
-    { label: "LLMOps", href: "/dashboard" },
-  ];
-
-  useEffect(() => {
-    return subscribeToActiveProject(setLatestProjectId);
-  }, []);
-
+import { useState, type ReactNode } from "react";
+import { Dialog, Icon } from "./ui";
+const creatorLinks = [
+  { href: "/analyze", label: "Compare videos", icon: "compare" },
+  { href: "/chat", label: "AI Assistant", icon: "chat" },
+];
+const engineerLinks = [
+  { href: "/evaluations", label: "RAG Evaluation", icon: "shield" },
+  { href: "/dashboard", label: "LLM Observability", icon: "chart" },
+];
+function Brand() {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 shadow-sm shadow-slate-950/[0.03] backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/85 dark:shadow-black/20">
-      <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between gap-4 px-6 sm:px-8 lg:px-10">
-        <Link href="/" className="flex shrink-0 items-center gap-2 text-base font-semibold text-slate-950 dark:text-slate-50">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-xs font-bold text-white shadow-sm dark:bg-teal-400 dark:text-slate-950">
-            CL
-          </span>
-          <span>CreatorLens AI</span>
-        </Link>
-
-        <nav className="hidden items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 text-sm font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 md:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              className={`rounded-full px-3 py-1.5 transition hover:bg-white hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white ${
-                isActive(pathname, link.href)
-                  ? "bg-white text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white"
-                  : ""
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <AiReasoningStatus />
-          <ThemeToggle />
-          <Link
-            href={latestProjectId ? "/analyze" : "/analyze?new=1"}
-            className="hidden h-10 items-center justify-center rounded-full bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 dark:bg-teal-400 dark:text-slate-950 dark:hover:bg-teal-300 sm:inline-flex"
-          >
-            Start Analysis
-          </Link>
-        </div>
-      </div>
-    </header>
+    <Link href="/" className="brand" aria-label="CreatorLens AI home">
+      <span className="brand-mark">
+        <Icon name="compare" size={19} />
+      </span>
+      <span>
+        CreatorLens<span className="brand-ai"> AI</span>
+      </span>
+    </Link>
   );
 }
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/") {
-    return pathname === "/";
-  }
-
-  return href.startsWith(pathname) && pathname !== "/";
+export function AppNavbar({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const [drawer, setDrawer] = useState(false);
+  const [auth, setAuth] = useState(false);
+  const publicPage = pathname === "/";
+  const navigation = (
+    <nav aria-label="Workspace navigation">
+      <p className="nav-group-label">Creator workspace</p>
+      {creatorLinks.map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          className="rail-link"
+          aria-current={pathname === l.href ? "page" : undefined}
+          onClick={() => setDrawer(false)}
+        >
+          <Icon name={l.icon} />
+          {l.label}
+        </Link>
+      ))}
+      <p className="nav-group-label engineering-label">Engineering</p>
+      {engineerLinks.map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          className="rail-link"
+          aria-current={pathname === l.href ? "page" : undefined}
+          onClick={() => setDrawer(false)}
+        >
+          <Icon name={l.icon} />
+          {l.label}
+        </Link>
+      ))}
+      <Link
+        className="rail-link product-link"
+        href="/"
+        onClick={() => setDrawer(false)}
+      >
+        <Icon name="home" />
+        About CreatorLens
+      </Link>
+    </nav>
+  );
+  const active = [...creatorLinks, ...engineerLinks].find(
+    (l) => l.href === pathname,
+  );
+  return (
+    <>
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      {publicPage ? (
+        <header className="public-header">
+          <div className="public-header-inner">
+            <Brand />
+            <nav className="public-links" aria-label="Public navigation">
+              <Link href="/#product">Product</Link>
+              <Link href="/#how-it-works">How it works</Link>
+              <Link href="/#features">Features</Link>
+              <Link href="/evaluations">Engineering</Link>
+            </nav>
+            <div className="header-actions">
+              <button
+                className="button-secondary public-signin"
+                onClick={() => setAuth(true)}
+              >
+                Sign in
+              </button>
+              <Link className="button-primary public-demo" href="/analyze">
+                Get started <Icon name="arrow" size={16} />
+              </Link>
+              <button
+                className="icon-button public-menu"
+                onClick={() => setDrawer(true)}
+                aria-label="Open navigation"
+                aria-expanded={drawer}
+              >
+                <Icon name="menu" />
+              </button>
+            </div>
+          </div>
+        </header>
+      ) : (
+        <>
+          <aside className="application-rail">
+            <Brand />
+            {navigation}
+            <div className="rail-footer">
+              <span className="status-dot" />
+              Demo workspace<p>Public evidence. No account required.</p>
+            </div>
+          </aside>
+          <header className="workspace-header">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                className="icon-button workspace-menu"
+                onClick={() => setDrawer(true)}
+                aria-label="Open navigation"
+                aria-expanded={drawer}
+              >
+                <Icon name="menu" />
+              </button>
+              <span className="breadcrumb-group">
+                {pathname === "/evaluations" || pathname === "/dashboard"
+                  ? "Engineering"
+                  : "Workspace"}
+              </span>
+              <span className="muted" aria-hidden="true">
+                /
+              </span>
+              <span className="truncate">{active?.label ?? "CreatorLens"}</span>
+            </div>
+            <div className="header-actions">
+              <span className="demo-label">Demo mode</span>
+            </div>
+          </header>
+        </>
+      )}
+      <div
+        id="main-content"
+        tabIndex={-1}
+        className={publicPage ? "public-content" : "application-content"}
+      >
+        {children}
+      </div>
+      <Dialog
+        open={drawer}
+        onClose={() => setDrawer(false)}
+        title="CreatorLens AI"
+        drawer
+      >
+        {navigation}
+        {publicPage && (
+          <div className="drawer-actions">
+            <button
+              className="button-secondary"
+              onClick={() => {
+                setDrawer(false);
+                setAuth(true);
+              }}
+            >
+              Sign in
+            </button>
+            <Link
+              href="/analyze"
+              className="button-primary"
+              onClick={() => setDrawer(false)}
+            >
+              Explore demo
+            </Link>
+          </div>
+        )}
+        <p className="muted text-sm mt-8">Demo mode · No sign-in required</p>
+      </Dialog>
+      <Dialog
+        open={auth}
+        onClose={() => setAuth(false)}
+        title="Explore without an account"
+      >
+        <p className="muted">
+          CreatorLens is currently an open demo. Google sign-in is planned, but
+          is not available yet. You can use the existing workspace without
+          signing in.
+        </p>
+        <Link
+          href="/analyze"
+          className="button-primary mt-6"
+          onClick={() => setAuth(false)}
+        >
+          Continue to demo <Icon name="arrow" size={16} />
+        </Link>
+      </Dialog>
+    </>
+  );
 }

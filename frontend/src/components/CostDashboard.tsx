@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeading } from "./ui";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
 import { getCostMetrics } from "@/lib/api";
 import {
@@ -14,50 +15,60 @@ import type {
 } from "@/types/cost";
 
 export function CostDashboard() {
-  const [projectId, setProjectId] = useState<string | null>(() =>
-    getActiveProjectId(),
-  );
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [scopeReady, setScopeReady] = useState(false);
+  const requestVersion = useRef(0);
   const [metrics, setMetrics] = useState<CostMetricsResponse | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadMetrics = useCallback(async () => {
+    const version = ++requestVersion.current;
     setIsLoading(true);
     setError(null);
 
     try {
       const response = await getCostMetrics(projectId);
+      if (version !== requestVersion.current) return;
       setMetrics(response);
       setSelectedRunId((current) =>
         response.runs.some((run) => run.id === current)
           ? current
-          : response.runs[0]?.id ?? null,
+          : (response.runs[0]?.id ?? null),
       );
     } catch (loadError) {
-      setError(errorMessage(loadError));
+      if (version === requestVersion.current) setError(errorMessage(loadError));
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
   }, [projectId]);
 
-  useEffect(
-    () =>
-      subscribeToActiveProject((nextProjectId) => {
-        setProjectId(nextProjectId);
-        setMetrics(null);
-        setSelectedRunId(null);
-      }),
-    [],
-  );
-
   useEffect(() => {
-    const loadTimer = window.setTimeout(() => {
+    const invalidateRequests = () => { requestVersion.current++; };
+    const timer = window.setTimeout(() => {
+      setProjectId(getActiveProjectId());
+      setScopeReady(true);
+    }, 0);
+    const unsubscribe = subscribeToActiveProject((next) => {
+      invalidateRequests();
+      setProjectId(next);
+      setMetrics(null);
+      setSelectedRunId(null);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+      invalidateRequests();
+    };
+  }, []);
+  useEffect(() => {
+    if (!scopeReady) return;
+    const timer = window.setTimeout(() => {
       void loadMetrics();
     }, 0);
-
-    return () => window.clearTimeout(loadTimer);
-  }, [loadMetrics]);
+    return () => window.clearTimeout(timer);
+  }, [loadMetrics, scopeReady]);
 
   const selectedRun = useMemo(
     () =>
@@ -76,49 +87,55 @@ export function CostDashboard() {
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-950 dark:bg-slate-950 dark:text-slate-50 sm:px-8 lg:px-10">
+    <main className="page-container engineering-view">
       <div className="mx-auto max-w-7xl space-y-8">
-        <header className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="grid gap-8 p-7 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">
-                LLM operations
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                Cost and latency dashboard
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
-                Inspect persisted token usage, model and prompt versions,
-                retrieval balance, latency, trace coverage, and available cost
-                estimates from the deployed observability service.
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-3 lg:items-end">
-              <CoverageBadge run={metrics?.runs[0] ?? null} />
-              <button
-                type="button"
-                onClick={() => void loadMetrics()}
-                disabled={isLoading}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:text-white"
-              >
-                {isLoading ? "Refreshing..." : "Refresh telemetry"}
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-7 py-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300 sm:flex-row sm:items-center sm:justify-between">
-            <span>Read-only operational view. No model calls are triggered here.</span>
-            <span className="font-mono text-xs">
-              {projectId ? `Active project ${shortId(projectId)}` : "All projects"}
+        <PageHeading
+          eyebrow="Engineering / Read-only"
+          title="LLM Observability"
+          description="Trace generation cost, latency and evidence usage."
+          action={
+            <button
+              className="button-secondary"
+              onClick={() => void loadMetrics()}
+              disabled={isLoading}
+            >
+              {isLoading ? "Refreshing..." : "Refresh telemetry"}
+            </button>
+          }
+        />
+        <div className="flex flex-wrap gap-3 justify-between items-center">
+          <p className="muted text-sm">
+            {projectId
+              ? `Active project ${shortId(projectId)}`
+              : "All projects"}{" "}
+            / Stored observations only
+          </p>
+          {isLoading ? (
+            <span role="status" className="muted text-sm">
+              Loading observations...
             </span>
-          </div>
-        </header>
-
+          ) : error ? (
+            <span className="muted text-sm">Refresh incomplete</span>
+          ) : (
+            <CoverageBadge run={metrics?.runs[0] ?? null} />
+          )}
+        </div>
+        <p className="notice text-sm">
+          Totals reflect the API scope. Latency is averaged over known values
+          in the {metrics?.runs.length ?? 0} returned runs; it is not end-to-end
+          response time. Refreshing does not trigger inference.
+        </p>
         {error ? <ErrorBanner message={error} onRetry={loadMetrics} /> : null}
 
         {isLoading && !metrics ? (
           <DashboardSkeleton />
         ) : metrics ? (
           <>
+            {error && (
+              <p className="notice">
+                Showing previously loaded observations. They may be out of date.
+              </p>
+            )}
             <SummaryCards metrics={metrics} averages={averages} />
             <UsagePanel metrics={metrics} averages={averages} />
             <section className="grid gap-8 xl:grid-cols-[0.9fr_1.4fr]">
@@ -159,15 +176,13 @@ function SummaryCards({
       value: formatCost(metrics.totals.estimated_cost_usd),
       note:
         metrics.totals.estimated_cost_usd === null
-          ? "Pricing is not configured"
+          ? "Estimate not provided"
           : "Configured model-rate estimate",
     },
     {
-      label: "Average latency",
+      label: "Mean LLM latency",
       value:
-        averages.llm === null
-          ? "Unavailable"
-          : formatDuration(averages.llm + (averages.retrieval ?? 0)),
+        averages.llm === null ? "Unavailable" : formatDuration(averages.llm),
       note: `${formatDuration(averages.retrieval)} retrieval · ${formatDuration(averages.llm)} LLM`,
     },
   ];
@@ -180,15 +195,15 @@ function SummaryCards({
       {cards.map((card) => (
         <article
           key={card.label}
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             {card.label}
           </p>
           <p className="mt-3 text-2xl font-semibold tracking-tight">
             {card.value}
           </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-xs leading-5 text-slate-500">
             {card.note}
           </p>
         </article>
@@ -220,15 +235,15 @@ function UsagePanel({
       : null;
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-7">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
             Usage signals
           </p>
           <h2 className="mt-2 text-xl font-semibold">Token and latency mix</h2>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500">
           Based on available persisted observations
         </p>
       </div>
@@ -276,14 +291,14 @@ function SignalBar({
   return (
     <div className="mb-5 last:mb-0">
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-slate-700 dark:text-slate-200">
+        <span className="font-medium text-slate-700">
           {label}
         </span>
-        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-mono text-xs text-slate-500">
           {value}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-full rounded-full bg-teal-500"
           style={{ width: `${bounded * 100}%` }}
@@ -303,8 +318,8 @@ function RunHistory({
   onSelect: (runId: string) => void;
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
         History
       </p>
       <h2 className="mt-2 text-xl font-semibold">Recent LLM runs</h2>
@@ -316,10 +331,11 @@ function RunHistory({
               type="button"
               key={run.id}
               onClick={() => onSelect(run.id)}
+              aria-pressed={active}
               className={`w-full rounded-2xl border p-4 text-left transition ${
                 active
-                  ? "border-teal-400 bg-teal-50 dark:border-teal-700 dark:bg-teal-950/50"
-                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-950"
+                  ? "border-teal-400 bg-teal-50"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -327,13 +343,13 @@ function RunHistory({
                   <p className="truncate text-sm font-semibold">
                     {friendlyPrompt(run.prompt_name)}
                   </p>
-                  <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 truncate text-xs text-slate-500">
                     {run.llm_model}
                   </p>
                 </div>
                 <RunState run={run} />
               </div>
-              <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
+              <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-600">
                 <span>{formatDate(run.completed_at ?? run.created_at)}</span>
                 <span>
                   {run.total_tokens === null
@@ -355,8 +371,8 @@ function RunHistory({
 function RunInspection({ run }: { run: LlmRunSummary | null }) {
   if (!run) {
     return (
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
           Inspection
         </p>
         <h2 className="mt-2 text-xl font-semibold">Run telemetry</h2>
@@ -372,20 +388,20 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
   ) as [string, number][];
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
             Inspection
           </p>
           <h2 className="mt-2 text-xl font-semibold">Run telemetry</h2>
         </div>
-        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+        <span className="font-mono text-[11px] text-slate-500">
           {shortId(run.id)}
         </span>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="telemetry-grid mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <TelemetryValue label="Provider" value={run.llm_provider} />
         <TelemetryValue label="Model" value={run.llm_model} />
         <TelemetryValue
@@ -424,17 +440,17 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
 
       <div className="mt-7 grid gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             Retrieval balance
           </h3>
           <div className="mt-3 space-y-2">
             {sourceEntries.map(([source, count]) => (
               <div
                 key={source}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-800 dark:bg-slate-950/60"
+                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
               >
                 <span>{friendlyLabel(source)}</span>
-                <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-mono text-xs text-slate-500">
                   {count} chunks
                 </span>
               </div>
@@ -446,11 +462,14 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
         </div>
 
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             Reliability signals
           </h3>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <SignalPill label="LangSmith trace" value={Boolean(run.langsmith_trace_id)} />
+            <SignalPill
+              label="LangSmith trace"
+              value={Boolean(run.langsmith_trace_id)}
+            />
             <SignalPill label="Cache hit" value={run.cache_hit} />
             <SignalPill label="Cache miss" value={run.cache_miss} />
             <SignalPill label="Embedding reused" value={run.embedding_reused} />
@@ -469,7 +488,8 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
         </div>
       </div>
 
-      <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+      <details className="technical-details">
+        <summary>Provider & trace identifiers</summary>
         <div className="grid gap-4 sm:grid-cols-2">
           <TelemetryValue
             label="Transcript provider"
@@ -495,7 +515,7 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
             mono
           />
         </div>
-      </div>
+      </details>
     </section>
   );
 }
@@ -516,10 +536,10 @@ function TelemetryValue({
       className={
         plain
           ? "min-w-0"
-          : "min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60"
+          : "min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4"
       }
     >
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
       <p
@@ -552,15 +572,15 @@ function SignalPill({
     state === "unknown" ? "Unavailable" : value ? trueLabel : falseLabel;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-      <span className="text-slate-600 dark:text-slate-300">{label}</span>
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
+      <span className="text-slate-600">{label}</span>
       <span
         className={`font-semibold ${
           state === "unknown"
             ? "text-slate-500"
             : positive
-              ? "text-emerald-600 dark:text-emerald-300"
-              : "text-amber-600 dark:text-amber-300"
+              ? "text-emerald-600"
+              : "text-amber-600"
         }`}
       >
         {labelValue}
@@ -572,17 +592,17 @@ function SignalPill({
 function CoverageBadge({ run }: { run: LlmRunSummary | null }) {
   const covered = Boolean(
     run &&
-      run.status === "COMPLETED" &&
-      run.prompt_version &&
-      run.langsmith_trace_id,
+    run.status === "COMPLETED" &&
+    run.prompt_version &&
+    run.langsmith_trace_id,
   );
 
   return (
     <span
       className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
         covered
-          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-          : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          ? "bg-emerald-100 text-emerald-800"
+          : "bg-amber-100 text-amber-800"
       }`}
     >
       <span
@@ -606,8 +626,8 @@ function RunState({ run }: { run: LlmRunSummary }) {
     <span
       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
         completed
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
-          : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-200"
+          ? "bg-emerald-100 text-emerald-700"
+          : "bg-amber-100 text-amber-700"
       }`}
     >
       {run.status}
@@ -625,7 +645,7 @@ function ErrorBanner({
   return (
     <div
       role="alert"
-      className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between"
     >
       <span>{message}</span>
       <button
@@ -639,10 +659,16 @@ function ErrorBanner({
   );
 }
 
-function EmptyState({ text, compact = false }: { text: string; compact?: boolean }) {
+function EmptyState({
+  text,
+  compact = false,
+}: {
+  text: string;
+  compact?: boolean;
+}) {
   return (
     <div
-      className={`rounded-2xl border border-dashed border-slate-300 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 ${
+      className={`rounded-2xl border border-dashed border-slate-300 text-center text-sm text-slate-500 ${
         compact ? "px-4 py-5" : "px-5 py-10"
       }`}
     >
@@ -658,11 +684,11 @@ function DashboardSkeleton() {
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="h-32 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-800"
+            className="h-32 animate-pulse rounded-2xl bg-slate-200"
           />
         ))}
       </div>
-      <div className="h-64 animate-pulse rounded-3xl bg-slate-200 dark:bg-slate-800" />
+      <div className="h-64 animate-pulse rounded-3xl bg-slate-200" />
     </div>
   );
 }
