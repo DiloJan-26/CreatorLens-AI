@@ -51,7 +51,7 @@ export function MetadataAvailabilityPanel({
   }, [loadSummary, projectId]);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
@@ -97,7 +97,10 @@ export function MetadataAvailabilityPanel({
 
 function AvailabilityCard({ item }: { item: MetadataAvailabilityItem }) {
   return (
-    <article className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+    <article
+      className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3"
+      data-content-slot={item.slot}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-slate-950">
@@ -111,8 +114,9 @@ function AvailabilityCard({ item }: { item: MetadataAvailabilityItem }) {
       </div>
 
       <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        {item.available_fields.length} available and {item.missing_fields.length} missing
-        across checked public metadata fields.
+        {item.available_fields.length} available and{" "}
+        {item.missing_fields.length} missing across checked public metadata
+        fields.
       </p>
 
       <FieldList

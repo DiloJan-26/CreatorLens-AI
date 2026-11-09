@@ -20,7 +20,10 @@ export function ContentCard({
     );
   const description = item.caption || item.description;
   return (
-    <article className="ui-panel content-identity">
+    <article
+      className="ui-panel content-identity"
+      data-content-slot={item.slot}
+    >
       <div className="flex items-start gap-3">
         <span className="content-monogram">{label.slice(-1)}</span>
         <div className="min-w-0">

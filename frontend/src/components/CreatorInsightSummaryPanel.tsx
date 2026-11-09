@@ -72,7 +72,7 @@ export function CreatorInsightSummaryPanel({
   }, [initialSummary?.project_id, loadInsights, projectId]);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="workspace-panel rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">

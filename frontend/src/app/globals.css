@@ -15,6 +15,10 @@
   color-scheme: light;
 }
 @theme inline {
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.55;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.65;
   --color-background: var(--canvas);
   --color-foreground: var(--ink);
   --font-sans: var(--font-geist), "Inter", system-ui, sans-serif;
@@ -28,7 +32,7 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-geist), "Inter", system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
 }
 button,
@@ -111,7 +115,7 @@ details > summary::marker {
 }
 .eyebrow {
   color: var(--accent);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -128,7 +132,7 @@ details > summary::marker {
   min-height: 44px;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   padding: 10px 18px;
   white-space: nowrap;
   text-decoration: none;
@@ -196,7 +200,7 @@ details > summary::marker {
   border-radius: 8px;
   background: var(--surface);
   padding: 14px 18px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .notice-error {
   border-left-color: var(--error);
@@ -276,7 +280,7 @@ details > summary::marker {
 .public-links {
   display: flex;
   gap: 28px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
 }
 .public-links a:hover {
@@ -292,8 +296,8 @@ details > summary::marker {
 }
 .application-rail,
 .navigation-drawer {
-  /* Opaque equivalent of #7bdbc642 over white, consistent on every surface. */
-  --nav-surface: #ddf6f0;
+  /* A stronger mint anchors the lighter workspace panel hierarchy. */
+  --nav-surface: #cde9dd;
   --nav-text: #28574d;
   --nav-muted: #42665c;
   --nav-border: #badfd3;
@@ -320,7 +324,7 @@ details > summary::marker {
   color: var(--nav-muted);
 }
 .nav-group-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--nav-muted);
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -336,7 +340,7 @@ details > summary::marker {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: 15px;
   border-radius: 8px;
   color: var(--nav-text);
   margin: 4px 0;
@@ -368,10 +372,10 @@ details > summary::marker {
   margin-top: auto;
   border-top: 1px solid var(--nav-border);
   padding: 20px 10px 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 .rail-footer p {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--nav-muted);
   margin-top: 6px;
 }
@@ -396,13 +400,13 @@ details > summary::marker {
   position: sticky;
   top: 0;
   z-index: 20;
-  font-size: 13px;
+  font-size: 14px;
 }
 .breadcrumb-group {
   color: var(--muted);
 }
 .demo-label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   border-left: 1px solid var(--line);
   padding-left: 16px;
@@ -477,7 +481,7 @@ details > summary::marker {
   align-items: center;
   padding: 12px 18px;
   min-height: 48px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
   border-bottom: 2px solid transparent;
 }
@@ -512,7 +516,7 @@ details > summary::marker {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--muted);
   margin-bottom: 18px;
@@ -535,14 +539,14 @@ details > summary::marker {
   width: 100%;
   height: 48px;
   padding: 12px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .url-field [aria-invalid="true"] {
   border-color: var(--error);
 }
 .field-error {
   color: var(--error);
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 10px;
 }
 .form-actions {
@@ -565,7 +569,7 @@ details > summary::marker {
   flex-wrap: wrap;
   margin: 28px 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .metric-grid {
   display: grid;
@@ -573,7 +577,7 @@ details > summary::marker {
   gap: 20px;
 }
 .metric-grid dt {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .metric-grid dd {
@@ -583,7 +587,7 @@ details > summary::marker {
   margin-top: 5px;
 }
 .metric-grid dd.unavailable {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--muted);
 }
@@ -611,7 +615,7 @@ details > summary::marker {
   margin: 7px 0;
 }
 .source-link {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -620,7 +624,7 @@ details > summary::marker {
   border-top: 1px solid var(--line);
   padding-top: 12px;
   margin-top: 24px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .detail-disclosure summary {
   color: var(--muted);
@@ -643,11 +647,11 @@ details > summary::marker {
   margin-top: 24px;
 }
 .verdict-grid dt {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .verdict-grid dd {
-  font-size: 15px;
+  font-size: 16px;
   margin-top: 6px;
   font-weight: 600;
 }
@@ -657,12 +661,12 @@ details > summary::marker {
   padding-top: 12px;
 }
 .technical-details summary {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
 }
 .technical-details dd {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .engineering-view .rounded-3xl,
@@ -735,7 +739,7 @@ details > summary::marker {
   min-height: 80px;
   max-height: 180px;
   padding: 12px;
-  font-size: 15px;
+  font-size: 16px;
 }
 .composer-actions {
   display: flex;
@@ -743,7 +747,7 @@ details > summary::marker {
   align-items: center;
   gap: 16px;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .starter-prompts {
@@ -756,7 +760,7 @@ details > summary::marker {
   border: 1px solid var(--line);
   padding: 14px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
 }
 .starter-prompts button:hover {
@@ -773,13 +777,13 @@ details > summary::marker {
   margin-left: 12%;
 }
 .message-author {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin-bottom: 10px;
   font-weight: 600;
 }
 .answer-content {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
@@ -788,7 +792,7 @@ details > summary::marker {
   max-width: 100%;
   overflow: auto;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .answer-content th,
 .answer-content td {
@@ -807,7 +811,7 @@ details > summary::marker {
 .citation-row {
   border-top: 1px solid var(--line);
   padding: 12px 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 .citation-row summary {
   color: var(--accent);
@@ -818,7 +822,7 @@ details > summary::marker {
   padding: 12px 16px;
   background: var(--surface-muted);
   border-left: 2px solid var(--accent);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
 }
 @layer utilities {
@@ -970,7 +974,7 @@ details > summary::marker {
   }
   .section-tabs a {
     padding: 10px 12px;
-    font-size: 13px;
+    font-size: 14px;
   }
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1088,7 +1092,7 @@ details > summary::marker {
   border-radius: 999px;
   background: #e0f4ed;
   color: #13665b;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 .hero-copy h1 {
@@ -1123,7 +1127,7 @@ details > summary::marker {
   border-color: #bdcfd2;
 }
 .hero-footnote {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   margin-top: 20px;
   line-height: 1.8;
@@ -1141,10 +1145,12 @@ details > summary::marker {
 }
 .preview-toolbar {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 6px;
   align-items: center;
   gap: 8px;
   padding: 17px 20px;
-  font-size: 11px;
+  font-size: 13px;
   color: #456057;
   border-bottom: 1px solid #e8f0ec;
 }
@@ -1158,7 +1164,7 @@ details > summary::marker {
 .preview-example {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 .preview-composition {
   display: grid;
@@ -1177,7 +1183,7 @@ details > summary::marker {
 }
 .preview-video > p {
   margin-top: 9px;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 550;
   color: #53645d;
   text-align: center;
@@ -1212,7 +1218,7 @@ details > summary::marker {
   top: 12px;
   left: 10px;
   z-index: 1;
-  font: 9px var(--font-mono);
+  font: 12px var(--font-mono);
   color: white;
   letter-spacing: 0.08em;
 }
@@ -1241,7 +1247,7 @@ details > summary::marker {
 }
 .poster-copy span {
   display: block;
-  font-size: 8px;
+  font-size: 12px;
   margin-bottom: 6px;
   color: #e0eae4;
 }
@@ -1260,7 +1266,7 @@ details > summary::marker {
   display: inline-block;
   border-radius: 7px;
   padding: 5px 8px;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
   background: #f1f6f4;
   color: #415b50;
@@ -1271,7 +1277,7 @@ details > summary::marker {
   gap: 8px;
   margin: 18px 0 10px;
   color: var(--accent);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
 }
 .landing .preview-result h2 {
@@ -1288,7 +1294,7 @@ details > summary::marker {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
   color: #42564c;
 }
@@ -1305,7 +1311,7 @@ details > summary::marker {
   min-height: 40px;
   color: #0f6657;
   font-weight: 650;
-  font-size: 11px;
+  font-size: 13px;
 }
 .preview-result > a:hover {
   text-decoration: underline;
@@ -1315,7 +1321,7 @@ details > summary::marker {
   border-top: 1px solid #e8f0ec;
   padding: 11px 20px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.6;
 }
 .hero-capabilities {
@@ -1341,13 +1347,13 @@ details > summary::marker {
 }
 .hero-capabilities strong {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 .hero-capabilities li div > span {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 3px;
 }
 .workflow-section,
@@ -1374,7 +1380,7 @@ details > summary::marker {
 .step-number {
   font-family: var(--font-mono);
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
   padding-top: 3px;
 }
 .workflow-list h3 {
@@ -1382,7 +1388,7 @@ details > summary::marker {
 }
 .workflow-list p,
 .evidence-ledger p {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.8;
   color: var(--muted);
   margin-top: 8px;
@@ -1412,7 +1418,7 @@ details > summary::marker {
 }
 .engineering-story p {
   max-width: 680px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .landing-limitations {
   display: grid;
@@ -1425,7 +1431,7 @@ details > summary::marker {
   font-size: 20px;
 }
 .landing-limitations p {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
   line-height: 1.8;
 }
@@ -1446,7 +1452,7 @@ details > summary::marker {
   gap: 24px;
   border-top: 1px solid var(--line);
   padding: 28px 0;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 .landing-footer strong {
@@ -1474,7 +1480,7 @@ details > summary::marker {
 .table-scroll table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 15px;
   text-align: left;
 }
 .table-scroll th,
@@ -1485,7 +1491,7 @@ details > summary::marker {
 }
 .table-scroll thead th {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   background: var(--surface-muted);
 }
 .table-scroll tbody th {
@@ -1512,7 +1518,7 @@ details > summary::marker {
 }
 .context-disclosure > summary {
   padding: 16px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .chat-context section {
@@ -1537,7 +1543,7 @@ details > summary::marker {
   text-align: left;
   justify-content: flex-start;
   font-weight: 400;
-  font-size: 13px;
+  font-size: 14px;
   padding: 14px;
 }
 .chat-welcome {
@@ -1555,7 +1561,7 @@ details > summary::marker {
   padding: 8px 0;
 }
 .evidence-summary > summary {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--accent);
   font-weight: 600;
 }
@@ -1574,7 +1580,7 @@ details > summary::marker {
 .latest-button {
   align-self: center;
   min-height: 36px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .transcript-panel ol > li {
   border: 0;
@@ -1586,7 +1592,7 @@ details > summary::marker {
 .transcript-panel ol > li > span {
   display: block;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   margin-bottom: 8px;
 }
 .engineering-view section,
@@ -1692,10 +1698,10 @@ details > summary::marker {
     gap: 9px;
   }
   .hero-capabilities strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .hero-capabilities li div > span {
-    font-size: 10px;
+    font-size: 13px;
   }
   .capability-icon {
     width: 37px;
@@ -1794,7 +1800,7 @@ details > summary::marker {
   }
   .section-tabs a {
     padding: 12px;
-    font-size: 13px;
+    font-size: 14px;
   }
   .table-scroll th,
   .table-scroll td {
@@ -1822,7 +1828,7 @@ details > summary::marker {
 @media (min-width: 768px) and (max-width: 1023px) {
   .public-links {
     gap: 16px;
-    font-size: 12px;
+    font-size: 14px;
   }
   .public-header-inner {
     gap: 16px;
@@ -1840,7 +1846,7 @@ details > summary::marker {
     gap: 9px;
   }
   .hero-capabilities strong {
-    font-size: 12px;
+    font-size: 14px;
   }
   .hero-capabilities li div > span {
     display: none;
@@ -1869,7 +1875,7 @@ details > summary::marker {
     display: none;
   }
   .hero-kicker {
-    font-size: 11px;
+    font-size: 13px;
     margin-bottom: 18px;
   }
   .hero-actions {
@@ -1877,7 +1883,7 @@ details > summary::marker {
   }
   .hero-actions > a {
     padding: 11px 15px;
-    font-size: 13px;
+    font-size: 14px;
   }
   .preview-composition {
     grid-template-columns: 1fr;
@@ -1909,16 +1915,187 @@ details > summary::marker {
     margin-top: 14px;
   }
   .preview-result li {
-    font-size: 12px;
+    font-size: 14px;
   }
   .preview-result > a {
     margin-top: 12px;
   }
   .preview-example {
-    font-size: 9px;
+    font-size: 12px;
   }
   .preview-toolbar {
     padding: 14px 16px;
-    font-size: 10px;
+    font-size: 13px;
   }
+}
+
+/* Long-form answers get a reading size distinct from supporting labels. */
+.chat-message .text-sm,
+.chat-message .answer-prose {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.chat-message .answer-prose li {
+  line-height: 1.75;
+}
+.chat-message .answer-prose :is(h1, h2) {
+  font-size: 1.1875rem;
+  line-height: 1.4;
+}
+.chat-message h3 {
+  font-size: 1.125rem;
+  line-height: 1.45;
+}
+.chat-message h4 {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.chat-message .answer-prose code {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* Workspace surfaces: canvas < primary panel < inset < navigation. */
+.application-content {
+  --canvas: #f6faf8;
+  --surface: #e8f3ec;
+  --surface-muted: #dcece2;
+  --line: #b9d2c3;
+  --wash: #d3e8db;
+  --ink: #19382f;
+  --muted: #466157;
+  --panel-top: #eff8f3;
+  --panel-reading: #edf6ef;
+  --panel-raised: #f0f7f2;
+  --accent: #0d655c;
+  --accent-hover: #0b554d;
+  --slot-one: #739c81;
+  --slot-two: #5d9189;
+  min-height: calc(100dvh - 65px);
+  color: var(--ink);
+  background-color: var(--canvas);
+}
+.workspace-header {
+  background: #f2f8f4;
+  border-bottom-color: #c3d9cc;
+}
+.application-content
+  :is(
+    .ui-panel,
+    .workspace-panel,
+    .url-field,
+    .context-disclosure,
+    .chat-panel
+  ),
+.application-content .engineering-view section.rounded-3xl {
+  background: linear-gradient(150deg, var(--panel-top), var(--surface));
+  border-color: var(--line);
+  box-shadow: 0 2px 8px rgb(28 71 47 / 0.035);
+}
+.application-content .bg-slate-50 {
+  background-color: var(--surface-muted);
+}
+.application-content [class~="bg-white/80"],
+.application-content [class~="bg-white/90"] {
+  background-color: var(--panel-raised);
+  border-color: var(--line);
+}
+.application-content :is(input, textarea, select) {
+  background-color: #f7fbf8;
+  border-color: #adc9b8;
+}
+.application-content .button-secondary {
+  background: #f2f8f4;
+  border-color: #adc9b8;
+}
+.application-content .button-secondary:hover {
+  background: var(--surface-muted);
+}
+.application-content .insight-conclusion {
+  background: linear-gradient(120deg, #d8ebdf, #e1efe5);
+  border-color: #a8cbb5;
+}
+.application-content .insight-conclusion .eyebrow {
+  color: #185f48;
+}
+.application-content [data-content-slot="content_1"] {
+  border-top: 3px solid var(--slot-one);
+}
+.application-content [data-content-slot="content_2"] {
+  border-top: 3px solid var(--slot-two);
+}
+.application-content .content-monogram {
+  background: var(--surface-muted);
+  border-color: #b1cbbb;
+}
+.application-content .content-identity .metric-grid {
+  background: var(--surface-muted);
+  border: 1px solid #bfd7c7;
+  border-radius: 10px;
+  padding: 16px;
+}
+.application-content .detail-disclosure {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #e0eee5;
+}
+.application-content .table-scroll thead th {
+  background: #d4e7db;
+  color: #315545;
+}
+.application-content .table-scroll tbody tr:nth-child(even) {
+  background: rgb(209 232 217 / 0.42);
+}
+.application-content .transcript-panel ol > li {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--slot-one);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--panel-reading);
+}
+.application-content .transcript-panel[data-content-slot="content_2"] ol > li {
+  border-left-color: var(--slot-two);
+}
+.application-content .chat-top {
+  background: #dcece2;
+  border-radius: 13px 13px 0 0;
+}
+.application-content .chat-messages {
+  background: var(--panel-reading);
+}
+.application-content .chat-composer {
+  background: #e0eee5;
+}
+.application-content .message-user {
+  background: #d3e7d9;
+  border: 1px solid #adcdb8;
+}
+.application-content .message-assistant {
+  background: var(--panel-top);
+  border: 1px solid #bfd6c7;
+  border-radius: 10px;
+  padding: 16px;
+}
+.application-content .evidence-summary {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 14px;
+}
+.application-content .evidence-summary li {
+  background: var(--panel-raised);
+  border-left-color: #7da38a;
+  border-radius: 4px;
+}
+.application-content .chat-starters button {
+  background: var(--panel-raised);
+  border-color: #b3cebd;
+}
+.application-content .chat-starters button:hover {
+  background: #d8eadf;
+}
+.application-content .engineering-view [aria-pressed="true"] {
+  background: #cce3d3;
+  border-color: var(--accent);
 }

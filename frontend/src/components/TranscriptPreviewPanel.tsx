@@ -54,7 +54,10 @@ export function TranscriptPreviewPanel({
   }
 
   return (
-    <section className="ui-panel transcript-panel">
+    <section
+      className="ui-panel transcript-panel"
+      data-content-slot={item?.slot}
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
