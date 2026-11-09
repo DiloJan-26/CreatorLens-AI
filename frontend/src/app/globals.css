@@ -297,11 +297,11 @@ details > summary::marker {
 .application-rail,
 .navigation-drawer {
   /* A stronger mint anchors the lighter workspace panel hierarchy. */
-  --nav-surface: #cde9dd;
-  --nav-text: #28574d;
-  --nav-muted: #42665c;
-  --nav-border: #badfd3;
-  --nav-hover: #c5eadd;
+  --nav-surface: #c9f0e5;
+  --nav-text: #245b53;
+  --nav-muted: #39655b;
+  --nav-border: #a7d7c8;
+  --nav-hover: #b9e9da;
   --nav-selected: #0f766e;
   background-color: var(--nav-surface);
   color: var(--nav-text);
@@ -1957,27 +1957,27 @@ details > summary::marker {
 
 /* Workspace surfaces: canvas < primary panel < inset < navigation. */
 .application-content {
-  --canvas: #f6faf8;
-  --surface: #e8f3ec;
-  --surface-muted: #dcece2;
-  --line: #b9d2c3;
-  --wash: #d3e8db;
-  --ink: #19382f;
-  --muted: #466157;
-  --panel-top: #eff8f3;
-  --panel-reading: #edf6ef;
-  --panel-raised: #f0f7f2;
+  --canvas: #f6fbf9;
+  --surface: #e8faf4;
+  --surface-muted: #dbf4eb;
+  --line: #b0d9ca;
+  --wash: #d2f1e4;
+  --ink: #173b36;
+  --muted: #3d625a;
+  --panel-top: #f2fcf8;
+  --panel-reading: #effaf5;
+  --panel-raised: #f0fbf6;
   --accent: #0d655c;
   --accent-hover: #0b554d;
-  --slot-one: #739c81;
-  --slot-two: #5d9189;
+  --slot-one: #55a98f;
+  --slot-two: #4d9fa6;
   min-height: calc(100dvh - 65px);
   color: var(--ink);
   background-color: var(--canvas);
 }
 .workspace-header {
-  background: #f2f8f4;
-  border-bottom-color: #c3d9cc;
+  background: #f2fbf7;
+  border-bottom-color: #bfdfd2;
 }
 .application-content
   :is(
@@ -1990,7 +1990,7 @@ details > summary::marker {
 .application-content .engineering-view section.rounded-3xl {
   background: linear-gradient(150deg, var(--panel-top), var(--surface));
   border-color: var(--line);
-  box-shadow: 0 2px 8px rgb(28 71 47 / 0.035);
+  box-shadow: 0 2px 8px rgb(21 156 118 / 0.055);
 }
 .application-content .bg-slate-50 {
   background-color: var(--surface-muted);
@@ -2001,22 +2001,22 @@ details > summary::marker {
   border-color: var(--line);
 }
 .application-content :is(input, textarea, select) {
-  background-color: #f7fbf8;
-  border-color: #adc9b8;
+  background-color: #f5fcf9;
+  border-color: #a5d3c1;
 }
 .application-content .button-secondary {
-  background: #f2f8f4;
-  border-color: #adc9b8;
+  background: #f2fbf7;
+  border-color: #a5d3c1;
 }
 .application-content .button-secondary:hover {
   background: var(--surface-muted);
 }
 .application-content .insight-conclusion {
-  background: linear-gradient(120deg, #d8ebdf, #e1efe5);
-  border-color: #a8cbb5;
+  background: linear-gradient(120deg, #daf5e9, #e4f9f1);
+  border-color: #9bd7be;
 }
 .application-content .insight-conclusion .eyebrow {
-  color: #185f48;
+  color: #12654f;
 }
 .application-content [data-content-slot="content_1"] {
   border-top: 3px solid var(--slot-one);
@@ -2026,11 +2026,11 @@ details > summary::marker {
 }
 .application-content .content-monogram {
   background: var(--surface-muted);
-  border-color: #b1cbbb;
+  border-color: #a7d5c3;
 }
 .application-content .content-identity .metric-grid {
   background: var(--surface-muted);
-  border: 1px solid #bfd7c7;
+  border: 1px solid #b2dfcc;
   border-radius: 10px;
   padding: 16px;
 }
@@ -2038,14 +2038,14 @@ details > summary::marker {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 14px;
-  background: #e0eee5;
+  background: #e1f7ed;
 }
 .application-content .table-scroll thead th {
-  background: #d4e7db;
-  color: #315545;
+  background: #d4f0e3;
+  color: #285d4e;
 }
 .application-content .table-scroll tbody tr:nth-child(even) {
-  background: rgb(209 232 217 / 0.42);
+  background: rgb(203 241 223 / 0.42);
 }
 .application-content .transcript-panel ol > li {
   border: 1px solid var(--line);
@@ -2058,22 +2058,22 @@ details > summary::marker {
   border-left-color: var(--slot-two);
 }
 .application-content .chat-top {
-  background: #dcece2;
+  background: #dbf4eb;
   border-radius: 13px 13px 0 0;
 }
 .application-content .chat-messages {
   background: var(--panel-reading);
 }
 .application-content .chat-composer {
-  background: #e0eee5;
+  background: #e1f7ed;
 }
 .application-content .message-user {
-  background: #d3e7d9;
-  border: 1px solid #adcdb8;
+  background: #d5f1e5;
+  border: 1px solid #a2d7bd;
 }
 .application-content .message-assistant {
   background: var(--panel-top);
-  border: 1px solid #bfd6c7;
+  border: 1px solid #b1decb;
   border-radius: 10px;
   padding: 16px;
 }
@@ -2085,17 +2085,17 @@ details > summary::marker {
 }
 .application-content .evidence-summary li {
   background: var(--panel-raised);
-  border-left-color: #7da38a;
+  border-left-color: #69b59a;
   border-radius: 4px;
 }
 .application-content .chat-starters button {
   background: var(--panel-raised);
-  border-color: #b3cebd;
+  border-color: #a9d8c3;
 }
 .application-content .chat-starters button:hover {
-  background: #d8eadf;
+  background: #d8f4e7;
 }
 .application-content .engineering-view [aria-pressed="true"] {
-  background: #cce3d3;
+  background: #cdeede;
   border-color: var(--accent);
 }
