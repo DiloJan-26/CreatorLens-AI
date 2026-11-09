@@ -8,7 +8,7 @@ const STEPS = [
 
 export function WorkflowStrip() {
   return (
-    <section id="how-it-works" className="border-b border-slate-200 bg-slate-950 py-10 text-white dark:border-slate-800">
+    <section id="how-it-works" className="border-b border-slate-200 bg-slate-950 py-10 text-white">
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>

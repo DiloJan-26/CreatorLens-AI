@@ -1,152 +1,127 @@
 import type { ContentItem, ContentPlatform } from "@/types/project";
-
-type ContentCardProps = {
-  item: ContentItem | null;
-  label: "Content 1" | "Content 2";
-  isPending?: boolean;
-};
-
 export function ContentCard({
   item,
   label,
   isPending = false,
-}: ContentCardProps) {
-  if (!item) {
+}: {
+  item: ContentItem | null;
+  label: "Content 1" | "Content 2";
+  isPending?: boolean;
+}) {
+  if (!item)
     return (
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-          {label}
-        </p>
-        <p className="mt-3 text-sm font-semibold text-slate-950">
-          {isPending ? "Analysis running" : "Waiting for analysis"}
-        </p>
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          Public metadata, transcript availability, and confirmed metrics appear
-          here after analysis.
+      <section className="ui-panel">
+        <p className="eyebrow">{label}</p>
+        <h2>{isPending ? "Processing content..." : "Content unavailable"}</h2>
+        <p className="muted mt-3">
+          Public metadata has not been returned for this content.
         </p>
       </section>
     );
-  }
-
-  const isFacebook = item.platform === "facebook";
   const description = item.caption || item.description;
-
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
+    <article className="ui-panel content-identity">
+      <div className="flex items-start gap-3">
+        <span className="content-monogram">{label.slice(-1)}</span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            {label} - {platformLabel(item.platform)}
+          <p className="eyebrow">
+            {label} / {platformLabel(item.platform)}
           </p>
-          <h2 className="mt-3 break-words text-lg font-semibold text-slate-950">
-            {item.title || "Unavailable"}
+          <h2 className="text-lg break-words">
+            {item.title || "Title unavailable"}
           </h2>
-          <p className="mt-2 break-all text-xs text-slate-500">{item.url}</p>
+          <p className="muted text-sm mt-2">
+            {item.creator ?? item.creator_handle ?? "Creator unavailable"}
+          </p>
+          <a
+            className="source-link"
+            href={/^https?:\/\//i.test(item.url) ? item.url : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open original video
+          </a>
         </div>
-        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
-          {item.extraction_status}
-        </span>
       </div>
-
-      {item.error_message ? (
-        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+      <p className="muted text-xs mt-3">
+        Extracted title / {item.extraction_status.replace(/_/g, " ")}
+      </p>
+      {item.error_message && (
+        <p className="notice notice-error mt-4" role="alert">
           {item.error_message}
         </p>
-      ) : null}
-
-      <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
-        <p className="text-sm font-medium text-slate-500">
-          {item.platform === "instagram" ? "Caption preview" : "Description preview"}
-        </p>
-        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
-          {description ? truncateText(description, 300) : "Unavailable"}
-        </p>
-      </div>
-
-      <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-        <Metric label="Platform" value={platformLabel(item.platform)} />
-        <Metric label="Creator" value={item.creator ?? item.creator_handle} />
-        <Metric
-          label="Follower/subscriber count"
-          value={formatNumber(item.follower_count ?? item.subscriber_count)}
-        />
-        <Metric label="Views" value={formatNumber(item.views)} />
-        {isFacebook ? (
-          <Metric label="Reactions" value={formatNumber(item.reactions)} />
-        ) : (
-          <Metric label="Likes" value={formatNumber(item.likes)} />
-        )}
-        <Metric label="Comments" value={formatNumber(item.comments)} />
-        {isFacebook ? (
-          <Metric label="Shares" value={formatNumber(item.shares)} />
-        ) : null}
-        <Metric
-          label="Engagement rate"
-          value={
+      )}
+      <h3 className="text-sm mt-6 mb-3">Confirmed public metrics</h3>
+      <dl className="metric-grid">
+        {[
+          ["Views", formatNumber(item.views)],
+          [
+            item.platform === "facebook" ? "Reactions" : "Likes",
+            formatNumber(
+              item.platform === "facebook" ? item.reactions : item.likes,
+            ),
+          ],
+          ["Comments", formatNumber(item.comments)],
+          ["Shares", formatNumber(item.shares)],
+          [
+            "Followers / subscribers",
+            formatNumber(item.follower_count ?? item.subscriber_count),
+          ],
+          [
+            "Engagement rate",
             item.engagement_rate == null
               ? null
-              : `${item.engagement_rate.toFixed(2)}%`
-          }
-        />
-        <Metric
-          label="Duration"
-          value={
-            item.duration_seconds == null ? null : `${item.duration_seconds}s`
-          }
-        />
-        <Metric label="Upload date" value={item.upload_date} />
-        <Metric label="Transcript language/source" value={transcriptStatus(item)} />
-        <Metric
-          label="Transcript segments"
-          value={formatNumber(item.transcript_segment_count)}
-        />
+              : `${item.engagement_rate.toFixed(2)}%`,
+          ],
+        ].map(([k, v]) => (
+          <Metric key={k} label={k as string} value={v} />
+        ))}
       </dl>
-
-      <div className="mt-5">
-        <p className="text-sm font-medium text-slate-500">Hashtags</p>
-        {item.hashtags && item.hashtags.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {item.hashtags.map((hashtag) => (
-              <span
-                key={hashtag}
-                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-              >
-                #{hashtag}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-1 text-sm text-slate-950">Unavailable</p>
+      <p className="muted text-xs mt-3">
+        Unavailable values are not zero. Engagement rate follows the existing
+        calculation and available inputs.
+      </p>
+      <details className="detail-disclosure mt-5">
+        <summary>Content details & provenance</summary>
+        <dl className="grid gap-4 sm:grid-cols-2 text-sm my-4">
+          <Metric
+            label="Duration"
+            value={
+              item.duration_seconds == null ? null : `${item.duration_seconds}s`
+            }
+          />
+          <Metric label="Published" value={item.upload_date} />
+          <Metric label="Transcript" value={transcriptStatus(item)} />
+          <Metric
+            label="Segments"
+            value={formatNumber(item.transcript_segment_count)}
+          />
+        </dl>
+        <p className="text-sm whitespace-pre-wrap mb-4">
+          {description || "Description unavailable"}
+        </p>
+        <p className="muted text-xs mb-4">
+          Hashtags:{" "}
+          {item.hashtags?.length
+            ? item.hashtags.map((x) => `#${x}`).join(" ")
+            : "Unavailable"}
+        </p>
+        {Boolean(item.missing_fields?.length) && (
+          <p className="text-sm mb-4">
+            Missing fields: {item.missing_fields?.map(fieldLabel).join(", ")}
+          </p>
         )}
-      </div>
-
-      {item.missing_fields && item.missing_fields.length > 0 ? (
-        <div className="mt-5">
-          <p className="text-sm font-medium text-slate-500">Missing fields</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {item.missing_fields.slice(0, 8).map((field) => (
-              <span
-                key={field}
-                className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900"
-              >
-                {fieldLabel(field)} unavailable
-              </span>
-            ))}
-          </div>
+        <div className="grid gap-3">
+          <SourceNote label="Metric source" value={item.metric_source_note} />
+          <SourceNote
+            label="Transcript source"
+            value={item.transcript_source_note}
+          />
         </div>
-      ) : null}
-
-      <div className="mt-5 grid gap-3">
-        <SourceNote label="Metric source" value={item.metric_source_note} />
-        <SourceNote
-          label="Transcript source"
-          value={item.transcript_source_note}
-        />
-      </div>
-    </section>
+      </details>
+    </article>
   );
 }
-
 function Metric({
   label,
   value,
@@ -157,7 +132,9 @@ function Metric({
   return (
     <div>
       <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="mt-1 break-words text-slate-950">
+      <dd
+        className={`mt-1 break-words text-slate-950 ${value == null ? "unavailable" : ""}`}
+      >
         {value ?? "Unavailable"}
       </dd>
     </div>
@@ -200,7 +177,9 @@ function transcriptStatus(item: ContentItem): string {
     return "Unavailable";
   }
 
-  const source = item.transcript_source ? sourceLabel(item.transcript_source) : "Unknown";
+  const source = item.transcript_source
+    ? sourceLabel(item.transcript_source)
+    : "Unknown";
   return `${transcriptLanguageStatus(item)} / ${source}`;
 }
 
@@ -265,12 +244,4 @@ function transcriptLanguageStatus(item: ContentItem): string {
 
 function fieldLabel(value: string): string {
   return value.replace(/_/g, " ");
-}
-
-function truncateText(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, maxLength).trimEnd()}...`;
 }

@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { AppNavbar } from "@/components/AppNavbar";
 import "./globals.css";
+const geist = localFont({
+  src: "../../node_modules/next/dist/next-devtools/server/font/geist-latin.woff2",
+  variable: "--font-geist",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "CreatorLens AI",
@@ -13,29 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-full flex flex-col">
-        <ThemeScript />
-        <AppNavbar />
-        {children}
+    <html lang="en" className="h-full antialiased">
+      <body className={`${geist.variable} min-h-full`}>
+        <AppNavbar>{children}</AppNavbar>
       </body>
     </html>
   );
-}
-
-function ThemeScript() {
-  const script = `
-    (function () {
-      try {
-        var storedTheme = localStorage.getItem('creatorlens_theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = storedTheme === 'dark' || storedTheme === 'light'
-          ? storedTheme
-          : prefersDark ? 'dark' : 'light';
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-      } catch (error) {}
-    })();
-  `;
-
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }

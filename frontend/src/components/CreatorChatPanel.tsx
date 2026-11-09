@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -45,8 +45,16 @@ export function CreatorChatPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentAssistantText, setCurrentAssistantText] = useState("");
-  const [currentCitations, setCurrentCitations] = useState<ChatCitation[]>([]);
+  const [, setCurrentAssistantText] = useState("");
+  const [, setCurrentCitations] = useState<ChatCitation[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const followRef = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
+  useEffect(() => {
+    if (followRef.current && scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isStreaming]);
   const canChat = Boolean(projectId && indexReady && !isRestoringSession);
 
   useEffect(() => {
@@ -94,6 +102,9 @@ export function CreatorChatPanel({
             return;
           }
 
+          setError(
+            "Previous messages could not be restored. A new conversation will start when you send a question.",
+          );
           clearChatSessionId(projectId);
           setSessionId(null);
           setMessages([]);
@@ -138,6 +149,7 @@ export function CreatorChatPanel({
       return;
     }
 
+    followRef.current = true;
     setInput("");
     setError(null);
     setIsStreaming(true);
@@ -156,6 +168,7 @@ export function CreatorChatPanel({
       },
     ]);
 
+    let streamCompleted = false;
     try {
       await streamChatResponse(
         projectId,
@@ -164,6 +177,9 @@ export function CreatorChatPanel({
           session_id: sessionId,
         },
         {
+          onDone: () => {
+            streamCompleted = true;
+          },
           onSession: (nextSessionId) => {
             setSessionId(nextSessionId);
             setChatSessionId(projectId, nextSessionId);
@@ -196,6 +212,12 @@ export function CreatorChatPanel({
           },
         },
       );
+      if (!streamCompleted)
+        setError(
+          (current) =>
+            current ??
+            "The response ended before completion. Review the partial answer or retry.",
+        );
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
     } finally {
@@ -204,140 +226,184 @@ export function CreatorChatPanel({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
-            Ask CreatorLens AI
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950 dark:text-slate-50">
-            Creator chat
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Ask performance, hook, rewrite, and improvement questions grounded
-            in cited sources.
-          </p>
-        </div>
-        {sessionId ? (
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
-            Session connected
-          </span>
-        ) : null}
+    <section className="chat-panel" aria-label="Evidence-grounded conversation">
+      <div className="chat-top">
+        <span className="font-semibold">CreatorLens AI</span>
+        <span className="muted text-xs">
+          {isStreaming
+            ? "Responding..."
+            : sessionId
+              ? "Current session"
+              : "New conversation"}
+        </span>
       </div>
-
-      {!projectId ? (
-        <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-          Analyze content before starting the chat.
-        </p>
-      ) : !indexReady ? (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-          The evidence index is still unavailable. Chat will unlock when cited
-          evidence is ready.
-        </p>
-      ) : null}
-
-      <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-        This chat keeps the active project session when you move between pages,
-        so follow-up questions can use the same recent context.
-      </p>
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {SUGGESTED_QUESTIONS.map((question) => (
-          <button
-            key={question}
-            type="button"
-            onClick={() => setInput(question)}
-            disabled={!canChat || isStreaming}
-            className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-medium text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-teal-700 dark:hover:bg-slate-900 dark:disabled:bg-slate-900 dark:disabled:text-slate-600"
-          >
-            {question}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-5 grid max-h-[560px] gap-3 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+      <div
+        className="chat-messages"
+        ref={scrollRef}
+        tabIndex={0}
+        aria-label="Conversation messages"
+        onScroll={() => {
+          const el = scrollRef.current;
+          if (el) {
+            followRef.current =
+              el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            setShowLatest(!followRef.current);
+          }
+        }}
+      >
         {isRestoringSession ? (
-          <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-3 text-sm leading-6 text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-100">
-            Restoring the current chat session...
-          </p>
+          <p role="status">Restoring this session...</p>
         ) : messages.length === 0 ? (
-          <p className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            Answers are grounded in retrieved sources and extracted metadata.
-            Unavailable public metrics are not estimated.
-          </p>
+          <div className="chat-welcome">
+            <p className="eyebrow">Start with the evidence</p>
+            <h2 className="text-2xl">What would you like to understand?</h2>
+            <p className="muted text-sm mt-3 mb-6">
+              Explore this comparison&apos;s performance, opening hooks and creative
+              choices.
+            </p>
+            <div className="chat-starters">
+              {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
+                <button
+                  className="button-secondary"
+                  key={q}
+                  disabled={!canChat || isStreaming}
+                  onClick={() => {
+                    setInput(q);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           messages.map((message, index) => (
             <ChatMessageBubble
-              key={`${message.role}-${index}`}
+              key={index}
               message={message}
               isStreaming={isStreaming && index === messages.length - 1}
             />
           ))
         )}
       </div>
-
-      {currentAssistantText && isStreaming ? (
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Streaming response... {currentCitations.length} sources ready
-        </p>
-      ) : null}
-
-      {error ? (
-        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-100">
-          {error}
-        </p>
-      ) : null}
-
-      <form onSubmit={handleSubmit} className="mt-4 grid gap-3">
-        <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
-          Ask a question
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            disabled={!canChat || isStreaming}
-            rows={3}
-            className="mt-2 w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm leading-6 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-400/60 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:placeholder:text-slate-500 dark:focus:border-emerald-400 dark:disabled:bg-slate-900 dark:disabled:text-slate-600"
-            placeholder="Ask about performance, hooks, story, or improvements."
-          />
-        </label>
+      {showLatest && (
         <button
-          type="submit"
-          disabled={!canChat || isStreaming || !input.trim()}
-          className="inline-flex h-11 w-fit items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300 dark:disabled:bg-slate-700 dark:disabled:text-slate-400"
+          className="button-quiet latest-button"
+          onClick={() => {
+            followRef.current = true;
+            scrollRef.current?.scrollTo({
+              top: scrollRef.current.scrollHeight,
+              behavior: "instant",
+            });
+            setShowLatest(false);
+          }}
         >
-          {isStreaming ? "Streaming..." : "Send"}
+          Jump to latest
         </button>
-      </form>
+      )}
+      <div className="chat-composer">
+        <p className="sr-only" role="status">
+          {isStreaming
+            ? "Response streaming"
+            : error
+              ? "Response failed"
+              : messages.length
+                ? "Response ready"
+                : "Ready for a question"}
+        </p>
+        {!canChat && !isRestoringSession && (
+          <p className="muted text-sm">
+            Analyze content and prepare its evidence index before chatting.
+          </p>
+        )}
+        {error && (
+          <div role="alert" className="notice notice-error mb-3">
+            {error}
+            <button
+              className="button-quiet"
+              onClick={() => {
+                const last = [...messages]
+                  .reverse()
+                  .find((m) => m.role === "user");
+                setInput(last?.content ?? "");
+                inputRef.current?.focus();
+              }}
+            >
+              Edit and retry
+            </button>
+          </div>
+        )}
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="chat-question" className="sr-only">
+            Ask about this comparison
+          </label>
+          <textarea
+            ref={inputRef}
+            id="chat-question"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            disabled={!canChat || isStreaming}
+            rows={2}
+            placeholder="Ask about this comparison..."
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+          <div className="flex gap-3 items-center justify-between mt-3">
+            <span className="muted text-xs">Ctrl / Cmd + Enter to send</span>
+            <button
+              type="submit"
+              className="button-primary"
+              disabled={!canChat || isStreaming || !input.trim()}
+            >
+              {isStreaming ? "Responding..." : "Send question"}
+            </button>
+          </div>
+        </form>
+        <details className="text-xs muted mt-2">
+          <summary>About this session</summary>Context is retained while
+          navigating in this browser session. Reloading can start a new
+          conversation. Restored message history may not include structured
+          cards or source details.
+        </details>
+      </div>
     </section>
   );
 }
 
 function AssistantMarkdown({ content }: { content: string }) {
   return (
-    <div className="mt-2 text-sm leading-6 text-slate-800 dark:text-slate-100">
+    <div className="answer-prose mt-2 text-sm leading-6">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          table: ({ children }) => (
+            <div className="table-scroll">
+              <table>{children}</table>
+            </div>
+          ),
           // Headings
           h1: ({ children }) => (
-            <h1 className="mt-4 mb-1 text-base font-bold text-slate-950 dark:text-slate-50 first:mt-0">
+            <h1 className="mt-4 mb-1 text-base font-bold text-slate-950 first:mt-0">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mt-4 mb-1 text-base font-semibold text-slate-950 dark:text-slate-50 first:mt-0">
+            <h2 className="mt-4 mb-1 text-base font-semibold text-slate-950 first:mt-0">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mt-3 mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100 first:mt-0">
+            <h3 className="mt-3 mb-1 text-sm font-semibold text-slate-900 first:mt-0">
               {children}
             </h3>
           ),
           // Paragraphs
-          p: ({ children }) => (
-            <p className="mb-2 last:mb-0">{children}</p>
-          ),
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
           // Unordered lists
           ul: ({ children }) => (
             <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">
@@ -350,38 +416,38 @@ function AssistantMarkdown({ content }: { content: string }) {
               {children}
             </ol>
           ),
-          li: ({ children }) => (
-            <li className="leading-6">{children}</li>
-          ),
+          li: ({ children }) => <li className="leading-6">{children}</li>,
           // Bold / italic
           strong: ({ children }) => (
-            <strong className="font-semibold text-slate-950 dark:text-slate-50">
+            <strong className="font-semibold text-slate-950">
               {children}
             </strong>
           ),
           em: ({ children }) => (
-            <em className="italic text-slate-700 dark:text-slate-300">{children}</em>
+            <em className="italic text-slate-700">
+              {children}
+            </em>
           ),
           // Horizontal rule (--- separators)
           hr: () => (
-            <hr className="my-3 border-slate-200 dark:border-slate-700" />
+            <hr className="my-3 border-slate-200" />
           ),
           // Inline code
           code: ({ children, className }) => {
             const isBlock = Boolean(className);
             return isBlock ? (
-              <code className="block rounded-md bg-slate-100 px-3 py-2 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+              <code className="block rounded-md bg-slate-100 px-3 py-2 font-mono text-xs text-slate-800">
                 {children}
               </code>
             ) : (
-              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs text-slate-800">
                 {children}
               </code>
             );
           },
           // Block quote
           blockquote: ({ children }) => (
-            <blockquote className="my-2 border-l-4 border-teal-400 pl-3 text-slate-600 dark:border-teal-600 dark:text-slate-300">
+            <blockquote className="my-2 border-l-4 border-teal-400 pl-3 text-slate-600">
               {children}
             </blockquote>
           ),
@@ -404,17 +470,13 @@ function ChatMessageBubble({
 
   return (
     <article
-      className={`rounded-md border px-3 py-3 ${
-        isUser
-          ? "ml-auto max-w-[86%] border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/50"
-          : "mr-auto max-w-[92%] border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-      }`}
+      className={`chat-message ${isUser ? "message-user" : "message-assistant"}`}
     >
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+      <p className="text-xs font-semibold uppercase text-slate-500">
         {isUser ? "You" : "CreatorLens AI"}
       </p>
       {isUser ? (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-100">
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
           {message.content}
         </p>
       ) : message.structuredAnswer ? (
@@ -422,7 +484,7 @@ function ChatMessageBubble({
       ) : message.content ? (
         <AssistantMarkdown content={message.content} />
       ) : isStreaming ? (
-        <p className="mt-2 text-sm leading-6 text-slate-400 dark:text-slate-500">
+        <p className="mt-2 text-sm leading-6 text-slate-400">
           Thinking...
         </p>
       ) : null}
@@ -435,28 +497,28 @@ function ChatMessageBubble({
 
 function CitationList({ citations }: { citations: ChatCitation[] }) {
   return (
-    <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-800">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+    <div className="mt-4 border-t border-slate-200 pt-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         Sources
       </p>
       <ol className="mt-2 grid gap-2">
         {citations.map((citation, index) => (
           <li
             key={`${citation.citation_label}-${index}`}
-            className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950"
+            className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2"
           >
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+            <p className="text-sm font-semibold text-slate-900">
               {index + 1}. {citationDisplayLabel(citation.citation_label)}
             </p>
-            <p className="mt-1 text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs font-medium uppercase text-slate-500">
               {platformLabel(citation.platform)} /{" "}
               {sourceTypeLabel(citation.source_type)}
             </p>
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs font-semibold text-teal-700 dark:text-teal-300">
+              <summary className="cursor-pointer text-xs font-semibold text-teal-700">
                 View source text
               </summary>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                 {citation.text}
               </p>
             </details>
@@ -488,8 +550,7 @@ function updateLastAssistantMessage(
       ...message,
       content: `${message.content}${update.appendText ?? ""}`,
       citations: update.citations ?? message.citations,
-      structuredAnswer:
-        update.structuredAnswer ?? message.structuredAnswer,
+      structuredAnswer: update.structuredAnswer ?? message.structuredAnswer,
     };
     break;
   }

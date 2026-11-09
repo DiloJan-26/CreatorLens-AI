@@ -25,13 +25,16 @@ export function CreatorInsightSummaryPanel({
   initialSummary = null,
   onSummaryLoaded,
 }: CreatorInsightSummaryPanelProps) {
-  const [summary, setSummary] =
-    useState<CreatorInsightSummaryResponse | null>(null);
+  const [summary, setSummary] = useState<CreatorInsightSummaryResponse | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const visibleSummary = summary ?? initialSummary;
   const activeSummary =
-    projectId && visibleSummary?.project_id === projectId ? visibleSummary : null;
+    projectId && visibleSummary?.project_id === projectId
+      ? visibleSummary
+      : null;
 
   const loadInsights = useCallback(
     async (activeProjectId: string) => {
@@ -80,8 +83,8 @@ export function CreatorInsightSummaryPanel({
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             CreatorLens AI separates confirmed public performance, creator-size
-            efficiency, and creative structure so the comparison does not mistake
-            data availability for content strength.
+            efficiency, and creative structure so the comparison does not
+            mistake data availability for content strength.
           </p>
         </div>
         <button
@@ -110,7 +113,8 @@ export function CreatorInsightSummaryPanel({
 
       {!projectId ? (
         <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Creator Insight Summary appears after Content 1 and Content 2 are analyzed.
+          Creator Insight Summary appears after Content 1 and Content 2 are
+          analyzed.
         </p>
       ) : null}
 
@@ -122,32 +126,38 @@ export function CreatorInsightSummaryPanel({
 
       {activeSummary ? (
         <div className="mt-5 grid gap-4">
-          <OverallComparisonCard comparison={activeSummary.comparison} />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {activeSummary.content_1 ? (
-              <InsightScoreCard content={activeSummary.content_1} />
-            ) : (
-              <UnavailableContentInsight label="Content 1" />
-            )}
-            {activeSummary.content_2 ? (
-              <InsightScoreCard content={activeSummary.content_2} />
-            ) : (
-              <UnavailableContentInsight label="Content 2" />
-            )}
-          </div>
-
-          <HookComparisonCard
-            content1={activeSummary.content_1 ?? null}
-            content2={activeSummary.content_2 ?? null}
-            comparison={activeSummary.comparison}
-          />
-
           <RecommendationList
             recommendations={activeSummary.comparison.top_recommendations}
             exampleRewrite={
               activeSummary.comparison.example_rewrite_for_content_2
             }
+          />
+          <ScoreComparison summary={activeSummary} />
+          <details className="detail-disclosure">
+            <summary>Detailed comparison rationale</summary>
+            <OverallComparisonCard comparison={activeSummary.comparison} />
+          </details>
+
+          <details className="detail-disclosure">
+            <summary>Per-content score breakdown & evidence gaps</summary>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {activeSummary.content_1 ? (
+                <InsightScoreCard content={activeSummary.content_1} />
+              ) : (
+                <UnavailableContentInsight label="Content 1" />
+              )}
+              {activeSummary.content_2 ? (
+                <InsightScoreCard content={activeSummary.content_2} />
+              ) : (
+                <UnavailableContentInsight label="Content 2" />
+              )}
+            </div>
+          </details>
+
+          <HookComparisonCard
+            content1={activeSummary.content_1 ?? null}
+            content2={activeSummary.content_2 ?? null}
+            comparison={activeSummary.comparison}
           />
 
           {activeSummary.notes.length > 0 ? (
@@ -197,27 +207,26 @@ function OverallComparisonCard({
           label="Creative structure winner"
           value={comparison.creative_structure_winner}
         />
-        <Metric label="Overall signal winner" value={comparison.overall_insight_winner} />
+        <Metric
+          label="Overall signal winner"
+          value={comparison.overall_insight_winner}
+        />
       </dl>
 
       <p className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700">
         {comparison.main_reason}
       </p>
       <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        <span className="font-medium text-slate-700">Evidence confidence: </span>
+        <span className="font-medium text-slate-700">
+          Evidence confidence:{" "}
+        </span>
         {comparison.confidence_note}
       </p>
     </section>
   );
 }
 
-function Metric({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
+function Metric({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
       <dt className="font-medium text-slate-500">{label}</dt>
@@ -228,7 +237,11 @@ function Metric({
   );
 }
 
-function UnavailableContentInsight({ label }: { label: "Content 1" | "Content 2" }) {
+function UnavailableContentInsight({
+  label,
+}: {
+  label: "Content 1" | "Content 2";
+}) {
   return (
     <article className="rounded-md border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
@@ -247,4 +260,78 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Could not load Creator Insight Summary.";
+}
+
+function ScoreComparison({
+  summary,
+}: {
+  summary: CreatorInsightSummaryResponse;
+}) {
+  const c = [summary.content_1, summary.content_2];
+  const rows = [
+    "Hook clarity",
+    "Creative structure",
+    "Public performance",
+    "Creator efficiency",
+    "Overall insight",
+  ];
+  const vals = c.map((v) =>
+    v
+      ? [
+          v.scores.hook_clarity,
+          v.scores.creative_structure_score,
+          v.scores.public_performance_score,
+          v.scores.creator_efficiency_score,
+          v.scores.overall_score,
+        ]
+      : [],
+  );
+  return (
+    <div className="score-comparison">
+      <h3 className="text-lg mb-2">Side-by-side assessment</h3>
+      <p className="muted text-xs mb-4">
+        Deterministic heuristic scores out of 10. These are review signals, not
+        measured retention or causal performance estimates.
+      </p>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Signal</th>
+              <th scope="col">Content 1</th>
+              <th scope="col">Content 2</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((label, i) => (
+              <tr key={label}>
+                <th scope="row">{label}</th>
+                {vals.map((v, j) => (
+                  <td key={j}>
+                    {v[i] == null ? (
+                      "Unavailable"
+                    ) : (
+                      <>
+                        <span className="font-semibold">
+                          {v[i]}
+                          <span className="muted text-xs"> / 10</span>
+                        </span>
+                        <div className="score-track" aria-hidden="true">
+                          <span
+                            style={{
+                              width: `${Math.max(0, Math.min(10, v[i])) * 10}%`,
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

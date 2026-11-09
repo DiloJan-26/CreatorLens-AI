@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeading, Notice } from "./ui";
 import { CreatorChatPanel } from "@/components/CreatorChatPanel";
-import { getCreatorInsightSummary, getProject } from "@/lib/api";
+import {
+  getCreatorInsightSummary,
+  getProject,
+  getProjectIngestionStatus,
+} from "@/lib/api";
 import { getActiveProjectId } from "@/lib/app-session";
 import type {
   ContentItem,
@@ -13,11 +18,24 @@ import type {
 } from "@/types/project";
 
 export function CreatorChatPage() {
+  const [contextOpen, setContextOpen] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width:1280px)");
+    const sync = () => setContextOpen(media.matches);
+    const timer = window.setTimeout(sync, 0);
+    media.addEventListener("change", sync);
+    return () => {
+      window.clearTimeout(timer);
+      media.removeEventListener("change", sync);
+    };
+  }, []);
+  const [readiness, setReadiness] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectDetail, setProjectDetail] =
     useState<ProjectDetailResponse | null>(null);
-  const [summary, setSummary] =
-    useState<CreatorInsightSummaryResponse | null>(null);
+  const [summary, setSummary] = useState<CreatorInsightSummaryResponse | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,10 +44,12 @@ export function CreatorChatPage() {
     setError(null);
 
     try {
-      const [detail, insightSummary] = await Promise.all([
+      const [detail, insightSummary, status] = await Promise.all([
         getProject(activeProjectId),
         getCreatorInsightSummary(activeProjectId).catch(() => null),
+        getProjectIngestionStatus(activeProjectId).catch(() => null),
       ]);
+      setReadiness(status?.status ?? null);
       setProjectDetail(detail);
       setSummary(insightSummary);
     } catch (caughtError) {
@@ -64,83 +84,101 @@ export function CreatorChatPage() {
     return () => window.clearTimeout(loadTimer);
   }, [loadProject]);
 
-  if (!projectId) {
+  if (!projectId)
     return (
-      <main className="min-h-screen bg-slate-50 px-6 py-12 text-slate-950 dark:bg-slate-950 dark:text-slate-50 sm:px-8 lg:px-10">
-        <EmptyChatState />
+      <main className="page-container">
+        {isLoading ? (
+          <Notice>Loading your workspace...</Notice>
+        ) : (
+          <EmptyChatState />
+        )}
       </main>
     );
-  }
-
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <section className="mx-auto max-w-7xl px-6 py-10 sm:px-8 lg:px-10">
-        <div className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
-            Cited Creator Reasoning
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold leading-tight text-slate-950 dark:text-slate-50">
-            Ask CreatorLens AI
-          </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
-            Ask performance, hook, rewrite, and improvement questions grounded
-            in cited metadata, transcripts, and creator insights.
-          </p>
-        </div>
-
-        {isLoading ? (
-          <p className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-100">
-            Loading the latest creator intelligence workspace...
-          </p>
-        ) : null}
-
-        {error ? (
-          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-100">
-            {error}
-          </p>
-        ) : null}
-
-        {!isLoading && projectDetail ? (
-          <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="grid gap-4 lg:sticky lg:top-[96px] lg:self-start">
+    <main className="page-container assistant-page">
+      <PageHeading
+        eyebrow="Creator workspace"
+        title="AI Assistant"
+        description="Ask a focused question. Follow the evidence."
+        action={
+          <Link className="button-secondary" href="/analyze">
+            View comparison
+          </Link>
+        }
+      />
+      {isLoading && <Notice>Loading comparison context...</Notice>}
+      {error && (
+        <Notice tone="error">
+          {error}{" "}
+          <button
+            className="button-secondary"
+            onClick={() => void loadProject(projectId)}
+          >
+            Retry
+          </button>
+        </Notice>
+      )}
+      {!isLoading && projectDetail && (
+        <div className="chat-layout">
+          <aside className="chat-context">
+            {readiness && readiness !== "READY" && (
+              <p className="notice text-sm mb-3">
+                {readiness === "PARTIAL_READY"
+                  ? "Partial evidence available. Review missing fields before drawing conclusions."
+                  : `Processing status: ${readiness.replace(/_/g, " ").toLowerCase()}. Return to Compare for updates.`}
+              </p>
+            )}
+            <details
+              className="context-disclosure"
+              open={contextOpen}
+              onToggle={(e) => setContextOpen(e.currentTarget.open)}
+            >
+              <summary>Active comparison</summary>
               <ProjectContextCard
                 projectId={projectId}
                 projectDetail={projectDetail}
                 summary={summary}
               />
-              <Link
-                href="/analyze?new=1"
-                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-              >
-                Analyze New Content
+              <Link className="button-quiet" href="/analyze#evidence">
+                Inspect evidence
               </Link>
-            </aside>
-
-            <CreatorChatPanel projectId={projectId} indexReady={true} />
-          </div>
-        ) : null}
-      </section>
+            </details>
+            <p className="muted text-xs mt-4">
+              AI suggestions are hypotheses to test. Missing public metrics are
+              not estimated.
+            </p>
+          </aside>
+          <CreatorChatPanel
+            projectId={projectId}
+            indexReady={
+              readiness === null ||
+              readiness === "READY" ||
+              readiness === "PARTIAL_READY"
+            }
+          />
+        </div>
+      )}
     </main>
   );
 }
 
 function EmptyChatState() {
   return (
-    <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">
+    <section className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
         Creator chat
       </p>
-      <h1 className="mt-3 text-3xl font-semibold text-slate-950 dark:text-slate-50">
+      <h1 className="mt-3 text-3xl font-semibold text-slate-950">
         Analyze two content URLs first to start a cited creator chat.
       </h1>
-      <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300">
+      <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600">
         CreatorLens AI only opens chat for an explicit analyzed project. Start
-        from the analysis workspace so the sidebar and answers use real extracted
-        data from your URLs.
+        from the analysis workspace so the sidebar and answers use real
+        extracted data from your URLs.
       </p>
       <Link
         href="/analyze?new=1"
-        className="mt-6 inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-teal-400 dark:text-slate-950"
+        className="mt-6 inline-flex h-11 items-center justify-center rounded-md bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
       >
         Go to Analysis
       </Link>
@@ -162,11 +200,11 @@ function ProjectContextCard({
   const hasContent = Boolean(content1 || content2);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
         Current project
       </p>
-      <p className="mt-2 break-all text-xs text-slate-500 dark:text-slate-400">
+      <p className="mt-2 break-all text-xs text-slate-500">
         {projectId}
       </p>
 
@@ -184,7 +222,7 @@ function ProjectContextCard({
           />
         </div>
       ) : (
-        <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+        <p className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600">
           Project content is not loaded yet.
         </p>
       )}
@@ -205,18 +243,19 @@ function ContentSummary({
     return null;
   }
 
-  const contentText = item.title || item.creator || item.creator_handle || item.url;
+  const contentText =
+    item.title || item.creator || item.creator_handle || item.url;
 
   return (
-    <article className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950">
-      <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+    <article className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+      <p className="text-xs font-semibold uppercase text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
+      <p className="mt-1 text-sm font-semibold text-slate-950">
         {platformLabel(item.platform)}
       </p>
       {contentText ? (
-        <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-slate-600 dark:text-slate-300">
+        <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-slate-600">
           {contentText}
         </p>
       ) : null}
@@ -239,8 +278,10 @@ function ContentSummary({
 function ContextMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-medium text-slate-500 dark:text-slate-400">{label}</dt>
-      <dd className="mt-1 break-words text-slate-950 dark:text-slate-50">
+      <dt className="font-medium text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-1 break-words text-slate-950">
         {value}
       </dd>
     </div>

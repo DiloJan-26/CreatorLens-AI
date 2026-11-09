@@ -20,7 +20,9 @@ export function TranscriptPreviewPanel({
   item,
   label,
 }: TranscriptPreviewPanelProps) {
-  const [preview, setPreview] = useState<TranscriptPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<TranscriptPreviewResponse | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,14 +54,14 @@ export function TranscriptPreviewPanel({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="ui-panel transcript-panel">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
             {label} {item ? `- ${platformLabel(item.platform)}` : ""}
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Transcript Evidence Preview
+            Transcript preview / up to 5 segments
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Review extracted transcript segments when public captions or
@@ -72,7 +74,7 @@ export function TranscriptPreviewPanel({
           disabled={isLoading || !projectId || !item}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Loading..." : "transcript"}
+          {isLoading ? "Loading..." : "Load preview"}
         </button>
       </div>
 
@@ -84,7 +86,7 @@ export function TranscriptPreviewPanel({
 
       {preview ? (
         <div className="mt-4">
-          <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600 sm:grid-cols-4">
+          <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600 sm:grid-cols-2">
             <PreviewMetric
               label="Source"
               value={transcriptSourceLabel(preview.transcript_source)}
@@ -168,7 +170,7 @@ function transcriptSourceLabel(source: string | null | undefined): string {
     return "Unavailable";
   }
 
-  return "Unknown";
+  return source?.replace(/_/g, " ") || "Unknown";
 }
 
 function languageLabel(language: string | null | undefined): string {

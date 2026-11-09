@@ -76,7 +76,7 @@ export function AiReasoningStatus() {
         className={`h-2 w-2 shrink-0 rounded-full ${dot}`}
         aria-label={label}
       />
-      <span className="hidden text-xs font-medium text-slate-500 dark:text-slate-400 lg:inline">
+      <span className="hidden text-xs font-medium text-slate-500 lg:inline">
         {label}
       </span>
       <button
@@ -84,7 +84,7 @@ export function AiReasoningStatus() {
         onClick={handleCheck}
         disabled={checking}
         aria-label="Check AI Reasoning"
-        className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
       >
         {checking ? "…" : "Check"}
       </button>

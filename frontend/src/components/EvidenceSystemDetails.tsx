@@ -21,40 +21,27 @@ export function EvidenceSystemDetails({
   onIndexed,
 }: EvidenceSystemDetailsProps) {
   return (
-    <details
-      id="evidence"
-      open={defaultOpen}
-      className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-    >
-      <summary className="cursor-pointer list-none">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-              Evidence & System Details
-            </p>
-            <h2 className="mt-2 text-base font-semibold text-slate-950">
-              Advanced validation layer
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Inspect the evidence index and retrieved sources used to ground
-              cited answers. This section is collapsed by default for normal
-              creator workflows.
-            </p>
-          </div>
-          <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-            Evidence index: {indexReady ? "Ready" : "Not ready"}
-          </span>
-        </div>
-      </summary>
-
-      <div className="mt-5 grid gap-4">
+    <div className="grid gap-5">
+      <div>
+        <h2 className="text-xl">Explore supporting evidence</h2>
+        <p className="muted mt-2">
+          Search the available source passages. Results preserve content slot,
+          platform, source type and timestamps.
+        </p>
+      </div>
+      <RetrievalTestPanel projectId={projectId} indexReady={indexReady} />
+      <details open={defaultOpen} className="ui-panel">
+        <summary>Advanced / Evidence index controls</summary>
+        <p className="muted text-sm mb-4">
+          Index status: {indexReady ? "Ready" : "Not ready"}. Indexing changes
+          the available evidence and is an explicit action.
+        </p>
         <RagIndexPanel
           projectId={projectId}
           initialResult={indexResult}
           onIndexed={onIndexed}
         />
-        <RetrievalTestPanel projectId={projectId} indexReady={indexReady} />
-      </div>
-    </details>
+      </details>
+    </div>
   );
 }

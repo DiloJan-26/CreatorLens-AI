@@ -55,7 +55,7 @@ export function IngestionProgressPanel({
       </div>
 
       <div
-        className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800"
+        className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/80"
         role="progressbar"
         aria-label="Ingestion progress"
         aria-valuemin={0}
@@ -75,14 +75,14 @@ export function IngestionProgressPanel({
       ) : null}
 
       {isFailed && status.error_message ? (
-        <p className="mt-4 rounded-md border border-rose-300 bg-white/70 px-3 py-2 text-sm text-rose-900 dark:bg-slate-950/40 dark:text-rose-100">
+        <p className="mt-4 rounded-md border border-rose-300 bg-white/70 px-3 py-2 text-sm text-rose-900">
           {status.error_message}
           {status.error_code ? ` (${status.error_code})` : ""}
         </p>
       ) : null}
 
       {isPartial ? (
-        <p className="mt-4 rounded-md border border-amber-300 bg-white/70 px-3 py-2 text-sm text-amber-950 dark:bg-slate-950/40 dark:text-amber-100">
+        <p className="mt-4 rounded-md border border-amber-300 bg-white/70 px-3 py-2 text-sm text-amber-950">
           Usable evidence is ready, but one or more transcript or metadata fields
           were unavailable. Missing values remain marked as unavailable.
         </p>
@@ -106,15 +106,15 @@ function terminalMessage(status: IngestionJobStatus): string {
 
 function panelClass(status: IngestionJobStatus): string {
   if (status === "FAILED") {
-    return "border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-100";
+    return "border-rose-200 bg-rose-50 text-rose-950";
   }
   if (status === "PARTIAL_READY") {
-    return "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100";
+    return "border-amber-200 bg-amber-50 text-amber-950";
   }
   if (status === "READY") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100";
+    return "border-emerald-200 bg-emerald-50 text-emerald-950";
   }
-  return "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-100";
+  return "border-sky-200 bg-sky-50 text-sky-950";
 }
 
 function progressClass(status: IngestionJobStatus): string {
