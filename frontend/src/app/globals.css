@@ -248,13 +248,11 @@ details > summary::marker {
   white-space: nowrap;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 33px;
   height: 33px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--on-accent);
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .brand-ai {
   font-weight: 500;

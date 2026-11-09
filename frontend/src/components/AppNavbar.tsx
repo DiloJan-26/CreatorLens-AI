@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Dialog, Icon } from "./ui";
@@ -14,9 +15,14 @@ const engineerLinks = [
 function Brand() {
   return (
     <Link href="/" className="brand" aria-label="CreatorLens AI home">
-      <span className="brand-mark">
-        <Icon name="compare" size={19} />
-      </span>
+      <Image
+        src="/Logo/Logo.png"
+        alt=""
+        width={33}
+        height={33}
+        className="brand-mark"
+        priority
+      />
       <span>
         CreatorLens<span className="brand-ai"> AI</span>
       </span>
