@@ -18,7 +18,7 @@ import {
 } from "@/components/ExecutiveInsightSnapshot";
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
 import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
-import { PageHeading, Notice, Icon } from "./ui";
+import { PageHeading, Notice, Icon, EmptyState } from "./ui";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import {
@@ -102,6 +102,27 @@ export function ComparisonWorkspace() {
     ingestionStatus?.status === "READY" ||
     ingestionStatus?.status === "PARTIAL_READY";
   const hasResults = Boolean(projectDetail);
+  const sectionIntro =
+    activeTab === "insights"
+      ? {
+          title: "Creator Insights",
+          description:
+            "Understand opening hooks, creative structure and opportunities to improve.",
+          emptyTitle: "Analyze two videos to unlock creator insights.",
+          emptyDescription:
+            "Start a comparison to review deterministic scores, compare opening hooks and find evidence-backed improvements for your content.",
+          icon: "chart",
+        }
+      : activeTab === "evidence"
+        ? {
+            title: "Evidence Explorer",
+            description: "Inspect the sources behind your comparison.",
+            emptyTitle: "Analyze two videos to explore their evidence.",
+            emptyDescription:
+              "Start a comparison to search source passages, inspect public metadata and review transcript evidence with citations.",
+            icon: "evidence",
+          }
+        : null;
 
   const resetWorkspaceState = useCallback(() => {
     setContent1Url("");
@@ -356,15 +377,81 @@ export function ComparisonWorkspace() {
     );
   }
 
+  if (!hasResults && sectionIntro) {
+    return (
+      <main className="page-container comparison-workspace">
+        <PageHeading
+          eyebrow="Creator workspace"
+          title={sectionIntro.title}
+          description={sectionIntro.description}
+          icon={sectionIntro.icon}
+        />
+        {isRestoringProject ? (
+          <Notice>Loading your comparison...</Notice>
+        ) : (
+          <div className="ui-panel workspace-prerequisite">
+            <EmptyState
+              title={
+                isSubmitting || createdProject
+                  ? "Your analysis is being prepared."
+                  : sectionIntro.emptyTitle
+              }
+              action={
+                <Link
+                  href="/analyze"
+                  className="button-primary mt-4"
+                  onClick={(event) => {
+                    if (
+                      event.ctrlKey ||
+                      event.metaKey ||
+                      event.shiftKey ||
+                      event.altKey
+                    )
+                      return;
+                    event.preventDefault();
+                    window.history.pushState(null, "", "/analyze");
+                    setActiveTab("overview");
+                    window.dispatchEvent(new HashChangeEvent("hashchange"));
+                  }}
+                >
+                  {isSubmitting || createdProject
+                    ? "View analysis progress"
+                    : "Go to Analysis"}
+                  <Icon name="arrow" size={17} />
+                </Link>
+              }
+            >
+              <p>
+                {isSubmitting || createdProject
+                  ? "Return to Compare to follow processing progress. This section will use the available results once they are ready."
+                  : sectionIntro.emptyDescription}
+              </p>
+            </EmptyState>
+          </div>
+        )}
+        {error && (
+          <div className="mt-4">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="page-container comparison-workspace">
       <PageHeading
         eyebrow="Creator workspace"
-        title={hasResults ? "Comparison Result" : "Compare two videos"}
+        title={
+          sectionIntro?.title ??
+          (hasResults ? "Comparison Result" : "Compare two videos")
+        }
+        icon={sectionIntro?.icon}
         description={
-          hasResults
+          sectionIntro?.description ??
+          (hasResults
             ? "Inspect the public metrics, creative signals and supporting evidence."
-            : "Bring two public videos. We'll bring the evidence."
+            : "Bring two public videos. We'll bring the evidence.")
         }
         action={
           hasResults ? (
@@ -375,6 +462,7 @@ export function ComparisonWorkspace() {
                 resetWorkspaceState();
                 setActiveTab("overview");
                 window.history.replaceState(null, "", "/analyze?new=1");
+                window.dispatchEvent(new HashChangeEvent("hashchange"));
               }}
             >
               <Icon name="compare" size={16} /> New comparison

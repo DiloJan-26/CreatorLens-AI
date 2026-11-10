@@ -380,17 +380,6 @@ details > summary::marker {
 .product-link {
   margin-top: 36px;
 }
-.rail-footer {
-  margin-top: auto;
-  border-top: 1px solid var(--nav-border);
-  padding: 14px 10px;
-  font-size: 14px;
-}
-.rail-footer p {
-  font-size: 14px;
-  color: var(--nav-muted);
-  margin-top: 6px;
-}
 .status-dot {
   display: inline-block;
   width: 6px;
@@ -2121,33 +2110,20 @@ details > summary::marker {
   width: 18px;
   height: 18px;
 }
-.rail-footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.rail-home {
+  margin-top: auto;
+  margin-bottom: 0;
+  width: 100%;
+  padding: 11px 14px;
   border: 1px solid var(--nav-border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: rgb(132 161 185 / 0.12);
 }
-.rail-footer strong {
-  color: #f2f7fb;
-  font-size: 13px;
-  font-weight: 550;
-}
-.rail-footer p {
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.workspace-avatar {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  color: #e5f0f7;
-  background: #4a6274;
-  border-radius: 50%;
+.drawer-navigation {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 140px);
+  gap: 20px;
 }
 .navigation-drawer .drawer-actions .button-secondary {
   color: var(--ink);

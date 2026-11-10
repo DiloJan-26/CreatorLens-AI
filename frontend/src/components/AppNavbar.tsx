@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Dialog, Icon } from "./ui";
 const creatorLinks = [
-  { href: "/", label: "Home", icon: "home" },
   { href: "/analyze", label: "Compare", icon: "compare" },
-  { href: "/chat", label: "AI Assistant", icon: "chat" },
-  { href: "/analyze#evidence", label: "Evidence", icon: "evidence" },
   { href: "/analyze#insights", label: "Insights", icon: "chart" },
+  { href: "/analyze#evidence", label: "Evidence", icon: "evidence" },
+  { href: "/chat", label: "AI Assistant", icon: "chat" },
 ];
 const engineerLinks = [
   { href: "/evaluations", label: "RAG Evaluation", icon: "shield" },
@@ -59,6 +58,16 @@ export function AppNavbar({ children }: { children: ReactNode }) {
     );
   };
   const publicPage = pathname === "/";
+  const homeLink = (
+    <Link
+      href="/"
+      className="rail-link rail-home"
+      aria-current={publicPage ? "page" : undefined}
+      onClick={() => setDrawer(false)}
+    >
+      <Icon name="home" /> Home
+    </Link>
+  );
   const navigation = (
     <nav aria-label="Workspace navigation">
       <p className="nav-group-label">Workspace</p>
@@ -147,15 +156,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
           <aside className="application-rail">
             <Brand />
             {navigation}
-            <div className="rail-footer">
-              <span className="workspace-avatar">
-                <Icon name="globe" size={18} />
-              </span>
-              <div>
-                <strong>Demo workspace</strong>
-                <p>Open access / Public evidence</p>
-              </div>
-            </div>
+            {homeLink}
           </aside>
           <header className="workspace-header">
             <div className="flex items-center gap-3 min-w-0">
@@ -196,28 +197,30 @@ export function AppNavbar({ children }: { children: ReactNode }) {
         title="CreatorLens AI"
         drawer
       >
-        {navigation}
-        {publicPage && (
-          <div className="drawer-actions">
-            <button
-              className="button-secondary"
-              onClick={() => {
-                setDrawer(false);
-                setAuth(true);
-              }}
-            >
-              Sign in
-            </button>
-            <Link
-              href="/analyze"
-              className="button-primary"
-              onClick={() => setDrawer(false)}
-            >
-              Explore demo
-            </Link>
-          </div>
-        )}
-        <p className="muted text-sm mt-8">Demo mode · No sign-in required</p>
+        <div className="drawer-navigation">
+          {navigation}
+          {publicPage && (
+            <div className="drawer-actions">
+              <button
+                className="button-secondary"
+                onClick={() => {
+                  setDrawer(false);
+                  setAuth(true);
+                }}
+              >
+                Sign in
+              </button>
+              <Link
+                href="/analyze"
+                className="button-primary"
+                onClick={() => setDrawer(false)}
+              >
+                Explore demo
+              </Link>
+            </div>
+          )}
+          {homeLink}
+        </div>
       </Dialog>
       <Dialog
         open={auth}
