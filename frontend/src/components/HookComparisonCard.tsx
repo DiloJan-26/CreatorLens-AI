@@ -1,4 +1,5 @@
 import type { ComparisonInsight, ContentInsight } from "@/types/project";
+import { PlatformIcon } from "./PlatformIcon";
 
 type HookComparisonCardProps = {
   content1: ContentInsight | null;
@@ -50,7 +51,9 @@ function HookDetail({
     return (
       <article className="rounded-md border border-slate-200 bg-white px-3 py-3">
         <h4 className="text-sm font-semibold text-slate-950">{label}</h4>
-        <p className="mt-2 text-sm text-slate-600">Hook Analysis unavailable.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          Hook Analysis unavailable.
+        </p>
       </article>
     );
   }
@@ -59,7 +62,8 @@ function HookDetail({
     <article className="rounded-md border border-slate-200 bg-white px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <h4 className="text-sm font-semibold text-slate-950">
-          {label} · {platformLabel(content.platform)}
+          <PlatformIcon platform={content.platform} size={17} /> {label} ·{" "}
+          {platformLabel(content.platform)}
         </h4>
         <span className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700">
           {content.hook_analysis.hook_score}/10

@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, type FormEvent } from "react";
+import { PlatformIcon } from "./PlatformIcon";
+import { Icon } from "./ui";
 type VideoUrlFormProps = {
   content1Url: string;
   content2Url: string;
@@ -83,7 +85,18 @@ export function VideoUrlForm({
       </div>
       <div className="form-actions">
         <div id="url-help">
-          <p className="text-sm font-medium">YouTube / Instagram / Facebook</p>
+          <p className="supported-platform-row">
+            {["youtube", "instagram", "facebook"].map((platform) => (
+              <span key={platform}>
+                <PlatformIcon platform={platform} size={18} />
+                {platform === "youtube"
+                  ? "YouTube"
+                  : platform === "instagram"
+                    ? "Instagram"
+                    : "Facebook"}
+              </span>
+            ))}
+          </p>
           <p className="muted text-xs mt-1">
             Public videos only. Availability varies by platform.
           </p>
@@ -93,7 +106,8 @@ export function VideoUrlForm({
           disabled={isSubmitting}
           type="submit"
         >
-          {isSubmitting ? "Starting analysis..." : "Analyze videos"}
+          {isSubmitting ? "Starting analysis..." : "Analyze videos"}{" "}
+          <Icon name="arrow" size={17} />
         </button>
       </div>
     </form>

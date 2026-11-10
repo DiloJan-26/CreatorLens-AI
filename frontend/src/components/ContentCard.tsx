@@ -1,12 +1,19 @@
+"use client";
+import Image from "next/image";
+import { useState } from "react";
+import { PlatformIcon } from "./PlatformIcon";
+import { Icon } from "./ui";
 import type { ContentItem, ContentPlatform } from "@/types/project";
 export function ContentCard({
   item,
   label,
   isPending = false,
+  hookScore,
 }: {
   item: ContentItem | null;
   label: "Content 1" | "Content 2";
   isPending?: boolean;
+  hookScore?: number | null;
 }) {
   if (!item)
     return (
@@ -24,68 +31,99 @@ export function ContentCard({
       className="ui-panel content-identity"
       data-content-slot={item.slot}
     >
-      <div className="flex items-start gap-3">
-        <span className="content-monogram">{label.slice(-1)}</span>
-        <div className="min-w-0">
-          <p className="eyebrow">
-            {label} / {platformLabel(item.platform)}
-          </p>
-          <h2 className="text-lg break-words">
+      <div className="video-card-heading">
+        <span className="platform-label">
+          <PlatformIcon platform={item.platform} />
+          {label}
+          <span className="muted">/ {platformLabel(item.platform)}</span>
+        </span>
+        <span className={`extraction-state state-${item.extraction_status}`}>
+          {item.extraction_status.replace(/_/g, " ")}
+        </span>
+      </div>
+      <div className="video-card-body">
+        <VideoThumbnail
+          key={item.thumbnail_url ?? item.url}
+          item={item}
+          label={label}
+        />
+        <div className="video-card-content">
+          <h2 className="video-title" title={item.title || undefined}>
             {item.title || "Title unavailable"}
           </h2>
-          <p className="muted text-sm mt-2">
+          <p className="muted text-sm video-creator">
             {item.creator ?? item.creator_handle ?? "Creator unavailable"}
           </p>
-          <a
-            className="source-link"
-            href={/^https?:\/\//i.test(item.url) ? item.url : undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open original video
-          </a>
+          <dl className="video-quick-metrics">
+            <Metric label="Views" value={formatNumber(item.views)} />
+            <Metric
+              label={item.platform === "facebook" ? "Reactions" : "Likes"}
+              value={formatNumber(
+                item.platform === "facebook" ? item.reactions : item.likes,
+              )}
+            />
+            <Metric label="Comments" value={formatNumber(item.comments)} />
+            <Metric
+              label="Hook score"
+              value={hookScore == null ? null : `${hookScore}/10`}
+            />
+          </dl>
         </div>
       </div>
-      <p className="muted text-xs mt-3">
-        Extracted title / {item.extraction_status.replace(/_/g, " ")}
-      </p>
+      <div className="video-card-footnote">
+        <span>
+          Public metric snapshot{" "}
+          <span className="muted">/ Hook score is heuristic</span>
+        </span>
+        <a
+          className="source-link"
+          href={/^https?:\/\//i.test(item.url) ? item.url : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Original <Icon name="external" size={13} />
+        </a>
+      </div>
       {item.error_message && (
         <p className="notice notice-error mt-4" role="alert">
           {item.error_message}
         </p>
       )}
-      <h3 className="text-sm mt-6 mb-3">Confirmed public metrics</h3>
-      <dl className="metric-grid">
-        {[
-          ["Views", formatNumber(item.views)],
-          [
-            item.platform === "facebook" ? "Reactions" : "Likes",
-            formatNumber(
-              item.platform === "facebook" ? item.reactions : item.likes,
-            ),
-          ],
-          ["Comments", formatNumber(item.comments)],
-          ["Shares", formatNumber(item.shares)],
-          [
-            "Followers / subscribers",
-            formatNumber(item.follower_count ?? item.subscriber_count),
-          ],
-          [
-            "Engagement rate",
-            item.engagement_rate == null
-              ? null
-              : `${item.engagement_rate.toFixed(2)}%`,
-          ],
-        ].map(([k, v]) => (
-          <Metric key={k} label={k as string} value={v} />
-        ))}
-      </dl>
-      <p className="muted text-xs mt-3">
-        Unavailable values are not zero. Engagement rate follows the existing
-        calculation and available inputs.
-      </p>
-      <details className="detail-disclosure mt-5">
+      <details className="detail-disclosure video-card-details">
         <summary>Content details & provenance</summary>
+        <p className="muted text-xs mt-3">
+          Extracted title: {item.title || "Unavailable"}
+        </p>
+        <h3 className="text-sm mt-4 mb-3">Confirmed public metrics</h3>
+        <dl className="metric-grid">
+          {[
+            ["Views", formatNumber(item.views)],
+            [
+              item.platform === "facebook" ? "Reactions" : "Likes",
+              formatNumber(
+                item.platform === "facebook" ? item.reactions : item.likes,
+              ),
+            ],
+            ["Comments", formatNumber(item.comments)],
+            ["Shares", formatNumber(item.shares)],
+            [
+              "Followers / subscribers",
+              formatNumber(item.follower_count ?? item.subscriber_count),
+            ],
+            [
+              "Engagement rate",
+              item.engagement_rate == null
+                ? null
+                : `${item.engagement_rate.toFixed(2)}%`,
+            ],
+          ].map(([k, v]) => (
+            <Metric key={k} label={k as string} value={v} />
+          ))}
+        </dl>
+        <p className="muted text-xs mt-3">
+          Unavailable values are not zero. Engagement rate follows the existing
+          calculation and available inputs.
+        </p>
         <dl className="grid gap-4 sm:grid-cols-2 text-sm my-4">
           <Metric
             label="Duration"
@@ -123,6 +161,38 @@ export function ContentCard({
         </div>
       </details>
     </article>
+  );
+}
+function VideoThumbnail({ item, label }: { item: ContentItem; label: string }) {
+  const [failed, setFailed] = useState(false);
+  const source =
+    item.thumbnail_url && /^(https?:\/\/|\/(?!\/))/i.test(item.thumbnail_url)
+      ? item.thumbnail_url
+      : null;
+  return (
+    <div className="video-thumbnail">
+      {source && !failed ? (
+        <Image
+          src={source}
+          alt={`Thumbnail for ${label}`}
+          fill
+          sizes="88px"
+          unoptimized
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="thumbnail-unavailable">
+          <PlatformIcon platform={item.platform} size={26} />
+          <span>Preview unavailable</span>
+        </div>
+      )}
+      {item.duration_seconds != null && (
+        <span className="video-duration">
+          {Math.floor(item.duration_seconds / 60)}:
+          {String(Math.floor(item.duration_seconds % 60)).padStart(2, "0")}
+        </span>
+      )}
+    </div>
   );
 }
 function Metric({

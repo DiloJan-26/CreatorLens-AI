@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { getTranscriptPreview } from "@/lib/api";
+import { PlatformIcon } from "./PlatformIcon";
 import type {
   ContentItem,
   TranscriptPreviewResponse,
@@ -60,7 +61,8 @@ export function TranscriptPreviewPanel({
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
+          <p className="platform-label">
+            {item && <PlatformIcon platform={item.platform} />}
             {label} {item ? `- ${platformLabel(item.platform)}` : ""}
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">

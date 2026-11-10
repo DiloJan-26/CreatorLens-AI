@@ -3,6 +3,9 @@
 import { FormEvent, useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Image from "next/image";
+import { Icon } from "./ui";
+import { PlatformIcon } from "./PlatformIcon";
 
 import { StructuredAnswerCard } from "@/components/StructuredAnswerCard";
 import { getChatHistory, streamChatResponse } from "@/lib/api";
@@ -228,7 +231,10 @@ export function CreatorChatPanel({
   return (
     <section className="chat-panel" aria-label="Evidence-grounded conversation">
       <div className="chat-top">
-        <span className="font-semibold">CreatorLens AI</span>
+        <span className="platform-label">
+          <Icon name="shield" size={16} />
+          Evidence-grounded conversation
+        </span>
         <span className="muted text-xs">
           {isStreaming
             ? "Responding..."
@@ -258,8 +264,8 @@ export function CreatorChatPanel({
             <p className="eyebrow">Start with the evidence</p>
             <h2 className="text-2xl">What would you like to understand?</h2>
             <p className="muted text-sm mt-3 mb-6">
-              Explore this comparison&apos;s performance, opening hooks and creative
-              choices.
+              Explore this comparison&apos;s performance, opening hooks and
+              creative choices.
             </p>
             <div className="chat-starters">
               {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
@@ -338,31 +344,40 @@ export function CreatorChatPanel({
           <label htmlFor="chat-question" className="sr-only">
             Ask about this comparison
           </label>
-          <textarea
-            ref={inputRef}
-            id="chat-question"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={!canChat || isStreaming}
-            rows={2}
-            placeholder="Ask about this comparison..."
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          <div className="flex gap-3 items-center justify-between mt-3">
-            <span className="muted text-xs">Ctrl / Cmd + Enter to send</span>
+          <div className="composer-field">
+            <textarea
+              ref={inputRef}
+              id="chat-question"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={!canChat || isStreaming}
+              rows={2}
+              placeholder="Ask about this comparison..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
             <button
               type="submit"
-              className="button-primary"
+              className="button-primary composer-send"
+              aria-label={isStreaming ? "Responding..." : "Send question"}
               disabled={!canChat || isStreaming || !input.trim()}
             >
-              {isStreaming ? "Responding..." : "Send question"}
+              {isStreaming ? (
+                <span className="stream-dots" aria-hidden="true">
+                  ...
+                </span>
+              ) : (
+                <Icon name="arrow" size={20} />
+              )}
             </button>
           </div>
+          <p className="composer-hint">
+            Ctrl / Cmd + Enter to send. AI suggestions are hypotheses to test.
+          </p>
         </form>
         <details className="text-xs muted mt-2">
           <summary>About this session</summary>Context is retained while
@@ -419,19 +434,13 @@ function AssistantMarkdown({ content }: { content: string }) {
           li: ({ children }) => <li className="leading-6">{children}</li>,
           // Bold / italic
           strong: ({ children }) => (
-            <strong className="font-semibold text-slate-950">
-              {children}
-            </strong>
+            <strong className="font-semibold text-slate-950">{children}</strong>
           ),
           em: ({ children }) => (
-            <em className="italic text-slate-700">
-              {children}
-            </em>
+            <em className="italic text-slate-700">{children}</em>
           ),
           // Horizontal rule (--- separators)
-          hr: () => (
-            <hr className="my-3 border-slate-200" />
-          ),
+          hr: () => <hr className="my-3 border-slate-200" />,
           // Inline code
           code: ({ children, className }) => {
             const isBlock = Boolean(className);
@@ -472,9 +481,21 @@ function ChatMessageBubble({
     <article
       className={`chat-message ${isUser ? "message-user" : "message-assistant"}`}
     >
-      <p className="text-xs font-semibold uppercase text-slate-500">
-        {isUser ? "You" : "CreatorLens AI"}
-      </p>
+      {isUser ? (
+        <p className="text-xs font-semibold uppercase text-slate-500">You</p>
+      ) : (
+        <div className="assistant-author">
+          <Image
+            src="/Logo/Logo.png"
+            width={25}
+            height={25}
+            alt=""
+            loading="eager"
+          />
+          <span>CreatorLens AI</span>
+          {isStreaming && <span role="status">Generating</span>}
+        </div>
+      )}
       {isUser ? (
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
           {message.content}
@@ -484,9 +505,7 @@ function ChatMessageBubble({
       ) : message.content ? (
         <AssistantMarkdown content={message.content} />
       ) : isStreaming ? (
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Thinking...
-        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-400">Thinking...</p>
       ) : null}
       {!isUser && message.citations && message.citations.length > 0 ? (
         <CitationList citations={message.citations} />
@@ -497,10 +516,8 @@ function ChatMessageBubble({
 
 function CitationList({ citations }: { citations: ChatCitation[] }) {
   return (
-    <div className="mt-4 border-t border-slate-200 pt-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-        Sources
-      </p>
+    <details className="retrieved-citations">
+      <summary>All retrieved sources ({citations.length})</summary>
       <ol className="mt-2 grid gap-2">
         {citations.map((citation, index) => (
           <li
@@ -511,6 +528,7 @@ function CitationList({ citations }: { citations: ChatCitation[] }) {
               {index + 1}. {citationDisplayLabel(citation.citation_label)}
             </p>
             <p className="mt-1 text-xs font-medium uppercase text-slate-500">
+              <PlatformIcon platform={citation.platform} size={15} />{" "}
               {platformLabel(citation.platform)} /{" "}
               {sourceTypeLabel(citation.source_type)}
             </p>
@@ -525,7 +543,7 @@ function CitationList({ citations }: { citations: ChatCitation[] }) {
           </li>
         ))}
       </ol>
-    </div>
+    </details>
   );
 }
 

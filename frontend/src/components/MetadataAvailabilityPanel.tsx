@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getMetadataAvailability } from "@/lib/api";
+import { PlatformIcon } from "./PlatformIcon";
 import type {
   ContentPlatform,
   MetadataAvailabilityItem,
@@ -103,7 +104,8 @@ function AvailabilityCard({ item }: { item: MetadataAvailabilityItem }) {
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-950">
+          <h3 className="platform-label text-slate-950">
+            <PlatformIcon platform={item.platform} size={18} />
             {slotLabel(item.slot)} - {platformLabel(item.platform)}
           </h3>
           <p className="mt-1 break-all text-xs text-slate-500">{item.url}</p>

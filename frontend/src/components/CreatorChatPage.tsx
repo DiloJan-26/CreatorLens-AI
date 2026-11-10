@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { PageHeading, Notice } from "./ui";
+import { PlatformIcon } from "./PlatformIcon";
 import { CreatorChatPanel } from "@/components/CreatorChatPanel";
 import {
   getCreatorInsightSummary,
@@ -98,7 +99,8 @@ export function CreatorChatPage() {
     <main className="page-container assistant-page">
       <PageHeading
         eyebrow="Creator workspace"
-        title="AI Assistant"
+        title="CreatorLens AI Assistant"
+        icon="chat"
         description="Ask a focused question. Follow the evidence."
         action={
           <Link className="button-secondary" href="/analyze">
@@ -200,14 +202,7 @@ function ProjectContextCard({
   const hasContent = Boolean(content1 || content2);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-        Current project
-      </p>
-      <p className="mt-2 break-all text-xs text-slate-500">
-        {projectId}
-      </p>
-
+    <section className="chat-context-card">
       {hasContent ? (
         <div className="mt-5 grid gap-3">
           <ContentSummary
@@ -226,6 +221,10 @@ function ProjectContextCard({
           Project content is not loaded yet.
         </p>
       )}
+      <details className="technical-details">
+        <summary>Project identifier</summary>
+        <p className="break-all text-xs muted">{projectId}</p>
+      </details>
     </section>
   );
 }
@@ -248,11 +247,9 @@ function ContentSummary({
 
   return (
     <article className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
-      <p className="text-xs font-semibold uppercase text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-slate-950">
-        {platformLabel(item.platform)}
+      <p className="platform-label">
+        <PlatformIcon platform={item.platform} size={17} />
+        {label} / {platformLabel(item.platform)}
       </p>
       {contentText ? (
         <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-slate-600">
@@ -278,12 +275,8 @@ function ContentSummary({
 function ContextMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-medium text-slate-500">
-        {label}
-      </dt>
-      <dd className="mt-1 break-words text-slate-950">
-        {value}
-      </dd>
+      <dt className="font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 break-words text-slate-950">{value}</dd>
     </div>
   );
 }

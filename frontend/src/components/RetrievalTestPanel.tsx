@@ -1,4 +1,5 @@
 "use client";
+import { PlatformIcon } from "./PlatformIcon";
 
 import { useState } from "react";
 
@@ -284,6 +285,7 @@ function RetrievedChunkCard({ chunk }: { chunk: RetrievedChunk }) {
             {chunk.citation_label}
           </p>
           <p className="mt-1 text-xs font-medium uppercase text-slate-500">
+            <PlatformIcon platform={chunk.platform} size={16} />{" "}
             {platformLabel(chunk.platform)} /{" "}
             {sourceTypeLabel(chunk.source_type)}
             {chunk.slot
