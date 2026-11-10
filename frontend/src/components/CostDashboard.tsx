@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeading } from "./ui";
+import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
 import { getCostMetrics } from "@/lib/api";
@@ -45,7 +45,9 @@ export function CostDashboard() {
   }, [projectId]);
 
   useEffect(() => {
-    const invalidateRequests = () => { requestVersion.current++; };
+    const invalidateRequests = () => {
+      requestVersion.current++;
+    };
     const timer = window.setTimeout(() => {
       setProjectId(getActiveProjectId());
       setScopeReady(true);
@@ -92,6 +94,7 @@ export function CostDashboard() {
         <PageHeading
           eyebrow="Engineering / Read-only"
           title="LLM Observability"
+          icon="chart"
           description="Trace generation cost, latency and evidence usage."
           action={
             <button
@@ -99,11 +102,12 @@ export function CostDashboard() {
               onClick={() => void loadMetrics()}
               disabled={isLoading}
             >
+              <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh telemetry"}
             </button>
           }
         />
-        <div className="flex flex-wrap gap-3 justify-between items-center">
+        <div className="engineering-meta flex flex-wrap gap-3 justify-between items-center">
           <p className="muted text-sm">
             {projectId
               ? `Active project ${shortId(projectId)}`
@@ -120,11 +124,14 @@ export function CostDashboard() {
             <CoverageBadge run={metrics?.runs[0] ?? null} />
           )}
         </div>
-        <p className="notice text-sm">
-          Totals reflect the API scope. Latency is averaged over known values
-          in the {metrics?.runs.length ?? 0} returned runs; it is not end-to-end
-          response time. Refreshing does not trigger inference.
-        </p>
+        <details className="notice text-sm observations-note">
+          <summary>About these observations</summary>
+          <p>
+            Totals reflect the API scope. Latency is averaged over known values
+            in the {metrics?.runs.length ?? 0} returned runs; it is not
+            end-to-end response time. Refreshing does not trigger inference.
+          </p>
+        </details>
         {error ? <ErrorBanner message={error} onRetry={loadMetrics} /> : null}
 
         {isLoading && !metrics ? (
@@ -137,15 +144,15 @@ export function CostDashboard() {
               </p>
             )}
             <SummaryCards metrics={metrics} averages={averages} />
-            <UsagePanel metrics={metrics} averages={averages} />
-            <section className="grid gap-8 xl:grid-cols-[0.9fr_1.4fr]">
-              <RunHistory
-                runs={metrics.runs}
-                selectedRunId={selectedRun?.id ?? null}
-                onSelect={setSelectedRunId}
-              />
+            <div className="engineering-grid">
+              <UsagePanel metrics={metrics} averages={averages} />
               <RunInspection run={selectedRun} />
-            </section>
+            </div>
+            <RunHistory
+              runs={metrics.runs}
+              selectedRunId={selectedRun?.id ?? null}
+              onSelect={setSelectedRunId}
+            />
           </>
         ) : null}
       </div>
@@ -188,24 +195,18 @@ function SummaryCards({
   ];
 
   return (
-    <section
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      aria-label="LLM operations summary"
-    >
-      {cards.map((card) => (
-        <article
-          key={card.label}
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-        >
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            {card.label}
-          </p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight">
-            {card.value}
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            {card.note}
-          </p>
+    <section className="engineering-stats" aria-label="LLM operations summary">
+      {cards.map((card, index) => (
+        <article key={card.label} className="engineering-stat">
+          <span className="stat-icon">
+            <Icon
+              name={["tokens", "chart", "cost", "clock"][index]}
+              size={21}
+            />
+          </span>
+          <p className="stat-label">{card.label}</p>
+          <p className="stat-value">{card.value}</p>
+          <p className="stat-note">{card.note}</p>
         </article>
       ))}
     </section>
@@ -235,7 +236,7 @@ function UsagePanel({
       : null;
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+    <section className="usage-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -289,14 +290,10 @@ function SignalBar({
   const bounded = share === null ? 0 : Math.min(Math.max(share, 0), 1);
 
   return (
-    <div className="mb-5 last:mb-0">
+    <div className="mb-5 last:mb-0" data-signal={label}>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-slate-700">
-          {label}
-        </span>
-        <span className="font-mono text-xs text-slate-500">
-          {value}
-        </span>
+        <span className="font-medium text-slate-700">{label}</span>
+        <span className="font-mono text-xs text-slate-500">{value}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
@@ -438,56 +435,61 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
         />
       </div>
 
-      <div className="mt-7 grid gap-6 lg:grid-cols-2">
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            Retrieval balance
-          </h3>
-          <div className="mt-3 space-y-2">
-            {sourceEntries.map(([source, count]) => (
-              <div
-                key={source}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
-              >
-                <span>{friendlyLabel(source)}</span>
-                <span className="font-mono text-xs text-slate-500">
-                  {count} chunks
-                </span>
-              </div>
-            ))}
-            {sourceEntries.length === 0 ? (
-              <EmptyState text="Source balance is unavailable." compact />
-            ) : null}
+      <details className="technical-details">
+        <summary>Retrieval balance & reliability signals</summary>
+        <div className="run-reliability grid gap-6">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Retrieval balance
+            </h3>
+            <div className="mt-3 space-y-2">
+              {sourceEntries.map(([source, count]) => (
+                <div
+                  key={source}
+                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
+                >
+                  <span>{friendlyLabel(source)}</span>
+                  <span className="font-mono text-xs text-slate-500">
+                    {count} chunks
+                  </span>
+                </div>
+              ))}
+              {sourceEntries.length === 0 ? (
+                <EmptyState text="Source balance is unavailable." compact />
+              ) : null}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Reliability signals
+            </h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <SignalPill
+                label="LangSmith trace"
+                value={Boolean(run.langsmith_trace_id)}
+              />
+              <SignalPill label="Cache hit" value={run.cache_hit} />
+              <SignalPill label="Cache miss" value={run.cache_miss} />
+              <SignalPill
+                label="Embedding reused"
+                value={run.embedding_reused}
+              />
+              <SignalPill
+                label="Transcript fallback"
+                value={run.transcript_fallback_used}
+              />
+              <SignalPill
+                label="Error"
+                value={run.error_code ? true : false}
+                trueLabel={run.error_code ?? "Recorded"}
+                falseLabel="None"
+                invert
+              />
+            </div>
           </div>
         </div>
-
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            Reliability signals
-          </h3>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <SignalPill
-              label="LangSmith trace"
-              value={Boolean(run.langsmith_trace_id)}
-            />
-            <SignalPill label="Cache hit" value={run.cache_hit} />
-            <SignalPill label="Cache miss" value={run.cache_miss} />
-            <SignalPill label="Embedding reused" value={run.embedding_reused} />
-            <SignalPill
-              label="Transcript fallback"
-              value={run.transcript_fallback_used}
-            />
-            <SignalPill
-              label="Error"
-              value={run.error_code ? true : false}
-              trueLabel={run.error_code ?? "Recorded"}
-              falseLabel="None"
-              invert
-            />
-          </div>
-        </div>
-      </div>
-
+      </details>
       <details className="technical-details">
         <summary>Provider & trace identifiers</summary>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -572,7 +574,7 @@ function SignalPill({
     state === "unknown" ? "Unavailable" : value ? trueLabel : falseLabel;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
+    <div className="signal-pill flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs">
       <span className="text-slate-600">{label}</span>
       <span
         className={`font-semibold ${

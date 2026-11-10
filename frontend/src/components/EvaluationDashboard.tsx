@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeading } from "./ui";
+import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -113,6 +113,7 @@ export function EvaluationDashboard() {
         <PageHeading
           eyebrow="Engineering / Read-only"
           title="RAG Evaluation"
+          icon="shield"
           description="Inspect regression quality, source coverage and evidence compliance."
           action={
             <button
@@ -120,11 +121,12 @@ export function EvaluationDashboard() {
               onClick={() => void loadOverview()}
               disabled={isLoading}
             >
+              <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh results"}
             </button>
           }
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="engineering-meta flex flex-wrap items-center justify-between gap-3">
           <p className="muted text-sm">
             Selected run /{" "}
             {latestRun
@@ -162,22 +164,27 @@ export function EvaluationDashboard() {
                 Showing previously loaded observations. They may be out of date.
               </p>
             )}
-            <DatasetStrip datasets={datasets} />
             <OverviewCards run={latestRun} />
-            <MetricPanel run={latestRun} />
-            <section className="grid gap-8 xl:grid-cols-[0.85fr_1.45fr]">
+            <div className="engineering-grid">
+              <MetricPanel run={latestRun} />
               <RunHistory
                 runs={runs}
                 selectedRunId={selectedRunId}
                 onSelect={setSelectedRunId}
               />
-              <CaseResults
-                detail={
-                  selectedRun?.run.id === selectedRunId ? selectedRun : null
-                }
-                loading={isDetailLoading}
-              />
-            </section>
+            </div>
+            <CaseResults
+              detail={
+                selectedRun?.run.id === selectedRunId ? selectedRun : null
+              }
+              loading={isDetailLoading}
+            />
+            <details className="dataset-disclosure">
+              <summary>
+                Evaluation datasets & versions ({datasets.length})
+              </summary>
+              <DatasetStrip datasets={datasets} />
+            </details>
           </>
         )}
       </div>
@@ -197,9 +204,7 @@ function DatasetStrip({ datasets }: { datasets: EvaluationDatasetSummary[] }) {
             Deployed datasets
           </h2>
         </div>
-        <p className="text-sm text-slate-500">
-          {datasets.length} available
-        </p>
+        <p className="text-sm text-slate-500">{datasets.length} available</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {datasets.map((dataset) => (
@@ -269,23 +274,20 @@ function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
 
   return (
     <section
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="engineering-stats"
       aria-label="Selected evaluation summary"
     >
-      {cards.map((card) => (
-        <article
-          key={card.label}
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-        >
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            {card.label}
-          </p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight">
-            {card.value}
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            {card.note}
-          </p>
+      {cards.map((card, index) => (
+        <article key={card.label} className="engineering-stat">
+          <span className="stat-icon">
+            <Icon
+              name={["shield", "check", "evidence", "target"][index]}
+              size={21}
+            />
+          </span>
+          <p className="stat-label">{card.label}</p>
+          <p className="stat-value">{card.value}</p>
+          <p className="stat-note">{card.note}</p>
         </article>
       ))}
     </section>
@@ -294,7 +296,7 @@ function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
 
 function MetricPanel({ run }: { run: EvaluationRunSummary | null }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+    <section className="quality-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -326,9 +328,7 @@ function MetricBar({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-slate-700">
-          {label}
-        </span>
+        <span className="font-medium text-slate-700">{label}</span>
         <span className="font-mono text-xs text-slate-500">
           {value === null ? "N/A" : value.toFixed(3)}
         </span>

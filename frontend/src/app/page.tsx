@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui";
 import { LandingComparisonPreview } from "@/components/LandingComparisonPreview";
+import { PlatformIcon } from "@/components/PlatformIcon";
 
 export default function Home() {
   return (
@@ -12,8 +13,8 @@ export default function Home() {
               <Icon name="shield" size={16} /> AI for creator intelligence
             </p>
             <h1>
-              Understand what makes
-              <br className="hero-line-break" /> one video stand out.
+              Understand why one
+              <br className="hero-line-break" /> video worked better.
             </h1>
             <p className="hero-description">
               Compare two public videos using confirmed metrics, transcript
@@ -27,10 +28,19 @@ export default function Home() {
                 See how it works
               </a>
             </div>
-            <p className="hero-footnote">
-              YouTube / Instagram / Facebook <span aria-hidden="true"> / </span>{" "}
-              No sign-in required
-            </p>
+            <div className="hero-footnote supported-platform-row">
+              {["youtube", "instagram", "facebook"].map((platform) => (
+                <span key={platform}>
+                  <PlatformIcon platform={platform} size={17} />
+                  {platform === "youtube"
+                    ? "YouTube"
+                    : platform === "instagram"
+                      ? "Instagram"
+                      : "Facebook"}
+                </span>
+              ))}
+              <span>No sign-in required</span>
+            </div>
           </div>
           <LandingComparisonPreview />
         </div>

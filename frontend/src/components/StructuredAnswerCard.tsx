@@ -6,6 +6,9 @@ import type {
   StructuredEvidenceItem,
   StructuredRecommendationItem,
 } from "@/types/project";
+import { ResultBanner } from "./ResultBanner";
+import { PlatformIcon } from "./PlatformIcon";
+import { Icon } from "./ui";
 
 type StructuredAnswerCardProps = {
   payload: StructuredAnswerPayload;
@@ -15,7 +18,10 @@ export function StructuredAnswerCard({ payload }: StructuredAnswerCardProps) {
   const { answer } = payload;
 
   return (
-    <div className="mt-3 grid gap-3" data-answer-type={answer.answer_type}>
+    <div
+      className="structured-answer grid gap-3"
+      data-answer-type={answer.answer_type}
+    >
       {payload.fallback_used || payload.warnings.length > 0 ? (
         <StatusNotice payload={payload} />
       ) : null}
@@ -79,22 +85,35 @@ function ComparisonAnswerCard({
 }: {
   answer: ComparisonStructuredAnswer;
 }) {
-  const confidencePercent = Math.round(answer.confidence * 100);
+  const confidencePercent = Number.isFinite(answer.confidence)
+    ? Math.round(Math.max(0, Math.min(1, answer.confidence)) * 100)
+    : null;
 
   return (
     <section className="structured-answer-body">
-      <CardHeading
-        eyebrow="Evidence comparison"
+      <ResultBanner
         title={winnerLabel(answer.winner)}
+        winner={answer.winner === "content_1" || answer.winner === "content_2"}
+        description="Based on the available metrics and cited evidence."
+        detail={
+          <>
+            <span className="signal-label">Model confidence</span>
+            <strong>
+              {confidencePercent == null
+                ? "Unavailable"
+                : `${confidencePercent}%`}
+            </strong>
+            <span className="muted">Uncalibrated</span>
+          </>
+        }
       />
-
-      <p className="muted text-xs mt-3">
-        Model-reported confidence: {confidencePercent}% - Uncalibrated; not a
-        probability of correctness.
+      <p className="confidence-note">
+        Model-reported confidence is uncalibrated, not a probability of
+        correctness.
       </p>
 
       {answer.key_reasons.length > 0 ? (
-        <CardList title="Why" items={answer.key_reasons} />
+        <CardList title="Why this result?" items={answer.key_reasons} />
       ) : null}
     </section>
   );
@@ -111,9 +130,7 @@ function RecommendationAnswerCard({
         eyebrow="Evidence-backed plan"
         title="Recommended improvements"
       />
-      <p className="mt-3 text-sm leading-6 text-slate-800">
-        {answer.summary}
-      </p>
+      <p className="mt-3 text-sm leading-6 text-slate-800">{answer.summary}</p>
     </section>
   );
 }
@@ -124,9 +141,7 @@ function CardHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">
         {eyebrow}
       </p>
-      <h3 className="mt-1 text-base font-semibold text-slate-950">
-        {title}
-      </h3>
+      <h3 className="mt-1 text-base font-semibold text-slate-950">{title}</h3>
     </div>
   );
 }
@@ -142,9 +157,7 @@ function Recommendations({
 
   return (
     <div className="mt-4">
-      <h4 className="text-sm font-semibold text-slate-950">
-        Recommendations
-      </h4>
+      <h4 className="text-sm font-semibold text-slate-950">Recommendations</h4>
       <ol className="mt-2 grid gap-2">
         {recommendations.map((item, index) => (
           <li
@@ -175,8 +188,7 @@ function Recommendations({
 function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
   const styles = {
     high: "border-rose-200 bg-rose-50 text-rose-700",
-    medium:
-      "border-amber-200 bg-amber-50 text-amber-700",
+    medium: "border-amber-200 bg-amber-50 text-amber-700",
     low: "border-slate-200 bg-slate-50 text-slate-600",
   }[priority];
 
@@ -192,10 +204,8 @@ function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
 function CardList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="mt-4">
-      <h4 className="text-sm font-semibold text-slate-950">
-        {title}
-      </h4>
-      <ol className="mt-2 ml-5 list-decimal space-y-1 text-sm leading-6 text-slate-700">
+      <h4 className="text-sm font-semibold text-slate-950">{title}</h4>
+      <ol className="reason-list mt-2 text-sm leading-6 text-slate-700">
         {items.map((item, index) => (
           <li key={`${item}-${index}`}>{item}</li>
         ))}
@@ -211,9 +221,7 @@ function Limitations({ limitations }: { limitations: string[] }) {
 
   return (
     <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
-      <h4 className="text-sm font-semibold text-amber-900">
-        Limitations
-      </h4>
+      <h4 className="text-sm font-semibold text-amber-900">Limitations</h4>
       <ul className="mt-2 ml-4 list-disc space-y-1 text-sm leading-6 text-amber-900">
         {limitations.map((limitation, index) => (
           <li key={`${limitation}-${index}`}>{limitation}</li>
@@ -227,14 +235,33 @@ function EvidenceSummary({ evidence }: { evidence: StructuredEvidenceItem[] }) {
   return (
     <details open className="evidence-summary">
       <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">
-        Evidence used ({evidence.length})
+        <Icon name="shield" size={16} /> Supporting evidence ({evidence.length})
       </summary>
       <ul className="mt-3 grid gap-2">
         {evidence.map((item, index) => (
           <li key={`${item.citation_label}-${index}`}>
-            <p className="text-sm font-semibold text-slate-900">
-              {item.citation_label}
-            </p>
+            <div className="evidence-item-heading">
+              <Icon
+                name={
+                  item.source_type === "transcript" ||
+                  item.source_type === "hook"
+                    ? "transcript"
+                    : "evidence"
+                }
+                size={18}
+              />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {item.citation_label}
+                </p>
+                {item.platform && (
+                  <span className="platform-label muted mt-1">
+                    <PlatformIcon platform={item.platform} size={14} />
+                    {item.platform} / {item.source_type || "Evidence"}
+                  </span>
+                )}
+              </div>
+            </div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               {item.claim}
             </p>

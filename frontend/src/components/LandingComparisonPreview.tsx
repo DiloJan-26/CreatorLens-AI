@@ -50,9 +50,9 @@ export function LandingComparisonPreview() {
           </div>
         </div>
         <div className="preview-result">
-          <p className="preview-result-label">Comparison workspace</p>
+          <p className="preview-result-label">Comparison result</p>
           <span className="preview-result-symbol">
-            <Icon name="compare" size={23} />
+            <Icon name="trophy" size={23} />
             <span>Evidence-first analysis</span>
           </span>
           <h2>

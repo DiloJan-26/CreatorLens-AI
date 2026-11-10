@@ -11,6 +11,7 @@ import type {
 import { HookComparisonCard } from "./HookComparisonCard";
 import { InsightScoreCard } from "./InsightScoreCard";
 import { RecommendationList } from "./RecommendationList";
+import { Icon } from "./ui";
 
 type CreatorInsightSummaryPanelProps = {
   projectId: string | null;
@@ -78,8 +79,8 @@ export function CreatorInsightSummaryPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
             Creator intelligence
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">
-            Creator Insight Summary
+          <h2 className="mt-2 text-xl font-semibold text-slate-950 flex items-center gap-2">
+            <Icon name="target" size={21} /> Creator Insight Summary
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             CreatorLens AI separates confirmed public performance, creator-size
@@ -97,13 +98,18 @@ export function CreatorInsightSummaryPanel({
         </button>
       </div>
 
-      <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
-        Creator Insight Score is a deterministic review signal combining public
-        performance, creator efficiency, creative structure, and metric
-        confidence. Metadata Availability is informational and is not a creative
-        strength or performance score.
-        {!indexReady ? " Vector search is not required for this summary." : ""}
-      </p>
+      <details className="insight-method mt-4 text-sm text-slate-600">
+        <summary>How scores are calculated</summary>
+        <p className="py-2 leading-6">
+          Creator Insight Score is a deterministic review signal combining
+          public performance, creator efficiency, creative structure, and metric
+          confidence. Metadata Availability is informational and is not a
+          creative strength or performance score.
+          {!indexReady
+            ? " Vector search is not required for this summary."
+            : ""}
+        </p>
+      </details>
 
       {error ? (
         <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">

@@ -12,10 +12,13 @@ import { AiReasoningStatus } from "./AiReasoningStatus";
 import { ContentCard } from "@/components/ContentCard";
 import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
 import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
-import { ExecutiveInsightSnapshot } from "@/components/ExecutiveInsightSnapshot";
+import {
+  ExecutiveInsightSnapshot,
+  ComparisonHighlights,
+} from "@/components/ExecutiveInsightSnapshot";
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
 import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
-import { PageHeading, Notice } from "./ui";
+import { PageHeading, Notice, Icon } from "./ui";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import {
@@ -64,7 +67,11 @@ export function ComparisonWorkspace() {
     };
     sync();
     window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("popstate", sync);
+    };
   }, []);
   const startNew = searchParams.get("new") === "1";
   const [content1Url, setContent1Url] = useState("");
@@ -353,10 +360,10 @@ export function ComparisonWorkspace() {
     <main className="page-container comparison-workspace">
       <PageHeading
         eyebrow="Creator workspace"
-        title={hasResults ? "Your comparison" : "Compare two videos"}
+        title={hasResults ? "Comparison Result" : "Compare two videos"}
         description={
           hasResults
-            ? "Review the evidence, understand the differences, and decide what to test next."
+            ? "Inspect the public metrics, creative signals and supporting evidence."
             : "Bring two public videos. We'll bring the evidence."
         }
         action={
@@ -370,7 +377,7 @@ export function ComparisonWorkspace() {
                 window.history.replaceState(null, "", "/analyze?new=1");
               }}
             >
-              New comparison
+              <Icon name="compare" size={16} /> New comparison
             </button>
           ) : undefined
         }
@@ -392,13 +399,13 @@ export function ComparisonWorkspace() {
           </p>
         </>
       )}
-      <div className="grid gap-4 my-6">
+      <div className="analysis-state-region">
         {isRestoringProject && <Notice>Restoring your comparison...</Notice>}
         {createdProject && !hasResults && !ingestionStatus && (
           <Notice>Comparison created. Waiting for processing status...</Notice>
         )}
         {hasResults && ingestionStatus?.status === "READY" ? (
-          <details className="text-sm muted">
+          <details className="processing-disclosure text-sm muted">
             <summary>Analysis ready / Processing details</summary>
             <IngestionProgressPanel
               status={ingestionStatus}
@@ -432,6 +439,7 @@ export function ComparisonWorkspace() {
                   event.preventDefault();
                   window.history.pushState(null, "", `#${id}`);
                   setActiveTab(id);
+                  window.dispatchEvent(new HashChangeEvent("hashchange"));
                 }}
               >
                 {label}
@@ -447,18 +455,21 @@ export function ComparisonWorkspace() {
               summary={insightSummary}
               isLoading={isSubmitting}
             />
-            <div className="grid gap-5 mt-6 xl:grid-cols-2">
+            <div className="content-pair">
               <ContentCard
                 label="Content 1"
                 item={contentItem(projectDetail, "content_1")}
                 isPending={isSubmitting}
+                hookScore={insightSummary?.content_1?.hook_analysis.hook_score}
               />
               <ContentCard
                 label="Content 2"
                 item={contentItem(projectDetail, "content_2")}
                 isPending={isSubmitting}
+                hookScore={insightSummary?.content_2?.hook_analysis.hook_score}
               />
             </div>
+            <ComparisonHighlights summary={insightSummary} />
           </section>
           <section
             id="insights"

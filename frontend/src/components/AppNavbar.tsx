@@ -2,11 +2,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Dialog, Icon } from "./ui";
 const creatorLinks = [
-  { href: "/analyze", label: "Compare videos", icon: "compare" },
+  { href: "/", label: "Home", icon: "home" },
+  { href: "/analyze", label: "Compare", icon: "compare" },
   { href: "/chat", label: "AI Assistant", icon: "chat" },
+  { href: "/analyze#evidence", label: "Evidence", icon: "evidence" },
+  { href: "/analyze#insights", label: "Insights", icon: "chart" },
 ];
 const engineerLinks = [
   { href: "/evaluations", label: "RAG Evaluation", icon: "shield" },
@@ -33,17 +36,53 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const [auth, setAuth] = useState(false);
+  const [section, setSection] = useState("");
+  useEffect(() => {
+    const sync = () => setSection(window.location.hash);
+    const timer = window.setTimeout(sync, 0);
+    window.addEventListener("hashchange", sync);
+    window.addEventListener("popstate", sync);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener("popstate", sync);
+    };
+  }, [pathname]);
+  const isCurrent = (href: string) => {
+    if (href.includes("#"))
+      return (
+        pathname === "/analyze" && section === href.slice(href.indexOf("#"))
+      );
+    return (
+      pathname === href &&
+      !(href === "/analyze" && ["#insights", "#evidence"].includes(section))
+    );
+  };
   const publicPage = pathname === "/";
   const navigation = (
     <nav aria-label="Workspace navigation">
-      <p className="nav-group-label">Creator workspace</p>
+      <p className="nav-group-label">Workspace</p>
       {creatorLinks.map((l) => (
         <Link
           key={l.href}
           href={l.href}
           className="rail-link"
-          aria-current={pathname === l.href ? "page" : undefined}
-          onClick={() => setDrawer(false)}
+          aria-current={isCurrent(l.href) ? "page" : undefined}
+          onClick={(event) => {
+            setDrawer(false);
+            if (
+              pathname === "/analyze" &&
+              l.href.startsWith("/analyze") &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.shiftKey &&
+              !event.altKey
+            ) {
+              event.preventDefault();
+              window.history.pushState(null, "", l.href);
+              window.dispatchEvent(new HashChangeEvent("hashchange"));
+            }
+          }}
         >
           <Icon name={l.icon} />
           {l.label}
@@ -62,18 +101,10 @@ export function AppNavbar({ children }: { children: ReactNode }) {
           {l.label}
         </Link>
       ))}
-      <Link
-        className="rail-link product-link"
-        href="/"
-        onClick={() => setDrawer(false)}
-      >
-        <Icon name="home" />
-        About CreatorLens
-      </Link>
     </nav>
   );
-  const active = [...creatorLinks, ...engineerLinks].find(
-    (l) => l.href === pathname,
+  const active = [...creatorLinks, ...engineerLinks].find((l) =>
+    isCurrent(l.href),
   );
   return (
     <>
@@ -117,8 +148,13 @@ export function AppNavbar({ children }: { children: ReactNode }) {
             <Brand />
             {navigation}
             <div className="rail-footer">
-              <span className="status-dot" />
-              Demo workspace<p>Public evidence. No account required.</p>
+              <span className="workspace-avatar">
+                <Icon name="globe" size={18} />
+              </span>
+              <div>
+                <strong>Demo workspace</strong>
+                <p>Open access / Public evidence</p>
+              </div>
             </div>
           </aside>
           <header className="workspace-header">
