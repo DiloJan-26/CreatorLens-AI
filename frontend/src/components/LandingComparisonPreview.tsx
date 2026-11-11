@@ -9,14 +9,13 @@ export function LandingComparisonPreview() {
     >
       <div className="preview-toolbar">
         <span className="preview-dot" /> Two videos. A clearer perspective.
-        <span className="preview-example">Illustrative preview</span>
       </div>
       <div className="preview-composition">
         <div className="preview-pair">
           <div className="preview-video">
             <div className="preview-poster poster-outdoors">
               <VideoIllustration scene="outdoors" />
-              <span className="poster-label">VIDEO 01</span>
+              <span className="poster-label">CONTENT 01</span>
               <span className="poster-play" aria-hidden="true">
                 <PlayGlyph />
               </span>
@@ -33,7 +32,7 @@ export function LandingComparisonPreview() {
           <div className="preview-video">
             <div className="preview-poster poster-studio">
               <VideoIllustration scene="studio" />
-              <span className="poster-label">VIDEO 02</span>
+              <span className="poster-label">CONTENT 02</span>
               <span className="poster-play" aria-hidden="true">
                 <PlayGlyph />
               </span>
@@ -79,10 +78,6 @@ export function LandingComparisonPreview() {
           </Link>
         </div>
       </div>
-      <figcaption className="preview-caption">
-        Illustrations, not analyzed videos. Your results use your URLs and
-        available evidence.
-      </figcaption>
     </figure>
   );
 }
