@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.models.transcript_segment import TranscriptSegment as TranscriptSegmentModel
 from app.db.repositories._utils import iso_timestamp, utc_now
 from app.models.video import TranscriptSegment
+from app.services.evidence_quality import assess_transcript
 
 
 class TranscriptRepository:
@@ -24,6 +25,13 @@ class TranscriptRepository:
         platform: str,
         segments: list[TranscriptSegment],
     ) -> None:
+        from app.db.models.content_item import ContentItem
+        item = self.session.get(ContentItem, content_item_id)
+        if item is None or item.project_id != project_id or item.slot != slot or item.platform != platform:
+            raise ValueError("Transcript source identity does not match project/slot/platform.")
+        _, quality = assess_transcript(segments)
+        if quality["rejected_segments"]:
+            raise ValueError("Invalid transcript segments must be quarantined before persistence.")
         self.session.execute(
             delete(TranscriptSegmentModel).where(
                 TranscriptSegmentModel.project_id == project_id,

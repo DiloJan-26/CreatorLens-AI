@@ -1,4 +1,5 @@
 import logging
+import re
 from time import perf_counter
 from typing import Any
 
@@ -109,6 +110,8 @@ def retrieve_project_chunks(
             )
             return response
 
+        match = re.search(r"first\s+(5|five|[1-8])\s+seconds", query, re.IGNORECASE)
+        window_seconds = (5.0 if match and match.group(1).lower() == "five" else float(match.group(1))) if match else None
         evidence_records = _filtered_evidence_records(
             project_id=project_id,
             platform=request.platform,
@@ -116,6 +119,10 @@ def retrieve_project_chunks(
             source_type=request.source_type,
             mode=mode,
         )
+        if window_seconds is not None:
+            evidence_records = [r for r in evidence_records if r.get("source_type") not in {"hook", "transcript"}
+                or (isinstance(r.get("start_time"), (int, float)) and isinstance(r.get("end_time"), (int, float))
+                    and 0 <= r["start_time"] < r["end_time"] <= window_seconds)]
         semantic_results = _semantic_results(
             project_id=project_id,
             query=query,
@@ -157,6 +164,10 @@ def retrieve_project_chunks(
             retrieval_mode=mode,
             retrieval_run_id=run_id,
             retrieval_latency_ms=duration_ms,
+            evidence_limitations=(
+                (["Whole segments crossing the requested verbal window are excluded; word-level clipping is unavailable."] if window_seconds is not None else [])
+                + (["Legacy chunks lack current-policy validation; use explicit project refresh before treating their provenance as validated."] if any(r.evidence_revision is None for r in results) else [])
+            ),
             structured_metadata_used=False,
             applied_platform=request.platform,
             applied_slot=request.slot,
@@ -302,6 +313,7 @@ def _semantic_results(
 def _retrieved_chunk(item: RankedCandidate) -> RetrievedChunk:
     candidate: HybridCandidate = item.candidate
     return RetrievedChunk(
+        evidence_revision=candidate.evidence_revision,
         chunk_id=candidate.chunk_id,
         content_id=candidate.content_id,
         slot=candidate.slot,

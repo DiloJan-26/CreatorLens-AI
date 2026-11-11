@@ -126,4 +126,5 @@ class MetadataRepository:
             "error_message": snapshot.error_message,
             "metric_source_note": snapshot.metric_source_note,
             "transcript_source_note": snapshot.transcript_source_note,
+            "transcript_evidence": (snapshot.raw_payload or {}).get("transcript_evidence", {}),
         }

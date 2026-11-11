@@ -269,6 +269,7 @@ def extract_instagram_video(url: str) -> VideoExtractionResult:
         )
         metadata.transcript_source_note = INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE
 
+    metadata.transcript_evidence = {"provenance": transcript_result.provenance if transcript_result else {}}
     return VideoExtractionResult(
         metadata=metadata,
         transcript_segments=transcript_segments,

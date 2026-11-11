@@ -4,6 +4,7 @@ from typing import Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
+    HasIdCondition,
     FieldCondition,
     Filter,
     FilterSelector,
@@ -110,7 +111,7 @@ def ensure_qdrant_payload_indexes() -> None:
         )
 
 
-def delete_project_points(project_id: str) -> None:
+def delete_project_points(project_id: str, keep_point_ids: list[str] | None = None) -> None:
     settings = get_settings()
     collection_name = settings.qdrant_collection
 
@@ -124,6 +125,7 @@ def delete_project_points(project_id: str) -> None:
         collection_name=collection_name,
         points_selector=FilterSelector(
             filter=Filter(
+                must_not=[HasIdCondition(has_id=keep_point_ids)] if keep_point_ids else None,
                 must=[
                     FieldCondition(
                         key="project_id",
@@ -279,6 +281,7 @@ def _chunk_payload(chunk: RagChunk) -> dict[str, Any]:
         "creator": _payload_value(chunk.creator),
         "text": _payload_text(chunk.text),
         "citation_label": _payload_value(chunk.citation_label),
+        "evidence_revision": _payload_value(chunk.evidence_revision),
         "content_hash": _payload_value(chunk.content_hash),
         "chunk_hash": _payload_value(chunk.chunk_hash),
         "embedding_hash": _payload_value(chunk.embedding_hash),

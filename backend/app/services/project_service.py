@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 import logging
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
@@ -7,6 +8,8 @@ from fastapi import HTTPException, status
 from app.extractors.facebook_extractor import extract_facebook_content
 from app.extractors.instagram_extractor import extract_instagram_video
 from app.extractors.youtube_extractor import extract_youtube_video
+from app.core.config import get_settings
+from app.services.evidence_quality import validate_extraction
 from app.models.project import (
     MetadataAvailabilityItem,
     MetadataAvailabilityResponse,
@@ -219,7 +222,7 @@ def get_project_transcript_preview(
     return TranscriptPreviewResponse(**preview)
 
 
-def extract_project_videos(project_id: str) -> ProjectDetailResponse:
+def extract_project_videos(project_id: str, *, refresh_evidence: bool = False) -> ProjectDetailResponse:
     record = get_project_record(project_id)
 
     if record is None:
@@ -239,6 +242,7 @@ def extract_project_videos(project_id: str) -> ProjectDetailResponse:
                 slot=slot,
                 platform=str(record[f"{slot}_platform"]),
                 url=str(record[f"{slot}_url"]),
+                refresh_evidence=refresh_evidence,
             )
         )
 
@@ -295,9 +299,10 @@ def _extract_and_store_platform(
     slot: str,
     platform: str,
     url: str,
+    refresh_evidence: bool = False,
 ) -> str:
     normalized_url = _normalized_cache_url(url)
-    extraction_result = _cached_extraction_result(normalized_url)
+    extraction_result = None if refresh_evidence else _cached_extraction_result(normalized_url)
     cached_result_used = extraction_result is not None
 
     if extraction_result is not None:
@@ -334,7 +339,16 @@ def _extract_and_store_platform(
                 transcript_segments=[],
             )
 
+    extraction_result = validate_extraction(extraction_result)
+    extraction_result.metadata.transcript_evidence["raw_cache_reused"] = cached_result_used
+    extraction_result.metadata.transcript_evidence["validated_cache_reused"] = (
+        cached_result_used and extraction_result.metadata.transcript_evidence["status"] == "valid")
     try:
+        previous = get_video_by_project_slot(project_id, slot)
+        if previous and (previous.get("transcript_evidence") or {}).get("revision") != extraction_result.metadata.transcript_evidence["revision"]:
+            # Invalidate SQL evidence before changing transcripts. Remote orphan
+            # vectors cannot be returned as current DB-backed evidence.
+            replace_rag_chunks(project_id=project_id, chunks=[])
         extraction_result.metadata.slot = slot  # type: ignore[assignment]
         video_record = upsert_video_metadata(
             project_id=project_id,
@@ -393,6 +407,17 @@ def _cached_extraction_result(
     if cached is None:
         return None
     try:
+        captured = (cached.get("metadata", {}).get("transcript_evidence") or {}).get("extracted_at") or cached.get("captured_at")
+        if captured:
+            captured_time = datetime.fromisoformat(str(captured).replace("Z", "+00:00"))
+            if captured_time.tzinfo is None:
+                captured_time = captured_time.replace(tzinfo=UTC)
+            age = (datetime.now(UTC) - captured_time).total_seconds()
+            if age < 0 or age > get_settings().evidence_cache_max_age_seconds:
+                return None
+        stored_evidence = cached.get("metadata", {}).get("transcript_evidence") or {}
+        if stored_evidence.get("status") in {"invalid", "unavailable"}:
+            return None
         result = VideoExtractionResult(
             metadata=VideoMetadata.model_validate(cached["metadata"]),
             transcript_segments=[
@@ -408,7 +433,11 @@ def _cached_extraction_result(
         if not result.transcript_segments:
             return None
         content_hash, metadata_hash, transcript_hash = _cache_hashes(result)
-        if (
+        legacy_payload = result.metadata.model_dump(mode="json", exclude={"slot", "url", "transcript_available", "transcript_segment_count", "transcript_language", "detected_language", "language_confidence", "transcript_source", "transcript_source_note", "transcript_evidence"})
+        legacy_metadata = hash_metadata(legacy_payload)
+        legacy_hash = hash_content(metadata_hash=legacy_metadata, transcript_hash=transcript_hash)
+        legacy_valid = not stored_evidence and cached.get("metadata_hash") == legacy_metadata and cached.get("content_hash") == legacy_hash and cached.get("transcript_hash") == transcript_hash
+        if not legacy_valid and (
             cached.get("content_hash") != content_hash
             or cached.get("metadata_hash") != metadata_hash
             or cached.get("transcript_hash") != transcript_hash
@@ -418,6 +447,12 @@ def _cached_extraction_result(
                 cached.get("content_item_id"),
             )
             return None
+        result = validate_extraction(result)
+        if result.metadata.transcript_evidence["status"] in {"invalid", "unavailable"}:
+            return None
+        if not captured:
+            result.metadata.transcript_evidence["cache_age_unknown"] = True
+            result.metadata.transcript_evidence["extracted_at"] = None
         return result
     except (KeyError, TypeError, ValueError):
         logger.warning("Content cache entry could not be validated.")
@@ -432,13 +467,14 @@ def _cache_hashes(result: VideoExtractionResult) -> tuple[str, str, str]:
             "url",
             "transcript_available",
             "transcript_segment_count",
-            "transcript_language",
-            "detected_language",
-            "language_confidence",
-            "transcript_source",
-            "transcript_source_note",
+            "transcript_evidence",
         },
     )
+    evidence = result.metadata.transcript_evidence
+    if evidence:
+        metadata_payload["transcript_evidence"] = {
+            k: v for k, v in evidence.items()
+            if k not in {"validated_at", "raw_cache_reused", "validated_cache_reused"}}
     metadata_digest = hash_metadata(metadata_payload)
     transcript_digest = hash_transcript(
         [segment.model_dump(mode="json") for segment in result.transcript_segments]

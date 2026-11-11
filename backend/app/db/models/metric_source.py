@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, Text, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -11,6 +11,10 @@ class MetricSource(Base):
 
     __tablename__ = "metric_sources"
 
+    __table_args__ = (Index("uq_metric_sources_slot_identity", "project_id", "slot", "source_platform", "metric_scope", "source_method", unique=True, postgresql_where=text("slot IS NOT NULL"), sqlite_where=text("slot IS NOT NULL")),)
+
+    slot: Mapped[str | None] = mapped_column(String(32))
+    content_item_id: Mapped[str | None] = mapped_column(String(36), index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(
         String(36),

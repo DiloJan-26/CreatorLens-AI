@@ -22,6 +22,9 @@ class MetricSourceRecord(BaseModel):
     source_platform: str
     source_method: str
     metric_scope: str
+    slot: Literal["content_1", "content_2"] | None = None
+    content_item_id: str | None = None
+    identity_status: str = "legacy_unresolved"
     url: str | None = None
     views: int | None = None
     likes: int | None = None
@@ -41,6 +44,8 @@ class VerifiedMetricInput(BaseModel):
     source_platform: MetricSourcePlatform
     metric_scope: MetricScope
     source_method: MetricSourceMethod = "user_verified"
+    slot: Literal["content_1", "content_2"] | None = None
+    content_item_id: str | None = None
     url: str | None = None
     views: int | None = None
     likes: int | None = None

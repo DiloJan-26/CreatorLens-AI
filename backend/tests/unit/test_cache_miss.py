@@ -33,7 +33,7 @@ def test_cache_miss_runs_extraction(monkeypatch) -> None:
         url="https://www.instagram.com/reel/ABC_123/",
     )
 
-    assert status == "ready"
+    assert status == "partial"  # Legacy fixture has no verified language/provenance.
     assert calls["extract"] == 1
 
 

@@ -30,6 +30,7 @@ class EvidenceChunk(Base):
     title: Mapped[str | None] = mapped_column(Text)
     creator: Mapped[str | None] = mapped_column(Text)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_revision: Mapped[str | None] = mapped_column(String(64), index=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     chunk_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     embedding_hash: Mapped[str | None] = mapped_column(String(64), index=True)

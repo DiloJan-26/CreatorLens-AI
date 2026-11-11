@@ -31,16 +31,28 @@ class MetricSourceRepository:
         confidence: str = "medium",
         note: str | None = None,
         record_id: str | None = None,
+        slot: str | None = None,
+        content_item_id: str | None = None,
     ) -> dict[str, Any]:
+        if slot is not None and slot not in {"content_1", "content_2"}:
+            raise ValueError("Invalid content slot.")
+        if content_item_id is not None:
+            from app.db.models.content_item import ContentItem
+            item = self.session.get(ContentItem, content_item_id)
+            if item is None or item.project_id != project_id or item.slot != slot or (metric_scope in {"native", "verified_override"} and item.platform != source_platform):
+                raise ValueError("Metric source content identity does not belong to this project/slot.")
         existing = None
         if record_id is not None:
             existing = self.session.get(MetricSource, record_id)
+            if existing is not None and (existing.project_id != project_id or existing.slot != slot):
+                raise ValueError("Metric source identity cannot be reassigned.")
         else:
             existing = self.latest(
                 project_id=project_id,
                 source_platform=source_platform,
                 metric_scope=metric_scope,
                 source_method=source_method,
+                slot=slot,
             )
 
         timestamp = utc_now()
@@ -58,6 +70,8 @@ class MetricSourceRepository:
             )
             self.session.add(existing)
 
+        existing.slot = slot
+        existing.content_item_id = content_item_id
         existing.platform = platform
         existing.source_platform = source_platform
         existing.source_method = source_method
@@ -100,9 +114,11 @@ class MetricSourceRepository:
         source_platform: str,
         metric_scope: str,
         source_method: str | None = None,
+        slot: str | None = None,
     ) -> MetricSource | None:
         statement = select(MetricSource).where(
             MetricSource.project_id == project_id,
+            MetricSource.slot == slot,
             MetricSource.source_platform == source_platform,
             MetricSource.metric_scope == metric_scope,
         )
@@ -132,6 +148,9 @@ class MetricSourceRepository:
             "source_platform": model.source_platform,
             "source_method": model.source_method,
             "metric_scope": model.metric_scope,
+            "slot": model.slot,
+            "content_item_id": model.content_item_id,
+            "identity_status": "bound" if model.slot else "legacy_unresolved",
             "url": model.url,
             "views": model.views,
             "likes": model.likes,

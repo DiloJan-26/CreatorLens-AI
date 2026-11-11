@@ -114,7 +114,6 @@ def index_project(
 
     try:
         ensure_qdrant_collection(vector_size)
-        delete_project_points(project_id)
         qdrant_point_ids = upsert_chunk_vectors(chunks=chunks, vectors=vectors)
     except (QdrantCollectionError, QdrantConfigurationError) as exc:
         return _failed_response(
@@ -129,11 +128,20 @@ def index_project(
             message=f"Qdrant upsert failed: {_safe_error_message(exc)}",
         )
 
-    for chunk, qdrant_point_id in zip(chunks, qdrant_point_ids, strict=True):
-        update_rag_chunk_qdrant_point_id(
-            chunk_id=chunk.chunk_id,
-            qdrant_point_id=qdrant_point_id,
-        )
+    try:
+        for chunk, qdrant_point_id in zip(chunks, qdrant_point_ids, strict=True):
+            update_rag_chunk_qdrant_point_id(
+                chunk_id=chunk.chunk_id,
+                qdrant_point_id=qdrant_point_id,
+            )
+    except Exception:
+        return _failed_response(project_id=project_id, chunks=chunks,
+            message="Vectors written but SQL point linkage incomplete; retry project indexing. Old points retained.")
+
+    try:
+        delete_project_points(project_id, qdrant_point_ids)
+    except Exception:
+        logger.warning("Stale vector cleanup deferred project_id=%s; current SQL identities remain authoritative", project_id)
 
     _record_embedding_observation(
         project_id,
@@ -181,6 +189,7 @@ def _has_reusable_embeddings(chunks: list[RagChunk]) -> bool:
             chunk_hash=chunk.chunk_hash,
             model_name=settings.embedding_model_name,
             model_version=settings.embedding_model_version,
+            evidence_revision=chunk.evidence_revision,
         )
         if chunk.embedding_hash != expected:
             return False

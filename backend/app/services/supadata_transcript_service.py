@@ -47,7 +47,11 @@ def transcribe_video_url_with_supadata(url: str) -> TranscriptionResult:
     return TranscriptionResult(
         segments=segments,
         transcript_language=language,
-        detected_language=language,
+        detected_language=None,
+        provenance={"requested_languages": [], "caption_track_language": language,
+                    "detected_text_language": None, "audio_language_verified": False,
+                    "caption_kind": "translated" if payload.get("isTranslated") is True else "unknown",
+                    "selection_reason": "supadata_" + mode},
         transcript_source=(
             "supadata_platform_captions"
             if native_captions_only

@@ -63,10 +63,12 @@ def hash_embedding(
     chunk_hash: str,
     model_name: str,
     model_version: str,
+    evidence_revision: str | None = None,
 ) -> str:
     """Build an embedding compatibility identity without storing vector data."""
     return hash_payload(
         {
+            **({"evidence_revision": evidence_revision} if evidence_revision else {}),
             "chunk_hash": chunk_hash,
             "model_name": model_name,
             "model_version": model_version,

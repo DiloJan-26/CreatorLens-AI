@@ -29,7 +29,7 @@ def test_repeated_url_reuses_extraction_and_index(monkeypatch) -> None:
             "content_hash": content_hash,
             "metadata_hash": metadata_hash,
             "transcript_hash": transcript_hash,
-            "metadata": result.metadata.model_dump(mode="json"),
+            "metadata": persisted.get("metadata", result.metadata.model_dump(mode="json")),
             "segments": [
                 segment.model_dump(mode="json")
                 for segment in result.transcript_segments
@@ -46,7 +46,7 @@ def test_repeated_url_reuses_extraction_and_index(monkeypatch) -> None:
     monkeypatch.setattr(
         project_service,
         "upsert_video_metadata",
-        lambda **_: {"id": "item-1"},
+        lambda **kwargs: persisted.update({"metadata": kwargs["metadata"].model_dump(mode="json")}) or {"id": "item-1"},
     )
     monkeypatch.setattr(project_service, "replace_transcript_segments", lambda **_: None)
     monkeypatch.setattr(

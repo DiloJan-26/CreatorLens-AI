@@ -53,7 +53,7 @@ def test_valid_cache_hit_skips_extraction(monkeypatch) -> None:
         url="https://www.youtube.com/watch?v=AbC_123-xYz&utm_source=test",
     )
 
-    assert status == "ready"
+    assert status == "partial"  # Legacy fixture has no verified language/provenance.
     assert stored["normalized_url"] == "https://www.youtube.com/watch?v=AbC_123-xYz"
 
 

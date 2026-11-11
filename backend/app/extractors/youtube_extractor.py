@@ -1,3 +1,4 @@
+from dataclasses import replace
 import logging
 import re
 from collections.abc import Iterable
@@ -10,6 +11,7 @@ from yt_dlp import YoutubeDL
 
 from app.core.config import get_settings
 from app.extractors.metadata_normalizer import extract_best_audio_url, normalize_metadata
+from app.services.evidence_quality import language_matches, language_code, assess_transcript
 from app.models.video import TranscriptSegment, VideoExtractionResult, VideoMetadata
 from app.services.apify_transcript_service import (
     ApifyTranscriptUnavailableError,
@@ -150,6 +152,7 @@ def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
     subscriber_count = _fetch_subscriber_count(channel_id, api_key) if channel_id else None
 
     return {
+        "default_audio_language": snippet.get("defaultAudioLanguage"),
         "title": snippet.get("title"),
         "description": snippet.get("description"),
         "uploader": snippet.get("channelTitle"),
@@ -233,8 +236,8 @@ def fetch_youtube_transcript(video_id: str) -> list[TranscriptSegment]:
     return fetch_youtube_transcript_with_metadata(video_id).segments
 
 
-def fetch_youtube_transcript_with_metadata(video_id: str) -> TranscriptionResult:
-    raw_items, language = _fetch_transcript_items(video_id)
+def fetch_youtube_transcript_with_metadata(video_id: str, original_audio_language: str | None = None) -> TranscriptionResult:
+    raw_items, language, provenance = _select_caption_items(video_id, original_audio_language)
     segments: list[TranscriptSegment] = []
 
     for item in raw_items:
@@ -265,12 +268,14 @@ def fetch_youtube_transcript_with_metadata(video_id: str) -> TranscriptionResult
             segments=[],
             transcript_source="unavailable",
             transcript_source_note=YOUTUBE_TRANSCRIPT_UNAVAILABLE_NOTE,
+            provenance=provenance,
         )
 
     return TranscriptionResult(
         segments=segments,
         transcript_language=language,
-        detected_language=language,
+        detected_language=None,
+        provenance=provenance,
         transcript_source="platform_captions",
         transcript_source_note=(
             "Transcript extracted from YouTube captions/subtitles. "
@@ -322,7 +327,9 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
     expected_duration = _expected_duration_seconds(info)
 
     # Attempt captions directly before using a managed fallback.
-    transcript_result = fetch_youtube_transcript_with_metadata(video_id)
+    original_language = language_code((info or {}).get("default_audio_language"))
+    transcript_result = fetch_youtube_transcript_with_metadata(video_id, original_language)
+    transcript_result = _with_audio_context(transcript_result, original_language)
 
     # Prefer Supadata when configured. Apify remains a legacy fallback only
     # when Supadata is absent, preventing paid actor starts after migration.
@@ -334,7 +341,7 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         try:
             transcript_result = _better_transcript_result(
                 current=transcript_result,
-                candidate=transcribe_video_url_with_supadata(url),
+                candidate=_with_audio_context(transcribe_video_url_with_supadata(url), original_language),
                 expected_duration=expected_duration,
             )
         except SupadataTranscriptUnavailableError as exc:
@@ -347,7 +354,7 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         try:
             transcript_result = _better_transcript_result(
                 current=transcript_result,
-                candidate=transcribe_youtube_url_with_apify(url),
+                candidate=_with_audio_context(transcribe_youtube_url_with_apify(url), original_language),
                 expected_duration=expected_duration,
             )
         except ApifyTranscriptUnavailableError as exc:
@@ -367,6 +374,8 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
                 expected_duration=expected_duration,
             )
 
+    if _known_mismatch(transcript_result):
+        transcript_result = replace(transcript_result, segments=[], transcript_source_note="Caption language conflicts with original-audio metadata; transcript unavailable.")
     transcript_segments = transcript_result.segments
     transcript_available = len(transcript_segments) > 0
 
@@ -414,91 +423,96 @@ def extract_youtube_video(url: str) -> VideoExtractionResult:
         transcript_source_note=transcript_source_note,
     )
 
+    video_metadata.transcript_evidence = {"provenance": transcript_result.provenance}
     return VideoExtractionResult(
         metadata=video_metadata,
         transcript_segments=transcript_segments,
     )
 
 
-def _fetch_transcript_items(video_id: str) -> tuple[Iterable[Any], str | None]:
-    languages = get_settings().transcript_fallback_language_list or ["en", "hi", "ta"]
+def _with_audio_context(result: TranscriptionResult, original_language: str | None) -> TranscriptionResult:
+    provenance = dict(result.provenance)
+    if result.transcript_source == "deepgram_multilingual":
+        provenance.update(original_audio_language=result.detected_language,
+                          audio_language_source="deepgram_audio_analysis",
+                          audio_language_verified=bool(result.detected_language))
+    else:
+        provenance.setdefault("original_audio_language", original_language)
+        provenance.setdefault("audio_language_source", "youtube_default_audio_language" if original_language else "unknown")
+        provenance.setdefault("audio_language_verified", False)
+        provenance.setdefault("caption_track_language", result.transcript_language)
+        provenance.setdefault("caption_kind", "unknown")
+    return replace(result, provenance=provenance)
 
-    transcript_result = _fetch_transcript_from_list_api(video_id, languages)
-    if transcript_result is not None:
-        return transcript_result
 
+def _known_mismatch(result: TranscriptionResult) -> bool:
+    p = result.provenance
+    audio = p.get("original_audio_language")
+    track = p.get("caption_track_language")
+    return bool(audio and track and not language_matches(audio, track))
+
+
+def _select_caption_items(video_id: str, original_audio_language: str | None = None):
+    requested = get_settings().transcript_fallback_language_list or ["en", "hi", "ta"]
+    preferred = [original_audio_language] if original_audio_language else requested
+    provenance = {"requested_languages": requested, "original_audio_language": original_audio_language,
+        "audio_language_source": "youtube_default_audio_language" if original_audio_language else "unknown",
+        "audio_language_verified": False, "caption_kind": "unknown",
+        "detected_text_language": None}
     try:
-        api = YouTubeTranscriptApi()
-        return api.fetch(video_id, languages=languages), languages[0]
-    except Exception:
-        pass
-
-    try:
-        api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
-
         try:
-            transcript = transcript_list.find_transcript(languages)
+            tracks = list(YouTubeTranscriptApi().list(video_id))
         except Exception:
-            transcript = next(iter(transcript_list))
-
-        return transcript.fetch(), _transcript_language(transcript)
+            tracks = list(getattr(YouTubeTranscriptApi, "list_transcripts")(video_id))
+        provenance["available_track_languages"] = [_transcript_language(t) for t in tracks]
+        candidates = [t for t in tracks if any(language_matches(_transcript_language(t), l) for l in preferred)]
+        if not candidates:
+            # Never fetch an arbitrary language solely because it was listed first.
+            provenance["selection_reason"] = "no_compatible_language_track"
+            return [], None, provenance
+        candidates.sort(key=lambda t: (
+            next((i for i, l in enumerate(preferred) if language_matches(_transcript_language(t), l)), 999),
+            bool(getattr(t, "is_translated", False)), bool(getattr(t, "is_generated", False)),
+            _transcript_language(t) or ""))
+        for track in candidates:
+            try:
+                fetched = track.fetch()
+            except Exception:
+                continue
+            language = _transcript_language(track)
+            kind = "translated" if getattr(track, "is_translated", False) else (
+                "automatic" if getattr(track, "is_generated", None) is True else
+                "original" if getattr(track, "is_generated", None) is False and original_audio_language else "unknown")
+            provenance.update(caption_track_language=language, caption_kind=kind,
+                caption_generation="automatic" if getattr(track, "is_generated", None) is True else "manual" if getattr(track, "is_generated", None) is False else "unknown",
+                selection_reason="original_audio_language_match" if original_audio_language else "requested_language_match_audio_unverified")
+            return fetched, language, provenance
+        provenance["selection_reason"] = "compatible_tracks_failed"
+        return [], None, provenance
     except Exception:
-        pass
-
-    try:
-        get_transcript = getattr(YouTubeTranscriptApi, "get_transcript")
-        return get_transcript(video_id, languages=languages), languages[0]
-    except Exception:
-        pass
-
-    try:
-        list_transcripts = getattr(YouTubeTranscriptApi, "list_transcripts")
-        transcript_list = list_transcripts(video_id)
-
+        # Older API versions expose fetch only. Request languages explicitly, but
+        # do not pretend requested language is the actual returned track language.
         try:
-            transcript = transcript_list.find_transcript(languages)
+            fetched = YouTubeTranscriptApi().fetch(video_id, languages=preferred)
         except Exception:
-            transcript = next(iter(transcript_list))
+            try:
+                fetched = getattr(YouTubeTranscriptApi, "get_transcript")(video_id, languages=preferred)
+            except Exception:
+                provenance["selection_reason"] = "caption_provider_unavailable"
+                return [], None, provenance
+        actual = getattr(fetched, "language_code", None)
+        provenance.update(caption_track_language=actual, selection_reason="legacy_fetch_track_metadata_limited")
+        return fetched, actual, provenance
 
-        return transcript.fetch(), _transcript_language(transcript)
-    except Exception:
-        return [], None
+
+def _fetch_transcript_items(video_id: str):
+    items, language, _ = _select_caption_items(video_id)
+    return items, language
 
 
-def _fetch_transcript_from_list_api(
-    video_id: str,
-    languages: list[str],
-) -> tuple[Iterable[Any], str | None] | None:
-    try:
-        api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
-    except Exception:
-        try:
-            list_transcripts = getattr(YouTubeTranscriptApi, "list_transcripts")
-            transcript_list = list_transcripts(video_id)
-        except Exception:
-            return None
-
-    for finder_name in (
-        "find_manually_created_transcript",
-        "find_generated_transcript",
-        "find_transcript",
-    ):
-        finder = getattr(transcript_list, finder_name, None)
-        if finder is None:
-            continue
-        try:
-            transcript = finder(languages)
-            return transcript.fetch(), _transcript_language(transcript)
-        except Exception:
-            continue
-
-    try:
-        transcript = next(iter(transcript_list))
-        return transcript.fetch(), _transcript_language(transcript)
-    except Exception:
-        return None
+def _fetch_transcript_from_list_api(video_id: str, languages: list[str]):
+    items, language, _ = _select_caption_items(video_id, languages[0] if len(languages) == 1 else None)
+    return (items, language) if items else None
 
 
 def _transcribe_youtube_audio(info: dict[str, Any]) -> TranscriptionResult:
@@ -549,6 +563,12 @@ def _should_try_transcript_fallback(
     transcript_result: TranscriptionResult,
     expected_duration: float | None,
 ) -> bool:
+    _, quality = assess_transcript(transcript_result.segments, duration=expected_duration,
+        provenance=transcript_result.provenance, source=transcript_result.transcript_source)
+    if quality["status"] == "invalid":
+        return True
+    if _known_mismatch(transcript_result) or transcript_result.provenance.get("caption_kind") == "translated":
+        return True
     if not transcript_result.segments:
         return True
 
@@ -574,8 +594,16 @@ def _better_transcript_result(
     candidate: TranscriptionResult,
     expected_duration: float | None,
 ) -> TranscriptionResult:
-    if not candidate.segments:
+    _, quality = assess_transcript(candidate.segments, duration=expected_duration,
+        provenance=candidate.provenance, source=candidate.transcript_source)
+    if quality["status"] == "invalid":
         return current
+    if not candidate.segments or _known_mismatch(candidate):
+        return current
+    if _known_mismatch(current):
+        return candidate
+    if current.provenance.get("caption_kind") == "translated" and candidate.provenance.get("caption_kind") in {"original", "automatic"}:
+        return candidate
 
     if not current.segments:
         return candidate

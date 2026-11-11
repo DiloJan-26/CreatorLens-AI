@@ -80,6 +80,7 @@ def extract_facebook_content(
         ),
     )
 
+    metadata.transcript_evidence = {"provenance": transcript_result.provenance if transcript_result else {}}
     return VideoExtractionResult(
         metadata=metadata,
         transcript_segments=transcript_segments,

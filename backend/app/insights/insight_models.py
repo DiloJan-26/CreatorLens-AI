@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class HookAnalysis(BaseModel):
+    evidence_window: dict = Field(default_factory=dict)
     hook_text: str | None = None
     hook_type: str
     hook_score: int = Field(ge=0, le=10)

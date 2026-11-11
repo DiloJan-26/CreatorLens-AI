@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -24,6 +24,7 @@ class TranscriptionResult:
     language_confidence: float | None = None
     transcript_source: str | None = None
     transcript_source_note: str | None = None
+    provenance: dict[str, Any] = field(default_factory=dict)
 
 
 def build_empty_transcript() -> list[TranscriptSegment]:
@@ -107,7 +108,7 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
             "Transcript unavailable or incomplete. The audio may be unsupported, mixed-language, noisy, or not publicly extractable."
         )
 
-    detected_language = _detected_language(response_json) or configured_language
+    detected_language = _detected_language(response_json)
     language_confidence = _language_confidence(response_json)
 
     return TranscriptionResult(
@@ -115,6 +116,11 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
         transcript_language=configured_language or detected_language,
         detected_language=detected_language,
         language_confidence=language_confidence,
+        provenance={"requested_languages": [configured_language] if configured_language else [],
+            "requested_language": configured_language, "transcript_language": configured_language or detected_language,
+            "original_audio_language": detected_language, "audio_language_source": "deepgram_audio_analysis",
+            "audio_language_verified": bool(detected_language), "detected_text_language": None,
+            "caption_kind": "automatic", "selection_reason": "deepgram_audio_fallback"},
         transcript_source="deepgram_multilingual",
         transcript_source_note=_deepgram_source_note(detected_language),
     )

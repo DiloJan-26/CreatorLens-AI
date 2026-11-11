@@ -70,7 +70,7 @@ class ContentItemRepository:
             select(ContentItem)
             .where(
                 ContentItem.normalized_url == normalized_url,
-                ContentItem.extraction_status == "ready",
+                ContentItem.extraction_status.in_(["ready", "partial"]),
                 ContentItem.transcript_available.is_(True),
                 ContentItem.content_hash.is_not(None),
                 ContentItem.metadata_hash.is_not(None),

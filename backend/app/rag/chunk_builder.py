@@ -1,8 +1,12 @@
+import json
 import hashlib
 import uuid
 from typing import Any
 
 from app.core.config import get_settings
+from app.models.video import VideoExtractionResult, VideoMetadata, TranscriptSegment
+from app.services.evidence_quality import validate_extraction
+from app.services.evidence_window import select_evidence_window
 from app.models.rag import RagChunk, RagPlatform, RagSourceType
 from app.services.hash_service import hash_chunk, hash_embedding
 from app.services.metric_source_service import get_metric_summary
@@ -59,6 +63,12 @@ def _build_platform_chunks(
     metadata: dict[str, Any],
     transcript_segments: list[dict[str, Any]],
 ) -> list[RagChunk]:
+    checked = validate_extraction(VideoExtractionResult(metadata=VideoMetadata.model_validate(metadata),
+        transcript_segments=[TranscriptSegment.model_validate(s) for s in transcript_segments]))
+    metadata = {**metadata, **checked.metadata.model_dump(mode="json")}
+    transcript_segments = [s.model_dump(mode="json") for s in checked.transcript_segments]
+    revision = checked.metadata.transcript_evidence["revision"]
+    metadata["verbal_hook_window"] = select_evidence_window(transcript_segments).describe()
     chunks: list[RagChunk] = []
     chunk_index = 0
     content_id = (
@@ -70,6 +80,7 @@ def _build_platform_chunks(
         _make_chunk(
             project_id=project_id,
             content_id=content_id,
+            evidence_revision=revision,
             slot=slot,
             platform=platform,
             source_type="metadata",
@@ -90,6 +101,7 @@ def _build_platform_chunks(
             _make_chunk(
                 project_id=project_id,
                 content_id=content_id,
+                evidence_revision=revision,
                 slot=slot,
                 platform=platform,
                 source_type="description",
@@ -117,6 +129,7 @@ def _build_platform_chunks(
             _make_chunk(
                 project_id=project_id,
                 content_id=content_id,
+                evidence_revision=revision,
                 slot=slot,
                 platform=platform,
                 source_type="hook",
@@ -130,38 +143,13 @@ def _build_platform_chunks(
             )
         )
         chunk_index += 1
-    else:
-        fallback_hook = _hook_fallback_text(metadata)
-
-        if fallback_hook:
-            chunks.append(
-                _make_chunk(
-                    project_id=project_id,
-                    content_id=content_id,
-                    slot=slot,
-                    platform=platform,
-                    source_type="hook",
-                    chunk_index=chunk_index,
-                    title=_optional_text(metadata.get("title")),
-                    creator=_optional_text(metadata.get("creator")),
-                    text=fallback_hook,
-                    citation_label=_citation_label(
-                        slot,
-                        platform,
-                        "hook",
-                        None,
-                        None,
-                    ),
-                )
-            )
-            chunk_index += 1
-
     for transcript_chunk_segments in _transcript_chunk_segments(clean_segments):
         start_time, end_time = _segment_time_range(transcript_chunk_segments)
         chunks.append(
             _make_chunk(
                 project_id=project_id,
                 content_id=content_id,
+                evidence_revision=revision,
                 slot=slot,
                 platform=platform,
                 source_type="transcript",
@@ -214,7 +202,10 @@ def _metadata_text(
         f"Metric source note: {_display_value(metadata.get('metric_source_note'))}",
         f"Transcript source note: {_display_value(metadata.get('transcript_source_note'))}",
     ]
-    metric_source_text = _metric_source_text(project_id, platform)
+    evidence = metadata.get("transcript_evidence") or {}
+    lines.append("Verbal hook window: " + json.dumps(metadata.get("verbal_hook_window"), ensure_ascii=False))
+    lines.append("Transcript evidence quality: " + json.dumps({k: evidence.get(k) for k in ("policy_version", "status", "issues", "revision", "provenance", "coverage_ratio")}, ensure_ascii=False))
+    metric_source_text = _metric_source_text(project_id, platform, metadata.get("slot"))
 
     if metric_source_text:
         lines.append(metric_source_text)
@@ -275,17 +266,7 @@ def _hook_fallback_text(metadata: dict[str, Any]) -> str | None:
 
 
 def _hook_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    timed_segments = [
-        segment
-        for segment in segments
-        if (start_time := _as_float(segment.get("start_time"))) is not None
-        and start_time <= 5.0
-    ]
-
-    if timed_segments:
-        return timed_segments
-
-    return segments[:2]
+    return select_evidence_window(segments).segments
 
 
 def _transcript_chunk_segments(
@@ -329,14 +310,16 @@ def _make_chunk(
     end_time: float | None = None,
     title: str | None = None,
     creator: str | None = None,
+    evidence_revision: str | None = None,
 ) -> RagChunk:
     settings = get_settings()
-    content_hash = _content_hash(project_id, slot, platform, source_type, text)
+    content_hash = _content_hash(project_id, slot, platform, source_type, text + (evidence_revision or ""))
     chunk_hash = hash_chunk(text)
     embedding_hash = hash_embedding(
         chunk_hash=chunk_hash,
         model_name=settings.embedding_model_name,
         model_version=settings.embedding_model_version,
+        evidence_revision=evidence_revision,
     )
     chunk_id = str(
         uuid.uuid5(
@@ -359,6 +342,7 @@ def _make_chunk(
         creator=creator,
         text=text,
         content_hash=content_hash,
+        evidence_revision=evidence_revision,
         chunk_hash=chunk_hash,
         embedding_hash=embedding_hash,
         citation_label=citation_label,
@@ -398,7 +382,10 @@ def _segment_time_range(segments: list[dict[str, Any]]) -> tuple[float | None, f
     if not segments:
         return None, None
 
-    return _as_float(segments[0].get("start_time")), _as_float(segments[-1].get("end_time"))
+    ranges = [(_as_float(s.get("start_time")), _as_float(s.get("end_time"))) for s in segments]
+    if any(start is None or end is None for start, end in ranges):
+        return None, None
+    return min(start for start, _ in ranges), max(end for _, end in ranges)
 
 
 def _clean_transcript_segments(
@@ -432,7 +419,7 @@ def _segments_length(segments: list[dict[str, Any]]) -> int:
     return len(_segments_text(segments))
 
 
-def _metric_source_text(project_id: str, platform: RagPlatform) -> str:
+def _metric_source_text(project_id: str, platform: RagPlatform, slot: str | None = None) -> str:
     try:
         summary = get_metric_summary(project_id)
     except Exception:
@@ -442,7 +429,7 @@ def _metric_source_text(project_id: str, platform: RagPlatform) -> str:
         (
             record
             for record in summary.records
-            if record.source_platform == platform and record.metric_scope == "native"
+            if record.source_platform == platform and record.metric_scope == "native" and record.slot == slot
         ),
         None,
     )
@@ -450,11 +437,13 @@ def _metric_source_text(project_id: str, platform: RagPlatform) -> str:
     lines = [
         "Metric Source Resolver:",
         f"{_platform_label(platform)} native completeness status: {platform_status}",
+        f"Metric source slot: {slot or 'unresolved'}",
     ]
 
     if source_record is not None:
         lines.extend(
             [
+                f"Metric source content ID: {source_record.content_item_id or 'unresolved'}",
                 f"Metric source method: {source_record.source_method}",
                 f"Metric source confidence: {source_record.confidence}",
                 f"Verified followers: {_display_number(source_record.followers)}",

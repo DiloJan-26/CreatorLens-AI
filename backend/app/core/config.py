@@ -149,6 +149,8 @@ class Settings(BaseSettings):
         alias="APIFY_YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS",
     )
     deepgram_api_key: str | None = Field(default=None, alias="DEEPGRAM_API_KEY")
+    evidence_cache_max_age_seconds: int = Field(default=86400, alias="EVIDENCE_CACHE_MAX_AGE_SECONDS", ge=300, le=2592000)
+
     transcript_language: str = Field(default="multi", alias="TRANSCRIPT_LANGUAGE")
     transcript_fallback_languages: str = Field(
         default="en,hi,ta",

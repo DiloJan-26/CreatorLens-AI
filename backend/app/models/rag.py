@@ -39,6 +39,7 @@ class RagChunk(BaseModel):
     title: str | None = None
     creator: str | None = None
     text: str
+    evidence_revision: str | None = None
     content_hash: str
     chunk_hash: str | None = None
     embedding_hash: str | None = None
@@ -100,6 +101,7 @@ class RetrieveRequest(BaseModel):
 
 
 class RetrievedChunk(BaseModel):
+    evidence_revision: str | None = None
     chunk_id: str | None = None
     content_id: str | None = None
     slot: str | None = None
@@ -116,6 +118,7 @@ class RetrievedChunk(BaseModel):
 
 
 class RetrieveResponse(BaseModel):
+    evidence_limitations: list[str] = Field(default_factory=list)
     project_id: str
     query: str
     retrieval_mode: RetrievalMode = RetrievalMode.TRANSCRIPT_DEEP
