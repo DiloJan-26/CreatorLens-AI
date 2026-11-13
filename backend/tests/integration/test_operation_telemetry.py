@@ -1,5 +1,6 @@
 """Local disposable SQLite compatibility and guarded GitHub PostgreSQL verification."""
 from contextlib import contextmanager
+from decimal import Decimal
 from pathlib import Path
 import importlib.util
 import os
@@ -29,7 +30,6 @@ def revision():
 def test_operation_telemetry_api_scope_pagination_history_and_no_inference(db_session,monkeypatch):
     from app.services import llm_observability_service as service
     from app.api import metrics
-    from decimal import Decimal
     project=_create_project(db_session)
     record(db_session,project,cost=Decimal('.0044059'));record(db_session,project,det=True);record(db_session,project)
     @contextmanager
@@ -49,7 +49,6 @@ def test_operation_telemetry_api_scope_pagination_history_and_no_inference(db_se
 
 
 def test_operation_telemetry_additive_upgrade_downgrade_preserves_legacy_rows(db_session):
-    from decimal import Decimal
     project=_create_project(db_session);run=record(db_session,project,cost=Decimal('.0044059'))
     connection=db_session.connection()
     with Operations.context(MigrationContext.configure(connection)):
