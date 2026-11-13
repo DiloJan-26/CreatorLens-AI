@@ -70,6 +70,12 @@ Supported sources:
 | Instagram | Reels, posts, and public video URLs | Public extraction with Deepgram transcription when public audio is available |
 | Facebook | Reels, watch URLs, and public video posts | Public extraction with Deepgram transcription when public audio is available |
 
+## Semantic creative analysis
+
+An optional, explicitly queued Gemini operation now extracts versioned creative labels from validated transcript and description evidence. `POST /api/projects/{project_id}/semantic/{slot}?allow_inference=true` queues the existing Celery worker; GET only reads compatible persisted snapshots. This operation can incur Gemini charges and is deferred to the coordinated release for live acceptance.
+
+Strict validation binds feature references to content identity, source excerpts, timestamps and evidence revision. Fixed deterministic rules map accepted labels into `semantic-creative-1.0.0`; Gemini supplies no scores or winners. Insight responses expose `semantic_analysis` and nullable `semantic_scoring` separately from legacy and Phase 2 results. A new additive semantic-snapshot migration is included. Offline mocks verify the implementation; live Gemini and PostgreSQL migration acceptance remain outstanding.
+
 ## Versioned deterministic scoring
 
 The insight summary API now returns `content_1.scoring` and `content_2.scoring` under policy `creator-insight-2.0.0`. These objects preserve unavailable scores as null, expose metric definitions, sample sufficiency, feature contributions and calculation coverage, and separate evidence assessment from quality. Engagement scoring requires complete platform-defined interactions and at least 1,000 views. These thresholds and weights are uncalibrated heuristics.

@@ -117,6 +117,26 @@ def _build_content_insight(
         hook_type=hook_analysis.hook_type,
     )
 
+    base_scoring = calculate_scoring(content_item, scores.model_dump(), hook_assessable=bool(hook_analysis.hook_text))
+    semantic_analysis = {"status": "unavailable"}
+    semantic_scoring = None
+    try:
+        from app.services.semantic_service import get_semantic_analysis
+        from app.insights.semantic_scoring import apply_semantic_scoring
+        from app.insights.semantic_models import CreativeFeatures
+        semantic_analysis = get_semantic_analysis(project_id, slot)
+        if semantic_analysis.get("status") == "ready":
+            from app.insights.semantic_evidence import build_semantic_input
+            from app.core.config import get_settings
+            supported = tuple(x.strip().lower() for x in get_settings().semantic_supported_languages.split(",") if x.strip())
+            local_revision = build_semantic_input(project_id, content_item, transcript_segments, supported_languages=supported)["input_revision"]
+            if semantic_analysis["input_revision"] != local_revision:
+                raise ValueError("Evidence changed while assembling insight summary.")
+            semantic_scoring = apply_semantic_scoring(base_scoring,
+                CreativeFeatures.model_validate(semantic_analysis["features"]), semantic_analysis["snapshot_id"])
+    except Exception:
+        semantic_analysis = {"status": "unavailable", "reason": "Semantic storage or current evidence unavailable."}
+
     return ContentInsight(
         slot=slot,
         label=_slot_label(slot),
@@ -124,7 +144,9 @@ def _build_content_insight(
         title=_optional_text(content_item.get("title")),
         creator=_optional_text(content_item.get("creator")),
         hook_analysis=hook_analysis,
-        scoring=calculate_scoring(content_item, scores.model_dump(), hook_assessable=bool(hook_analysis.hook_text)),
+        scoring=base_scoring,
+        semantic_analysis=semantic_analysis,
+        semantic_scoring=semantic_scoring,
         scores=scores,
         strengths=strengths,
         weaknesses=weaknesses,

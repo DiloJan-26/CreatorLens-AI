@@ -56,6 +56,9 @@ class EvidenceAssessment(BaseModel):
     limitations: list[str]
 
 class CreatorScoring(BaseModel):
+    metric_policy_version: str = POLICY_VERSION
+    creative_policy_version: str | None = None
+    semantic_snapshot_id: str | None = None
     policy: ScoringPolicy = Field(default_factory=ScoringPolicy)
     metrics: CreatorMetrics
     reach: ScoreBreakdown

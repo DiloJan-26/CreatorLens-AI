@@ -1,0 +1,7 @@
+﻿"""Optional post-ingestion semantic task on the existing Celery worker."""
+from app.workers.celery_app import celery_app
+from app.services.semantic_service import process_semantic_snapshot
+
+@celery_app.task(name='creatorlens.semantic_features', max_retries=0)
+def extract_semantic_features(snapshot_id: str):
+    return process_semantic_snapshot(snapshot_id)

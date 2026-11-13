@@ -27,6 +27,8 @@ class InsightScores(BaseModel):
 
 
 class ContentInsight(BaseModel):
+    semantic_analysis: dict = Field(default_factory=dict)
+    semantic_scoring: CreatorScoring | None = None
     scoring: CreatorScoring | None = None
     slot: str
     label: str

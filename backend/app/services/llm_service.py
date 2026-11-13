@@ -17,6 +17,8 @@ def get_llm(
     streaming: bool = False,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    max_retries: int | None = None,
+    timeout: float | None = None,
 ) -> ChatGoogleGenerativeAI:
     settings = get_settings()
     provider = settings.llm_provider.strip().lower()
@@ -39,6 +41,7 @@ def get_llm(
         ),
         google_api_key=settings.gemini_api_key,
         streaming=streaming,
+        max_retries=max_retries, timeout=timeout,
     )
 
 
@@ -165,13 +168,17 @@ def _get_gemini_llm(
     max_output_tokens: int,
     google_api_key: str,
     streaming: bool,
+    max_retries: int | None = None,
+    timeout: float | None = None,
 ) -> ChatGoogleGenerativeAI:
+    options = {} if max_retries is None else {"max_retries": max_retries}
     return ChatGoogleGenerativeAI(
         model=model,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
         google_api_key=google_api_key,
         streaming=streaming,
+        timeout=timeout, **options,
     )
 
 

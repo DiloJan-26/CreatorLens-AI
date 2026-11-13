@@ -49,6 +49,7 @@ celery_app = Celery(
     include=[
         "app.workers.ingestion_tasks",
         "app.workers.indexing_tasks",
+        "app.workers.semantic_tasks",
     ],
 )
 

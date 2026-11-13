@@ -72,6 +72,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY")
+    semantic_supported_languages: str = Field(default="en,hi,ta", alias="SEMANTIC_SUPPORTED_LANGUAGES")
+
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
     llm_model: str = Field(default="gemini-3.5-flash", alias="LLM_MODEL")
     llm_fallback_model: str | None = Field(default=None, alias="LLM_FALLBACK_MODEL")

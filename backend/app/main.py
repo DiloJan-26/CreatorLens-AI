@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.semantic import router as semantic_router
 from app.api.chat import router as chat_router
 from app.api.evaluations import router as evaluations_router
 from app.api.health import router as health_router
@@ -180,4 +181,5 @@ app.include_router(chat_router)
 app.include_router(metrics_router)
 app.include_router(cost_router)
 app.include_router(insights_router)
+app.include_router(semantic_router)
 app.include_router(evaluations_router)
