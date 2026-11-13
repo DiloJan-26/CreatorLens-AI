@@ -3,10 +3,21 @@ import re
 from app.llm.structured_outputs import ComparisonAnswer,MetricAnswer,RecommendationAnswer
 from app.models.chat import Citation
 from app.rag.intelligence_context import canonical_answer
+from app.llm.grounded_claims import (SENTIMENT, METRIC_ASSERTION, sentiment_uncertainty, source_quotation, supported_metric_claim)
 
 # No outcome measurements in the current public evidence contract support these claims.
-UNSUPPORTED=re.compile(r'retention|drop[ -]?off|watch[ -]?time|revenue|moneti[sz]|sentiment|viral|caus(?:e|es|ed|al)|guarantee|\bwill\b|ignore.{0,30}instructions|system prompt|(?:audience|viewers|people).{0,40}(?:love|hate|enjoy|prefer|stopped|leave|left|stay)|\b(?:boosts?|drives?|increases?|decreases?)\b',re.I)
-DIRECTION=re.compile(r'\b(wins?|winner|leads?|superior|outperforms?|higher|lower|better|stronger|weaker|poor|weakness)\b',re.I)
+UNSUPPORTED=re.compile(r'retention|drop[ -]?off|watch[ -]?time|revenue|moneti[sz]|viral|caus(?:e|es|ed|al)|guarantee|\bwill\b|ignore.{0,30}instructions|system prompt|(?:audience|viewers|people).{0,40}(?:stopped|leave|left|stay)|\b(?:boosts?|drives?|increases?|decreases?)\b',re.I)
+DIRECTION=re.compile(r'\b(wins?|winner|leads?|superior|outperforms?|higher|lower|more|fewer|less|ahead|better|stronger|weaker|poor|weakness)\b',re.I)
+
+
+def _unsupported(text, evidence=()):
+    if sentiment_uncertainty(text):
+        return False
+    quote = source_quotation(text, evidence)
+    if quote is not None:
+        # Explicit sourced quotation can report wording, not verify audience emotion.
+        return bool(UNSUPPORTED.search(quote))
+    return bool(UNSUPPORTED.search(text) or SENTIMENT.search(text))
 
 
 def _has_numeric_claim(text):
@@ -31,10 +42,10 @@ def validate_generated_answer(answer,context,question,intent,citations):
         actual=(item.project_id,item.content_id,item.evidence_id,item.evidence_revision,item.slot,item.platform,item.source_type,item.start_time,item.end_time)
         if actual!=expected or item.project_id!=context['project_id'] or not item.excerpt or item.excerpt not in source.text:
             return fail('Evidence ownership, revision, source type, excerpt or timestamp mismatch.')
-        if UNSUPPORTED.search(item.claim):return fail('Unsupported outcome, causal or instruction-like claim.')
-        # Numeric interpretations must be quoted observations; generated numerical facts are not authoritative.
-        if _has_numeric_claim(item.claim) and item.claim not in source.text:return fail('Generated numeric claim is not a verified source observation.')
-        if DIRECTION.search(item.claim):return fail('Generated directional claim must use the canonical decision or semantic rubric.')
+        if _unsupported(item.claim, [item]):return fail('Unsupported outcome, causal or instruction-like claim.')
+        # Numerical prose must match a canonical metric assertion or an exact sourced observation.
+        if _has_numeric_claim(item.claim) and not supported_metric_claim(item.claim,context,citations,source=source) and item.claim not in source.text:return fail('Generated numeric claim is not a verified source observation.')
+        if (DIRECTION.search(item.claim) or METRIC_ASSERTION.search(item.claim)) and not supported_metric_claim(item.claim,context,citations,source=source):return fail('Generated directional claim must match an eligible canonical metric decision.')
     if isinstance(answer,ComparisonAnswer):
         if answer.winner!=base.winner:return fail('Generated winner conflicts with the canonical decision.')
         texts=answer.key_reasons
@@ -49,10 +60,14 @@ def validate_generated_answer(answer,context,question,intent,citations):
         expected=authoritative.get(r.recommendation_id)
         if expected is None or any(getattr(r,k)!=getattr(expected,k) for k in ('target_content_id','target_slot','priority','objective','recommendation','rationale','source_evidence_ids')):
             return fail('Generated recommendation identity, target, priority or action is not authoritative.')
-    if any(UNSUPPORTED.search(t) for t in texts):return fail('Unsupported outcome or causal statement was withheld.')
+    if any(_unsupported(t, answer.evidence) for t in texts):return fail('Unsupported outcome or causal statement was withheld.')
     safe=[]
     for text in texts:
-        if _has_numeric_claim(text) or DIRECTION.search(text):
+        if supported_metric_claim(text,context,citations):
+            safe.append('Evidence-limited interpretation: '+text[:900])
+        elif sentiment_uncertainty(text) or source_quotation(text,answer.evidence):
+            safe.append('Evidence-limited interpretation: '+text[:900])
+        elif _has_numeric_claim(text) or DIRECTION.search(text) or METRIC_ASSERTION.search(text):
             warnings.append('Generated numerical or directional prose was replaced by the canonical explanation.')
         elif any(e.source_type in {'opening','hook','transcript','description'} for e in answer.evidence) and text.strip():safe.append('Evidence-limited interpretation: '+text[:900])
         elif text.strip():warnings.append('Generated qualitative prose lacked a current verbal or description citation and was withheld.')
@@ -66,7 +81,7 @@ def validate_generated_answer(answer,context,question,intent,citations):
         if draft:
             recommendation=authoritative.get(draft.recommendation_id)
             owned={c.evidence_id for c in citations if c.content_id==draft.target_content_id and c.source_type in {'opening','hook','transcript','description'}}
-            if not recommendation or draft.target_content_id!=recommendation.target_content_id or not set(draft.source_evidence_ids).issubset(owned) or UNSUPPORTED.search(draft.text) or re.search(r'\d',draft.text):
+            if not recommendation or draft.target_content_id!=recommendation.target_content_id or not set(draft.source_evidence_ids).issubset(owned) or _unsupported(draft.text) or re.search(r'\d',draft.text):
                 warnings.append('Unsupported or misattributed hypothetical draft was withheld.')
             else:base.hypothetical_draft=draft
     base.limitations=list(dict.fromkeys([*base.limitations,*context.get('limitations',[]),

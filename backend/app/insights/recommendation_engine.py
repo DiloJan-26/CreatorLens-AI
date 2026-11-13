@@ -150,7 +150,7 @@ def _metric_opportunity(subjects, decision):
         priority=_priority(1,1,2),basis='comparative_opportunity',comparison=_comparison_context(decision,'engagement'))
 
 
-def validate_recommendation(recommendation, subjects, decision):
+def _validate_recommendation_evidence(recommendation, subjects, decision):
     """Fail closed on target swaps, stale references or unsupported action promises."""
     r=recommendation
     subject=subjects.get(r.target_content_id)
@@ -189,6 +189,25 @@ def validate_recommendation(recommendation, subjects, decision):
     return r
 
 
+def validate_recommendation(recommendation, subjects, decision):
+    """Validate untrusted output against current deterministic recommendation assembly.
+
+    Replays only the bounded recommendation rules over supplied snapshots, without
+    inference, repository reads, scoring or comparison recalculation. Internal
+    assembly uses the evidence validator directly to avoid recursive validation.
+    """
+    _validate_recommendation_evidence(recommendation, subjects, decision)
+    canonical = build_creator_recommendations(
+        decision.project_id, decision, [(s.item, s.insight) for s in subjects.values()]
+    )
+    current = next((r for r in canonical.recommendations if r.id == recommendation.id), None)
+    if current is None:
+        raise ValueError('Recommendation is not present in the current canonical output.')
+    if recommendation.model_dump(mode='json') != current.model_dump(mode='json'):
+        raise ValueError('Recommendation fields or full priority breakdown differ from the canonical output.')
+    return recommendation
+
+
 def _merge_and_limit(candidates, subjects, decision):
     groups={}
     for r in sorted(candidates,key=lambda x:(-x.priority.score,x.target_content_id,x.signals[0].rule_id)):
@@ -208,7 +227,7 @@ def _merge_and_limit(candidates, subjects, decision):
         r.evidence=sorted({e.model_dump_json():e for e in r.evidence}.values(),key=lambda e:(e.role,e.content_id,e.evidence_id,e.excerpt or ''))
         r.id=hash_payload(dict(policy=RECOMMENDATION_POLICY,project=decision.project_id,target=r.target_content_id,
             objective=decision.selected_objective.value,group=r.intervention_group,rules=[s.rule_id for s in r.signals],evidence=[e.model_dump(mode='json') for e in r.evidence]))
-        try:eligible.append(validate_recommendation(r,subjects,decision))
+        try:eligible.append(_validate_recommendation_evidence(r,subjects,decision))
         except ValueError:continue
     ordered=sorted(eligible,key=lambda r:(-r.priority.score,r.target_content_id,r.intervention_group,r.id))
     displayed=[];per_target={}
