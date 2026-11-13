@@ -44,6 +44,11 @@ def get_evaluation_datasets() -> list[EvaluationDatasetSummary]:
                 answer_types=sorted({case.expected_answer_type for case in cases}),
             )
         )
+    from app.evaluations.intelligence_models import DATASETS, DATASET_VERSION as INTELLIGENCE_VERSION, EVALUATOR
+    from app.evaluations.intelligence_runner import load_intelligence_dataset
+    for name in DATASETS:
+        cases=load_intelligence_dataset(name)
+        summaries.append(EvaluationDatasetSummary(name=name,version=INTELLIGENCE_VERSION,case_count=len(cases),answer_types=['comparison'],methodology='offline_intelligence_contracts_and_mocked_probes',evaluator=EVALUATOR))
     return summaries
 
 
@@ -54,7 +59,9 @@ def get_evaluation_datasets() -> list[EvaluationDatasetSummary]:
     description=(
         "Runs bounded, network-free RAGAS non-LLM context metrics, labelled lexical "
         "quality metrics, and DeepEval rubrics against stable fixtures, then persists "
-        "the report. No Gemini quota is consumed."
+        "the report. Intelligence v2 datasets instead exercise versioned deterministic "
+        "contracts, synthetic retrieval and mocked response probes, with explicit "
+        "failure/skip accounting. No Gemini quota is consumed."
     ),
 )
 def create_evaluation_run(payload: EvaluationRunRequest) -> EvaluationRunReport:
@@ -132,7 +139,8 @@ def get_evaluation_run(run_id: str) -> EvaluationRunDetail:
                         answer_type=result.answer_type,
                         citation_labels=result.citation_labels,
                         metric_scores=result.metric_scores,
-                        rubric_results=result.rubric_results,
+                        rubric_results={k:v for k,v in result.rubric_results.items() if k!='_evaluation'},
+                        evaluation_details=result.rubric_results.get('_evaluation',{}),
                         duration_ms=result.duration_ms,
                         error_code=result.error_code,
                     )
@@ -156,6 +164,8 @@ def get_evaluation_run(run_id: str) -> EvaluationRunDetail:
 def _run_summary(repository: EvaluationRepository, run) -> EvaluationRunSummary:
     dataset = repository.get_dataset_by_id(run.dataset_id)
     return EvaluationRunSummary(
+        skipped_cases=run.aggregate_metrics.get('_evaluation',{}).get('skipped_cases',0),
+        evaluation_details=run.aggregate_metrics.get('_evaluation',{}),
         id=run.id,
         dataset_name=dataset.name if dataset else "unknown",
         dataset_version=dataset.version if dataset else "unknown",

@@ -84,6 +84,21 @@ Recommendations expose stable project/content IDs, observed labels, trigger rule
 
 The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. The Assistant now consumes these canonical contracts for decisions and supported experiments; legacy advice is not used as a V2 fallback. No live rollout or new migration is included in this change.
 
+## Intelligence evaluation
+
+The existing evaluation service now includes `creatorlens_intelligence_v2` (133 offline cases) and `creatorlens_intelligence_ci_v2` (23 critical cases), version `2.0.0`, alongside the unchanged legacy 20-case core and five-case smoke datasets. Reports separate deterministic contracts, mocked-model behavior, synthetic retrieval, critical gates, exploratory failures and explicit skips. They preserve actual outputs, expected contracts, failure reasons, methodology and dataset fingerprints in the existing history tables.
+
+The initial full baseline contains three visible exploratory failures: a forged recommendation-priority validation gap, a suppressed valid reach paraphrase, and an accepted indirect sentiment claim. These are findings to review, not hidden by the critical gate. Independent human semantic review, multilingual reference quality and live Gemini/Qdrant acceptance remain pending. No combined semantic-accuracy percentage is reported.
+
+Run offline without provider credentials from `backend/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_ci_v2
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2
+```
+
+Default V2 CLI success means all curated critical contracts passed. Add `--strict` to fail on exploratory findings too. Reports and the read-only dashboard always retain failures/skips. CI publishes bounded JSON artifacts; it does not invoke a paid judge or live providers. See `backend/app/evaluations/fixtures/ANNOTATION-GUIDE.md` before approving reference labels.
+
 ## Canonical RAG Assistant
 
 The Assistant resolves Balanced, Reach, Engagement or Creative Quality from the question and optional selected objective. Deterministic metric, comparison, insight and supported-recommendation requests read the same canonical intelligence contracts as Insights, without Gemini or vector retrieval. Missing Balanced evidence still permits eligible Reach and Engagement observations.

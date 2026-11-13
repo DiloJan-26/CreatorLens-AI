@@ -113,3 +113,62 @@ jobs:
           python -m app.evaluations.regression_runner
           --dataset creatorlens_ci_smoke_v1
           --no-persist
+
+
+      - name: Run critical intelligence regression
+        run: >-
+          python -m app.evaluations.offline_runner
+          --dataset creatorlens_intelligence_ci_v2
+          --output evaluation_reports/intelligence-ci.json
+
+      - name: Preserve critical evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-critical-report
+          path: backend/evaluation_reports/intelligence-ci.json
+          retention-days: 7
+
+  intelligence-offline:
+    name: Full offline intelligence evaluation
+    needs: evaluation-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      ENVIRONMENT: test
+      LANGSMITH_TRACING: "false"
+      PYTHONHASHSEED: "0"
+      HF_HUB_OFFLINE: "1"
+      RAGAS_DO_NOT_TRACK: "true"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "true"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Preserve legacy core regression
+        run: >-
+          python -m app.evaluations.offline_runner --dataset creatorlens_core_v1
+          --output evaluation_reports/legacy-core.json
+      - name: Measure full offline intelligence baseline
+        run: >-
+          python -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2
+          --output evaluation_reports/intelligence-full.json
+      - name: Preserve full reports including exploratory failures and skips
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intelligence-full-report
+          path: backend/evaluation_reports/*.json
+          retention-days: 7

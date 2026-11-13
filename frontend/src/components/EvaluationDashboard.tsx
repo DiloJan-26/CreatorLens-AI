@@ -104,6 +104,8 @@ export function EvaluationDashboard() {
     };
   }, [selectedRunId, refreshVersion]);
 
+  const [family, setFamily] = useState("all");
+  const visibleRuns = runs.filter((run) => family === "all" || (family === "intelligence") === Boolean(run.evaluation_details?.critical_gate));
   const latestRun = runs.find((r) => r.id === selectedRunId) ?? null;
   const accepted = latestRun ? isAcceptedRun(latestRun) : false;
 
@@ -143,12 +145,22 @@ export function EvaluationDashboard() {
             <StatusBadge accepted={accepted} run={latestRun} />
           )}
         </div>
+        <label className="flex flex-wrap items-center gap-3 text-sm">Evaluation family
+          <select className="rounded-md border border-slate-300 bg-white p-2" value={family} onChange={(event) => {
+            const next = event.target.value; setFamily(next);
+            const matches = runs.filter((run) => next === "all" || (next === "intelligence") === Boolean(run.evaluation_details?.critical_gate));
+            setSelectedRunId(matches[0]?.id ?? null);
+          }}><option value="all">All run history</option><option value="legacy">Legacy RAG regression</option><option value="intelligence">Creator Intelligence v2</option></select>
+        </label>
         <details className="notice text-sm">
           <summary>How to read these results</summary>
           <p className="muted">
             Pass rate reflects deterministic rubric gates. Lexical faithfulness
             and relevance measure text-based signals, not LLM-judge assessments.
             Context precision and recall use the configured RAGAS metrics.
+            Intelligence v2 reports critical contracts separately from mocked-model probes,
+            synthetic retrieval and pending human/live references. Failed exploratory cases
+            and skips remain visible; a critical pass is not overall model accuracy.
             Passing a regression suite does not guarantee every live answer is
             correct. This view cannot execute evaluations.
           </p>
@@ -168,7 +180,7 @@ export function EvaluationDashboard() {
             <div className="engineering-grid">
               <MetricPanel run={latestRun} />
               <RunHistory
-                runs={runs}
+                runs={visibleRuns}
                 selectedRunId={selectedRunId}
                 onSelect={setSelectedRunId}
               />
@@ -245,15 +257,16 @@ function DatasetStrip({ datasets }: { datasets: EvaluationDatasetSummary[] }) {
 
 function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
   const passRate = metricValue(run?.aggregate_metrics, "pass_rate");
+  const gate = run?.evaluation_details?.critical_gate;
   const cards = [
     {
-      label: "Pass rate",
-      value: passRate === null ? "Unavailable" : formatPercent(passRate),
-      note: "Hardened quality gates",
+      label: gate ? "Critical contracts" : "Pass rate",
+      value: gate ? `${gate.passed_cases}/${gate.total_cases}` : passRate === null ? "Unavailable" : formatPercent(passRate),
+      note: gate ? "Curated contracts; not model accuracy" : "Hardened quality gates",
     },
     {
-      label: "Cases passed",
-      value: run ? `${run.passed_cases}/${run.total_cases}` : "Unavailable",
+      label: gate ? "Passed / failed / skipped" : "Cases passed",
+      value: run ? gate ? `${run.passed_cases} / ${run.failed_cases} / ${run.skipped_cases ?? 0}` : `${run.passed_cases}/${run.total_cases}` : "Unavailable",
       note: !run
         ? "No persisted run"
         : run.failed_cases
@@ -268,7 +281,7 @@ function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
     {
       label: "Evaluator",
       value: run ? evaluatorVersion(run.evaluator) : "Unavailable",
-      note: "RAGAS + DeepEval deterministic",
+      note: gate ? "Offline contracts and mocked probes" : "RAGAS + DeepEval deterministic",
     },
   ];
 
@@ -295,6 +308,7 @@ function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
 }
 
 function MetricPanel({ run }: { run: EvaluationRunSummary | null }) {
+  if (run?.evaluation_details?.critical_gate) return <IntelligenceMeasurements run={run} />;
   return (
     <section className="quality-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -387,7 +401,7 @@ function RunHistory({
               <div className="mt-4 flex items-center justify-between text-xs text-slate-600">
                 <span>v{run.dataset_version}</span>
                 <span>
-                  {run.passed_cases}/{run.total_cases} passed
+                  {run.evaluation_details?.critical_gate ? `${run.passed_cases} passed / ${run.failed_cases} failed / ${run.skipped_cases ?? 0} skipped` : `${run.passed_cases}/${run.total_cases} passed`}
                 </span>
               </div>
             </button>
@@ -451,6 +465,7 @@ function CaseResults({
 
 function CaseResult({ result }: { result: EvaluationResultSummary }) {
   const checks = Object.entries(result.rubric_results);
+  const details = result.evaluation_details;
   const failedChecks = checks.filter(([, check]) => !check.passed).length;
   return (
     <details className="group rounded-2xl border border-slate-200 bg-slate-50 open:bg-white">
@@ -460,7 +475,7 @@ function CaseResult({ result }: { result: EvaluationResultSummary }) {
             {friendlyCaseName(result.case_id)}
           </p>
           <p className="mt-1 text-xs capitalize text-slate-500">
-            {result.answer_type ?? "Unknown answer type"} ·{" "}
+            {result.evaluation_details?.category ?? result.answer_type ?? "Unknown answer type"} ·{" "}
             {result.duration_ms == null
               ? "Duration unavailable"
               : `${result.duration_ms} ms`}
@@ -473,13 +488,19 @@ function CaseResult({ result }: { result: EvaluationResultSummary }) {
             </span>
           ) : null}
           <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${result.status === "PASSED" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${result.status === "PASSED" ? "bg-emerald-100 text-emerald-700" : result.status === "SKIPPED" ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-700"}`}
           >
             {result.status}
           </span>
         </div>
       </summary>
       <div className="border-t border-slate-200 p-4">
+        {details?.category && <div className="mb-4 space-y-2 text-sm">
+          <p><strong>{details.category.replaceAll("_", " ")}</strong> / {details.execution_mode?.replaceAll("_", " ")} / {details.critical ? "Critical contract" : "Exploratory indicator"}</p>
+          {details.skip_reason && <p className="text-amber-800">Skipped: {details.skip_reason}</p>}
+          {details.failure_reasons?.map((reason) => <p className="text-rose-800" key={reason}>{reason}</p>)}
+          <details><summary>Actual output and explicit reference</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md border p-3 text-xs">{JSON.stringify({ actual: details.actual_output, expected: details.expected_output, references: details.references }, null, 2)}</pre></details>
+        </div>}
         <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           Quality gates
         </h3>
@@ -567,7 +588,7 @@ function StatusBadge({
       />
       {run
         ? accepted
-          ? "Quality gate passed"
+          ? run.evaluation_details?.critical_gate ? "Critical contracts passed / inspect findings" : "Quality gate passed"
           : "Review required"
         : "No run available"}
     </span>
@@ -580,7 +601,7 @@ function RunState({ run }: { run: EvaluationRunSummary }) {
     <span
       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${passed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
     >
-      {run.status === "COMPLETED" ? (passed ? "Passed" : "Review") : run.status}
+      {run.status === "COMPLETED" ? (passed ? run.evaluation_details?.critical_gate ? "Critical pass" : "Passed" : "Review") : run.status}
     </span>
   );
 }
@@ -631,6 +652,7 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function isAcceptedRun(run: EvaluationRunSummary): boolean {
+  if (run.evaluation_details?.critical_gate) return run.status === "COMPLETED" && run.evaluation_details.critical_gate.passed;
   return (
     run.status === "COMPLETED" &&
     run.failed_cases === 0 &&
@@ -667,6 +689,8 @@ function formatDate(value: string): string {
 }
 
 function friendlyDatasetName(value: string): string {
+  if (value === "creatorlens_intelligence_v2") return "Creator Intelligence v2 / full offline";
+  if (value === "creatorlens_intelligence_ci_v2") return "Creator Intelligence v2 / critical CI";
   if (value === "creatorlens_core_v1") return "CreatorLens core";
   if (value === "creatorlens_ci_smoke_v1") return "CI smoke subset";
   return friendlyMetricName(value);
@@ -712,4 +736,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
     : "Could not load evaluation results.";
+}
+
+
+function IntelligenceMeasurements({ run }: { run: EvaluationRunSummary }) {
+  const details = run.evaluation_details!;
+  return <section className="quality-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h2 className="text-xl font-semibold">Methodology and measured indicators</h2>
+    <p className="mt-2 text-sm text-slate-600">Offline contracts, synthetic retrieval and mocked responses. Human-reviewed semantic agreement and real model quality are not inferred from these checks.</p>
+    <div className="mt-4 space-y-3">{Object.entries(details.indicators ?? {}).map(([name, metric]) => <div className="rounded-md border p-3 text-sm" key={name}>
+      <p className="font-medium">{friendlyMetricName(name)}</p><p>{metric.numerator} / {metric.denominator} / {metric.value == null ? "Not measured" : metric.value.toFixed(3)}</p><p className="text-slate-600">{metric.mode.replaceAll("_", " ")}</p>
+    </div>)}</div>
+    <details className="mt-4 text-sm"><summary>Category results and execution modes</summary><div className="mt-3 space-y-2">{Object.entries(details.categories ?? {}).map(([name, result]) => <p key={name}>{friendlyMetricName(name)}: {result.passed} passed / {result.failed} failed / {result.skipped} skipped</p>)}</div><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(details.execution_modes, null, 2)}</pre></details>
+    <p className="mt-4 text-sm text-slate-600">{details.limitations?.join(" ")}</p>
+  </section>;
 }

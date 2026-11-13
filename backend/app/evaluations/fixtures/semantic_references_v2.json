@@ -1,0 +1,158 @@
+{
+  "version": "2.0.0",
+  "annotation_policy": "semantic-annotation-1.0.0",
+  "references": {
+    "educational": {
+      "reference_id": "reference_educational",
+      "reference_labels": {
+        "opening_type": "question",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "direct_introduction": {
+      "reference_id": "reference_direct_introduction",
+      "reference_labels": {
+        "opening_type": "introduction",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "absent",
+        "audience_benefit": "partial",
+        "problem_solution_clarity": "partial",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "question_led": {
+      "reference_id": "reference_question_led",
+      "reference_labels": {
+        "opening_type": "question",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "problem_led": {
+      "reference_id": "reference_problem_led",
+      "reference_labels": {
+        "opening_type": "problem",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "music_only": {
+      "reference_id": "reference_music_only",
+      "reference_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "ambiguous_partial": {
+      "reference_id": "reference_ambiguous_partial",
+      "reference_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "missing_transcript": {
+      "reference_id": "reference_missing_transcript",
+      "reference_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    },
+    "translated_caption": {
+      "reference_id": "reference_translated_caption",
+      "reference_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "review_status": "pending_human_review",
+      "reviewer": null,
+      "origin": "Agent-authored synthetic candidate annotation; not production-generated or independently human-reviewed.",
+      "guidance": "Review each label against quoted source spans. Missing/partial evidence is not absence. Separate spoken and description CTA. Record disagreements before approving."
+    }
+  }
+}

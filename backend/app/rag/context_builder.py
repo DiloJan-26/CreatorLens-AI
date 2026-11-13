@@ -119,19 +119,10 @@ def build_rag_context(
             retained=[]
             for chunk in response.results:
                 record=records.get(chunk.chunk_id)
-                identity=(intelligence['summary']['goal_comparison'].get(chunk.slot or '') or {})
-                quality=(intelligence['content_evidence'].get(chunk.slot) or {}).get('quality',{})
-                fields=('content_id','slot','platform','source_type','text','evidence_revision','start_time','end_time','citation_label')
-                if (not record or record.get('project_id')!=project_id or not chunk.content_id or chunk.content_id!=identity.get('content_id')
-                    or chunk.platform!=identity.get('platform') or not chunk.evidence_revision or chunk.evidence_revision!=identity.get('transcript_revision')
-                    or any(record.get(k)!=getattr(chunk,k) for k in fields) or chunk.source_type not in {'hook','transcript','description'}
-                    or quality.get('status') not in {'valid','partial'}):
-                    intelligence['limitations'].append('A retrieved source was withheld because ownership, current revision, type or stored text/timing could not be verified.')
+                problem=validate_retrieved_source(chunk,record,project_id,intelligence)
+                if problem:
+                    intelligence['limitations'].append(problem)
                     continue
-                if chunk.start_time is not None or chunk.end_time is not None:
-                    duration=intelligence['content_evidence'][chunk.slot]['duration']
-                    if chunk.start_time is None or chunk.end_time is None or not 0<=chunk.start_time<chunk.end_time or duration is not None and chunk.end_time>duration:
-                        intelligence['limitations'].append('A retrieved source has invalid timestamp coverage.');continue
                 retained.append(chunk)
                 citations.append(Citation(project_id=project_id,content_id=chunk.content_id,slot=chunk.slot,platform=chunk.platform,
                     source_type=chunk.source_type,citation_label=chunk.citation_label,text=chunk.text,evidence_id=chunk.chunk_id,
@@ -1526,3 +1517,20 @@ def _compact_text(value: str, max_length: int) -> str:
         return normalized
 
     return f"{normalized[: max_length - 3].rstrip()}..."
+
+
+def validate_retrieved_source(chunk,record,project_id,intelligence):
+    """Pure source-binding boundary shared by chat assembly and offline regressions."""
+    identity=(intelligence['summary']['goal_comparison'].get(chunk.slot or '') or {})
+    quality=(intelligence['content_evidence'].get(chunk.slot) or {}).get('quality',{})
+    fields=('content_id','slot','platform','source_type','text','evidence_revision','start_time','end_time','citation_label')
+    if (not record or record.get('project_id')!=project_id or not chunk.content_id or chunk.content_id!=identity.get('content_id')
+        or chunk.platform!=identity.get('platform') or not chunk.evidence_revision or chunk.evidence_revision!=identity.get('transcript_revision')
+        or any(record.get(k)!=getattr(chunk,k) for k in fields) or chunk.source_type not in {'hook','transcript','description'}
+        or quality.get('status') not in {'valid','partial'}):
+        return 'A retrieved source was withheld because ownership, current revision, type or stored text/timing could not be verified.'
+    if chunk.start_time is not None or chunk.end_time is not None:
+        duration=intelligence['content_evidence'][chunk.slot]['duration']
+        if chunk.start_time is None or chunk.end_time is None or not 0<=chunk.start_time<chunk.end_time or duration is not None and chunk.end_time>duration:
+            return 'A retrieved source has invalid timestamp coverage.'
+    return None

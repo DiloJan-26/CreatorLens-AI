@@ -114,8 +114,18 @@ class EvaluationCheckResult(BaseModel):
 
 
 class EvaluationCaseReport(BaseModel):
+    category: str | None = None
+    execution_mode: str = "deterministic_fixture"
+    critical: bool = False
+    fixture_id: str | None = None
+    evaluator_version: str | None = None
+    actual_output: dict[str, Any] = Field(default_factory=dict)
+    expected_output: dict[str, Any] = Field(default_factory=dict)
+    failure_reasons: list[str] = Field(default_factory=list)
+    skip_reason: str | None = None
+    references: list[str] = Field(default_factory=list)
     case_id: str
-    status: Literal["PASSED", "FAILED"]
+    status: Literal["PASSED", "FAILED", "SKIPPED"]
     answer_type: AnswerType
     answer_text: str
     citation_labels: list[str] = Field(default_factory=list)
@@ -125,6 +135,9 @@ class EvaluationCaseReport(BaseModel):
 
 
 class EvaluationRunReport(BaseModel):
+    dataset_version: str | None = None
+    skipped_cases: int = 0
+    evaluation_details: dict[str, Any] = Field(default_factory=dict)
     run_id: str
     dataset: str
     evaluator: str
@@ -132,7 +145,7 @@ class EvaluationRunReport(BaseModel):
     total_cases: int = Field(ge=0)
     passed_cases: int = Field(ge=0)
     failed_cases: int = Field(ge=0)
-    aggregate_metrics: dict[str, float] = Field(default_factory=dict)
+    aggregate_metrics: dict[str, Any] = Field(default_factory=dict)
     cases: list[EvaluationCaseReport] = Field(default_factory=list)
     created_at: datetime
     completed_at: datetime
@@ -147,6 +160,8 @@ class EvaluationRunRequest(BaseModel):
 
 
 class EvaluationDatasetSummary(BaseModel):
+    methodology: str = "legacy_deterministic_lexical"
+    evaluator: str | None = None
     name: str
     version: str
     case_count: int = Field(ge=0)
@@ -154,6 +169,8 @@ class EvaluationDatasetSummary(BaseModel):
 
 
 class EvaluationRunSummary(BaseModel):
+    skipped_cases: int = 0
+    evaluation_details: dict[str, Any] = Field(default_factory=dict)
     id: str
     dataset_name: str
     dataset_version: str
@@ -169,6 +186,7 @@ class EvaluationRunSummary(BaseModel):
 
 
 class EvaluationResultSummary(BaseModel):
+    evaluation_details: dict[str, Any] = Field(default_factory=dict)
     case_id: str
     status: str
     answer_type: str | None = None
