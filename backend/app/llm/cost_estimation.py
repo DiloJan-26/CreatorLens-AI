@@ -36,25 +36,25 @@ def estimate_cost_usd(
 
 
 # Runtime estimation uses an exact, reviewed registry, never the global legacy rates.
-import json
-from pathlib import Path
-from datetime import date
 
 
-def estimate_model_cost(usage, *, provider, model, service_tier=None, at=None, caching_mode='unknown', deterministic=False):
+def estimate_model_cost(usage, *, provider, model, service_tier=None, at=None, caching_mode='unknown', deterministic=False, api_backend='gemini_developer_api'):
     result=dict(status='pricing_unavailable',estimated_cost_usd=None,priced_subtotal_usd=None,
         actual_billed_cost_usd=None,mode='paid_tier_equivalent_not_invoice',reason=None,
         provider=provider,model=model,service_tier=service_tier,caching_mode=caching_mode,policy_version=None,components={})
     if deterministic:
         return {**result,'status':'known_zero','estimated_cost_usd':'0','priced_subtotal_usd':'0','mode':'no_provider_call','reason':'No model invocation.'}
-    registry=json.loads((Path(__file__).with_name('pricing_registry.json')).read_text(encoding='utf-8'))
-    result['policy_version']=registry['version']
-    day=(at or date.today()).isoformat()
-    result['pricing_observed_on']=day
-    rate=next((r for r in registry['entries'] if r['provider']==provider and r['model']==model and r['service_tier']==service_tier
-        and r['effective_from']<=day and (r['effective_until'] is None or day<r['effective_until'])),None)
+    from app.llm.pricing_policy import load_pricing_registry,pricing_date,resolve_price
+    try:
+        registry=load_pricing_registry();day=pricing_date(at)
+        rate=resolve_price(registry,provider,model,service_tier,day,api_backend)
+    except (OSError,ValueError,KeyError,TypeError,ArithmeticError):
+        result['reason']='Invalid, ambiguous or unsupported pricing configuration/date.';return result
+    result['registry_version']=registry['version']
+    result['pricing_observed_on']=day.isoformat()
+    result['api_backend']=api_backend
     if rate is None: result['reason']='No verified rate for exact model, tier and observation period.'; return result
-    result.update(source_url=rate['source_url'],verified_on=rate['verified_on'],rates=rate)
+    result.update(policy_version=rate['policy_version'],source_url=rate['source_url'],verified_on=rate['verified_on'],rates=rate)
     if usage is None or not usage.available: result.update(status='usage_unavailable',reason='Provider usage unavailable.'); return result
     counts=(usage.input_tokens,usage.output_tokens,usage.cached_input_tokens,usage.thinking_tokens,usage.tool_use_prompt_tokens)
     if any(v is not None and (type(v) is not int or v<0) for v in counts):

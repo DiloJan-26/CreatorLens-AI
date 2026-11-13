@@ -2,7 +2,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select, case, or_
+from sqlalchemy import func, select, case, or_, cast, Numeric
 from sqlalchemy.orm import Session
 
 from app.db.models.llm_observability import CostEvent, LlmRun
@@ -72,7 +72,7 @@ class CostRepository:
         # Aggregate the entire scope, independently of paginated history.
         runtime=or_(LlmRun.execution_mode.is_(None),LlmRun.execution_mode=='runtime')
         events=select(func.count(CostEvent.id),func.sum(CostEvent.input_tokens),func.sum(CostEvent.output_tokens),
-            func.sum(CostEvent.total_tokens),func.sum(CostEvent.estimated_cost_usd)).join(LlmRun,CostEvent.llm_run_id==LlmRun.id).where(runtime)
+            func.sum(CostEvent.total_tokens),func.sum(exact_cost_expression())).join(LlmRun,CostEvent.llm_run_id==LlmRun.id).where(runtime)
         if project_id is not None: events=events.where(CostEvent.project_id==project_id)
         row=self.session.execute(events).one()
         inference=runtime & or_(LlmRun.provider_invocation_count>0,
@@ -95,7 +95,7 @@ class CostRepository:
             measured=measured.where(LlmRun.project_id==project_id);missing=missing.where(LlmRun.project_id==project_id)
         inference_events=int(self.session.scalar(measured) or 0)+int(self.session.scalar(missing) or 0)
         known=int(self.session.scalar(priced) or 0);unknown=max(0,inference_events-known)
-        partial_sum=select(func.sum(func.coalesce(CostEvent.priced_subtotal_usd,CostEvent.estimated_cost_usd))).join(LlmRun,CostEvent.llm_run_id==LlmRun.id).where(inference)
+        partial_sum=select(func.sum(exact_cost_expression(subtotal=True))).join(LlmRun,CostEvent.llm_run_id==LlmRun.id).where(inference)
         if project_id is not None:partial_sum=partial_sum.where(LlmRun.project_id==project_id)
         inference_subtotal=self.session.scalar(partial_sum)
         subtotal=row[4]
@@ -113,10 +113,11 @@ class CostRepository:
 
     @staticmethod
     def to_record(event: CostEvent) -> dict[str, Any]:
-        return {
-            column.name: getattr(event, column.name)
-            for column in event.__table__.columns
-        }
+        result={column.name:getattr(event,column.name) for column in event.__table__.columns}
+        details=event.estimate_details or {}
+        for name in ('estimated_cost_usd','priced_subtotal_usd'):
+            if details.get(name) is not None:result[name]=Decimal(details[name])
+        return result
 
 
 def _optional_cost(value: Decimal | str | float | None) -> Decimal | None:
@@ -151,3 +152,11 @@ def _required_text(value: str, limit: int) -> str:
 def _optional_text(value: str | None, limit: int) -> str | None:
     normalized = (value or "").strip()
     return normalized[:limit] if normalized else None
+
+
+def exact_cost_expression(*,subtotal=False):
+    """New estimates retain sub-cent precision in existing JSON; legacy columns stay untouched."""
+    name='priced_subtotal_usd' if subtotal else 'estimated_cost_usd'
+    stored=cast(CostEvent.estimate_details[name].as_string(),Numeric(24,12))
+    legacy=func.coalesce(CostEvent.priced_subtotal_usd,CostEvent.estimated_cost_usd) if subtotal else CostEvent.estimated_cost_usd
+    return func.coalesce(stored,legacy)

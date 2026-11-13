@@ -89,6 +89,23 @@ def test_operation_telemetry_postgresql_migration_and_aggregates():
                     with Operations.context(MigrationContext.configure(connection)):
                         with pytest.raises(RuntimeError):revision().downgrade()
                     diagnostic_fixture.rollback()
+                with session.begin_nested() as precision_fixture:
+                    from app.llm.cost_estimation import estimate_model_cost
+                    from app.llm.token_usage import parse_token_usage
+                    from datetime import date
+                    tiny_project = _create_project(session)
+                    tiny_run = record(session, tiny_project)
+                    cached = parse_token_usage({'usage_metadata': {'input_tokens': 1, 'output_tokens': 0,
+                        'input_token_details': {'cache_read': 1}}})
+                    estimate = estimate_model_cost(cached, provider='gemini', model='gemini-3.6-flash',
+                        service_tier='standard', at=date(2026, 12, 31), caching_mode='implicit')
+                    costs = CostRepository(session)
+                    costs.record(llm_run_id=tiny_run.id, project_id=tiny_project, llm_provider='gemini',
+                        llm_model='gemini-3.6-flash', usage=cached, estimated_cost_usd=estimate['estimated_cost_usd'],
+                        estimate_details=estimate, event_key='disposable-cached-token')
+                    assert costs.summary(project_id=tiny_project)['priced_subtotal_usd'] == Decimal('.000000075')
+                    assert Decimal(operation_analytics(session, tiny_project)['daily'][0]['priced_subtotal_usd']) == Decimal('.000000075')
+                    precision_fixture.rollback()
                 with Operations.context(MigrationContext.configure(connection)):
                     revision().downgrade();revision().upgrade()
                 session.expire_all()

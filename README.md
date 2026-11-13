@@ -541,6 +541,12 @@ The local observability upgrade separates deterministic responses, RAG generatio
 
 A reviewed, versioned registry supports the exact `gemini-3.5-flash-lite` Standard paid-tier reference: $0.30 input, $2.50 output including thinking, and $0.03 cached input per million tokens. The 6,803-input/946-output fixture estimates **$0.0044059**, not an invoice. Unknown models/tiers remain unpriced; partial totals and legacy unverified estimates are labeled explicitly. See [Google's official pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
 
+Configuration now allowlists exact Gemini Developer API model IDs: `gemini-3.5-flash-lite` (intended model), `gemini-3.6-flash`, and `gemini-3.8-flash`. Production API and worker inference require an explicit matching `LLM_MODEL`; automatic model substitution is disabled. Local/test defaults use Flash-Lite. No deployed setting was changed.
+
+The registry retains a historical snapshot and selects Standard reference rates using the UTC inference-start timestamp. Gemini 3.6/3.8 entries distinguish the verified November 14?December 31, 2026 period from the documented January 1, 2027 increase. Other API tiers and Vertex AI remain unpriced. Exact component amounts survive storage and aggregation; cached input and thinking tokens are counted once. Changing models creates distinct semantic snapshot keys and requires authorized compatibility acceptance, rather than treating cached labels from another model as current.
+
+Cost estimates are observational, not a spending cap. Public inference authorization, rate limiting and hard spending controls remain release requirements; offline tests do not establish live model availability or billed charges.
+
 The read-only dashboard presents pricing coverage, per-operation cost provenance and timing sample counts. This implementation introduces additive migration `20261113_0011`; cloud deployment remains deferred to the coordinated release. Optional `LLM_ESTIMATE_SERVICE_TIER=standard` selects a reference estimate, not an assertion about account billing. No paid evaluator or live inference was used for verification.
 
 Each RAG interaction creates an auditable operational record.

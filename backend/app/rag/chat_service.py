@@ -1,3 +1,4 @@
+from datetime import datetime, UTC
 import json
 import asyncio
 from types import SimpleNamespace
@@ -93,6 +94,7 @@ async def stream_chat_answer(
 ) -> AsyncIterator[str]:
     request_started = perf_counter()
     provider_invocations = 0
+    inference_at = None
     cost_recorded = False
     context_ms = None
     direct_started = None
@@ -417,6 +419,7 @@ async def stream_chat_answer(
             ),
         ) as llm_trace:
             try:
+                inference_at = datetime.now(UTC)
                 provider_invocations += 1
                 llm_started_at = perf_counter()
                 response = await asyncio.wait_for(llm.ainvoke(messages), timeout=35)
@@ -535,7 +538,7 @@ async def stream_chat_answer(
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
             usage=usage,
-            estimated_cost_usd=estimated_cost, provider_invocation_count=provider_invocations,
+            estimated_cost_usd=estimated_cost, provider_invocation_count=provider_invocations,inference_at=inference_at,
             pricing_source=(
                 "configured-env-per-million" if estimated_cost is not None else None
             ),
@@ -631,7 +634,7 @@ async def stream_chat_answer(
                 deterministic_latency_ms=round((perf_counter()-direct_started)*1000) if direct_started is not None else None)
             if not cost_recorded:
                 record_cost_event(llm_run_id=llm_run_id,project_id=project_id,llm_provider=settings.llm_provider,
-                    llm_model=settings.llm_model,usage=usage,provider_invocation_count=provider_invocations)
+                    llm_model=settings.llm_model,usage=usage,provider_invocation_count=provider_invocations,inference_at=inference_at)
         if root_trace is not None:
             root_trace.set_outputs(
                 {

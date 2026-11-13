@@ -3,6 +3,7 @@ from collections import defaultdict
 import math
 from sqlalchemy import select, func, case, or_
 from app.db.models.llm_observability import LlmRun, CostEvent
+from app.db.repositories.cost_repository import exact_cost_expression
 
 
 def distribution(values):
@@ -35,7 +36,7 @@ def operation_analytics(session,project_id=None):
         if context is not None:buckets['context_preparation'].append(context)
     is_inference=CostEvent.llm_provider!='internal'
     costs=select(func.date(CostEvent.created_at),func.sum(CostEvent.input_tokens),func.sum(CostEvent.output_tokens),
-        func.sum(case((is_inference,func.coalesce(CostEvent.priced_subtotal_usd,CostEvent.estimated_cost_usd)),else_=None)),
+        func.sum(case((is_inference,exact_cost_expression(subtotal=True)),else_=None)),
         func.sum(case((is_inference & CostEvent.estimated_cost_usd.is_(None),1),else_=0)),
         func.sum(case((is_inference & CostEvent.estimated_cost_usd.is_not(None),1),else_=0)),
         func.sum(case((is_inference & CostEvent.estimated_cost_usd.is_not(None) & CostEvent.cost_status.is_(None),1),else_=0)))

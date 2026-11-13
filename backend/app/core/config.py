@@ -1,4 +1,5 @@
 from functools import lru_cache
+from app.core.model_policy import DEFAULT_GEMINI_MODEL
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -75,12 +76,12 @@ class Settings(BaseSettings):
     semantic_supported_languages: str = Field(default="en,hi,ta", alias="SEMANTIC_SUPPORTED_LANGUAGES")
 
     llm_provider: str = Field(default="gemini", alias="LLM_PROVIDER")
-    llm_model: str = Field(default="gemini-3.5-flash", alias="LLM_MODEL")
+    llm_model: str = Field(default=DEFAULT_GEMINI_MODEL, alias="LLM_MODEL")
     llm_fallback_model: str | None = Field(default=None, alias="LLM_FALLBACK_MODEL")
     llm_temperature: float = Field(default=0.35, alias="LLM_TEMPERATURE")
     llm_max_output_tokens: int = Field(
         default=2200,
-        alias="LLM_MAX_OUTPUT_TOKENS",
+        alias="LLM_MAX_OUTPUT_TOKENS", ge=1, le=8192,
     )
     llm_input_cost_per_million_usd: float | None = Field(
         default=None,

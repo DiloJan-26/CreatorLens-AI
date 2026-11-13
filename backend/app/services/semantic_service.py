@@ -9,6 +9,7 @@ from pathlib import Path
 from time import perf_counter
 import yaml
 from app.core.config import get_settings
+from app.core.model_policy import model_configuration_error
 from app.db.repositories import semantic_repository as store
 from app.insights.semantic_models import CreativeFeatures, PROMPT_VERSION, SCHEMA_VERSION, CREATIVE_POLICY
 from app.insights.semantic_evidence import build_semantic_input, parse_features
@@ -25,6 +26,8 @@ _INVOCATION = ContextVar('semantic_invocation',default=None)
 
 
 def semantic_identity(project_id, slot):
+    error=model_configuration_error(get_settings())
+    if error:raise ValueError(error)
     if slot not in {'content_1','content_2'}:
         raise ValueError('Invalid content slot.')
     project = get_project_detail_record(project_id)
@@ -98,7 +101,7 @@ async def _invoke(context, prompt):
     llm = get_llm(streaming=False, temperature=0, max_output_tokens=4096, max_retries=0, timeout=60)
     messages = [('system', prompt['system_prompt']), ('human', json.dumps({'schema': CreativeFeatures.model_json_schema(), 'input':context}, ensure_ascii=False))]
     state=_INVOCATION.get()
-    if state is not None: state.update(count=1,started=perf_counter())
+    if state is not None: state.update(count=1,started=perf_counter(),inference_at=datetime.now(UTC))
     return await asyncio.wait_for(llm.ainvoke(messages, response_mime_type="application/json", response_schema=CreativeFeatures.model_json_schema()), timeout=65)
 
 
@@ -138,8 +141,12 @@ def process_semantic_snapshot(key):
             record_cost_event(llm_run_id=run_id, project_id=row['project_id'], llm_provider='gemini',
                 llm_model=row['model_id'], usage=usage,
                 estimated_cost_usd=None,
-                pricing_source=None,provider_invocation_count=state['count'])
+                pricing_source=None,provider_invocation_count=state['count'],inference_at=state.get('inference_at'))
             cost_recorded=True
+            processing.update(requested_model=row['model_id'],observed_model=usage.model_id,
+                model_identity_status='reported' if usage.model_id else 'unreported')
+            if usage.model_id is not None and usage.model_id!=row['model_id']:
+                raise ValueError('SEMANTIC_MODEL_MISMATCH')
             features = parse_features(_message_text(response), context)
             if semantic_identity(row['project_id'], row['slot'])[0] != key:
                 raise ValueError('STALE_INPUT')
@@ -153,6 +160,7 @@ def process_semantic_snapshot(key):
         code = ('STALE_INPUT' if str(exc) == 'STALE_INPUT' else
             'SEMANTIC_TIMEOUT' if isinstance(exc, TimeoutError) else
             'SEMANTIC_RATE_LIMIT' if getattr(exc, 'status_code', None) == 429 or type(exc).__name__ in {'ResourceExhausted','TooManyRequests'} else
+            'SEMANTIC_MODEL_MISMATCH' if str(exc)=='SEMANTIC_MODEL_MISMATCH' else
             'SEMANTIC_VALIDATION_FAILED' if isinstance(exc, ValueError) else 'SEMANTIC_EXTRACTION_FAILED')
         processing.update(latency_ms=round((perf_counter()-start)*1000), provider_status='failed', exception_type=type(exc).__name__)
         store.transition(key,'running','failed', attempt=row['attempts'], error_code=code, processing=processing)
@@ -165,5 +173,5 @@ def process_semantic_snapshot(key):
                 end_to_end_latency_ms=round((perf_counter()-start)*1000))
             if not cost_recorded:
                 record_cost_event(llm_run_id=run_id,project_id=row['project_id'],llm_provider='gemini',
-                    llm_model=row['model_id'],usage=usage,provider_invocation_count=state['count'])
+                    llm_model=row['model_id'],usage=usage,provider_invocation_count=state['count'],inference_at=state.get('inference_at'))
         _INVOCATION.reset(token)

@@ -123,6 +123,7 @@ def record_cost_event(
     estimated_cost_usd: Decimal | None = None,
     pricing_source: str | None = None,
     provider_invocation_count: int | None = None,
+    inference_at=None,
 ) -> bool:
     if llm_run_id is None or not is_database_configured():
         return False
@@ -136,7 +137,13 @@ def record_cost_event(
             model=usage.model_id or llm_model
             details=estimate_model_cost(usage,provider=llm_provider,model=model,
                 service_tier=usage.service_tier or settings.llm_estimate_service_tier,
-                caching_mode=settings.llm_cache_billing_mode,deterministic=provider_invocation_count==0)
+                caching_mode=settings.llm_cache_billing_mode,deterministic=provider_invocation_count==0,at=inference_at)
+            if provider_invocation_count and (inference_at is None or getattr(inference_at,'tzinfo',None) is None):
+                details.update(status='pricing_unavailable',estimated_cost_usd=None,priced_subtotal_usd=None,components={},
+                    reason='Actual timezone-aware inference timestamp unavailable; no current-date repricing.')
+            details.update(requested_model=llm_model, observed_model=usage.model_id,
+                model_identity_status='reported' if usage.model_id else 'unreported')
+            if inference_at is not None: details['inference_started_at']=inference_at.isoformat()
             estimated_cost_usd=details['estimated_cost_usd'];pricing_source=details.get('policy_version');llm_model=model
         with database_session() as session:
             CostRepository(session).record(
