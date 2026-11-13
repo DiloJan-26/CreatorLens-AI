@@ -408,6 +408,7 @@ export type HookAnalysis = {
 };
 
 export type InsightScores = {
+  policy_version?: string;
   hook_clarity: number;
   problem_solution_clarity: number;
   cta_strength: number;
@@ -421,7 +422,26 @@ export type InsightScores = {
   overall_score: number;
 };
 
+export type EvidenceScoreBreakdown = {
+  score: number | null;
+  status: string;
+  coverage: number;
+  rationale: string;
+  missing_inputs: string[];
+};
+
+export type CreatorScoring = {
+  policy: { version: string };
+  reach: EvidenceScoreBreakdown;
+  engagement: EvidenceScoreBreakdown;
+  public_performance: EvidenceScoreBreakdown;
+  creator_efficiency: EvidenceScoreBreakdown;
+  creative_structure: EvidenceScoreBreakdown;
+  overall: EvidenceScoreBreakdown;
+};
+
 export type ContentInsight = {
+  scoring?: CreatorScoring | null;
   slot: string;
   label: string;
   platform: string;

@@ -70,6 +70,12 @@ Supported sources:
 | Instagram | Reels, posts, and public video URLs | Public extraction with Deepgram transcription when public audio is available |
 | Facebook | Reels, watch URLs, and public video posts | Public extraction with Deepgram transcription when public audio is available |
 
+## Versioned deterministic scoring
+
+The insight summary API now returns `content_1.scoring` and `content_2.scoring` under policy `creator-insight-2.0.0`. These objects preserve unavailable scores as null, expose metric definitions, sample sufficiency, feature contributions and calculation coverage, and separate evidence assessment from quality. Engagement scoring requires complete platform-defined interactions and at least 1,000 views. These thresholds and weights are uncalibrated heuristics.
+
+Existing `scores` and comparison winner fields retain `legacy-1.0.0` for client, recommendation and Assistant compatibility. The original formulas documented below describe that legacy policy. They are not authoritative V2 decisions. The Insights view labels both versions; V2 does not yet select an overall winner. In V2, reach and engagement are separate; public performance requires both; current-audience efficiency is nullable; overall requires performance and creative evidence and renormalizes eligible weights 0.35/0.30/0.25 without a confidence bonus. No cloud rollout of this upgrade has been performed.
+
 ## Scope Justification
 
 ### What problem does CreatorLens AI solve?

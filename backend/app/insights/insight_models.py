@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from app.insights.scoring_models import CreatorScoring
 
 
 class HookAnalysis(BaseModel):
@@ -11,6 +12,7 @@ class HookAnalysis(BaseModel):
 
 
 class InsightScores(BaseModel):
+    policy_version: str = "legacy-1.0.0"
     hook_clarity: int = Field(ge=0, le=10)
     problem_solution_clarity: int = Field(ge=0, le=10)
     cta_strength: int = Field(ge=0, le=10)
@@ -25,6 +27,7 @@ class InsightScores(BaseModel):
 
 
 class ContentInsight(BaseModel):
+    scoring: CreatorScoring | None = None
     slot: str
     label: str
     platform: str
@@ -41,6 +44,8 @@ class ContentInsight(BaseModel):
 
 
 class ComparisonInsight(BaseModel):
+    policy_version: str = "legacy-1.0.0"
+    scoring_eligibility: dict = Field(default_factory=dict)
     confirmed_metric_winner: str | None = None
     creator_efficiency_winner: str | None = None
     creative_structure_winner: str | None = None

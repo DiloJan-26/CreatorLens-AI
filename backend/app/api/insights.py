@@ -18,7 +18,7 @@ router = APIRouter(
     response_model=CreatorInsightSummaryResponse,
     summary="Build the Creator Insight Summary",
     description=(
-        "Returns deterministic comparison scores and findings used by the Insights UI. "
+        "Returns legacy-1.0.0 comparison fields and creator-insight-2.0.0 evidence-aware scoring objects with nullable scores. "
         "Run extraction first; verified metrics improve metric completeness."
     ),
 )

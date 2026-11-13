@@ -1,4 +1,5 @@
 from typing import Any
+from app.insights.deterministic_scoring import calculate_scoring, comparison_eligibility
 
 from app.insights.hook_analyzer import analyze_hook
 from app.insights.insight_models import (
@@ -60,7 +61,7 @@ def get_creator_insight_summary(project_id: str) -> CreatorInsightSummaryRespons
         content_1=content_1_insight,
         content_2=content_2_insight,
         comparison=comparison,
-        notes=_summary_notes(content_1_insight, content_2_insight),
+        notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; it does not supply an authoritative winner."],
     )
 
 
@@ -123,6 +124,7 @@ def _build_content_insight(
         title=_optional_text(content_item.get("title")),
         creator=_optional_text(content_item.get("creator")),
         hook_analysis=hook_analysis,
+        scoring=calculate_scoring(content_item, scores.model_dump(), hook_assessable=bool(hook_analysis.hook_text)),
         scores=scores,
         strengths=strengths,
         weaknesses=weaknesses,
@@ -178,6 +180,7 @@ def _build_comparison(
     )
 
     return ComparisonInsight(
+        scoring_eligibility=comparison_eligibility(content_1_insight.scoring, content_2_insight.scoring),
         confirmed_metric_winner=metric_winner,
         creator_efficiency_winner=efficiency_winner,
         creative_structure_winner=creative_structure_winner,

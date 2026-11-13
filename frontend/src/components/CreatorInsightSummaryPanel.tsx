@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getCreatorInsightSummary } from "@/lib/api";
 import type {
   ComparisonInsight,
+  ContentInsight,
   CreatorInsightSummaryResponse,
 } from "@/types/project";
 
@@ -138,6 +139,12 @@ export function CreatorInsightSummaryPanel({
               activeSummary.comparison.example_rewrite_for_content_2
             }
           />
+          <div className="grid gap-4 md:grid-cols-2">
+            {[activeSummary.content_1, activeSummary.content_2].map((content) =>
+              content?.scoring ? <EvidenceScoring key={content.slot} content={content} /> : null,
+            )}
+          </div>
+          <p className="text-sm text-slate-600">The existing comparison and recommendation panels below use legacy-1.0.0. The versioned evidence-aware scores above do not select a winner.</p>
           <ScoreComparison summary={activeSummary} />
           <details className="detail-disclosure">
             <summary>Detailed comparison rationale</summary>
@@ -339,5 +346,27 @@ function ScoreComparison({
         </table>
       </div>
     </div>
+  );
+}
+
+function EvidenceScoring({ content }: { content: ContentInsight }) {
+  const scoring = content.scoring;
+  if (!scoring) return null;
+  const fields = ["reach", "engagement", "public_performance", "creator_efficiency", "creative_structure", "overall"] as const;
+  return (
+    <section className="rounded-lg border border-slate-200 p-4" aria-label={`${content.label} evidence-aware scores`}>
+      <h3 className="font-semibold">{content.label} ? Evidence-aware scoring</h3>
+      <p className="text-sm text-slate-600">{scoring.policy.version} ? Uncalibrated heuristics</p>
+      <dl className="mt-3 grid gap-3">
+        {fields.map((field) => {
+          const value = scoring[field];
+          return <div key={field}>
+            <dt className="font-medium capitalize">{field.replaceAll("_", " ")}</dt>
+            <dd>{value.score == null ? "Not assessable" : `${value.score.toFixed(2)} / 10`} ? Coverage {(value.coverage * 100).toFixed(0)}%</dd>
+            <dd className="text-sm text-slate-600">{value.rationale}{value.missing_inputs.length ? ` Missing: ${value.missing_inputs.join(", ")}.` : ""}</dd>
+          </div>;
+        })}
+      </dl>
+    </section>
   );
 }
