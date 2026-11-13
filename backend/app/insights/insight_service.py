@@ -1,4 +1,6 @@
 from typing import Any
+from app.insights.comparison_engine import build_goal_comparison
+from app.insights.comparison_models import ComparisonObjective
 from app.insights.deterministic_scoring import calculate_scoring, comparison_eligibility
 
 from app.insights.hook_analyzer import analyze_hook
@@ -30,7 +32,7 @@ class CreatorInsightProjectNotFoundError(Exception):
     """Raised when a Creator Insight Summary is requested for a missing project."""
 
 
-def get_creator_insight_summary(project_id: str) -> CreatorInsightSummaryResponse:
+def get_creator_insight_summary(project_id: str, objective: ComparisonObjective = ComparisonObjective.BALANCED) -> CreatorInsightSummaryResponse:
     project = get_project_detail_record(project_id)
 
     if project is None:
@@ -61,7 +63,8 @@ def get_creator_insight_summary(project_id: str) -> CreatorInsightSummaryRespons
         content_1=content_1_insight,
         content_2=content_2_insight,
         comparison=comparison,
-        notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; it does not supply an authoritative winner."],
+        goal_comparison=build_goal_comparison(project_id, content_1, content_2, content_1_insight, content_2_insight, objective),
+        notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; Authoritative objective decisions are in goal_comparison; legacy winners are not V2 decisions."],
     )
 
 

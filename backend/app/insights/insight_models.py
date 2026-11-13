@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from app.insights.scoring_models import CreatorScoring
+from app.insights.comparison_models import ComparisonDecision
 
 
 class HookAnalysis(BaseModel):
@@ -60,6 +61,7 @@ class ComparisonInsight(BaseModel):
 
 
 class CreatorInsightSummaryResponse(BaseModel):
+    goal_comparison: ComparisonDecision | None = None
     project_id: str
     content_1: ContentInsight | None = None
     content_2: ContentInsight | None = None

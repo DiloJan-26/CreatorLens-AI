@@ -56,7 +56,7 @@ def get_semantic_analysis(project_id, slot):
         input_revision=context['input_revision'], features=result, model_id=row['model_id'], prompt_version=row['prompt_version'],
         schema_version=row['schema_version'], creative_policy=CREATIVE_POLICY, processing=row['processing'],
         attempts=row['attempts'], cache_hit=row['status'] == 'ready', error_code=row['error_code'],
-        limitations=context['limitations'], evidence_sources=context['sources'],
+        limitations=context['limitations'], evidence_sources=context['sources'], evidence_complete=context['complete'],
         assessments=[dict(feature=f['feature'], value=f['value'], status=f['status'],
             explanation=f"{f['feature']}: {f['value']}. Model-derived textual interpretation; inspect cited sources.",
             limitations=context['limitations'], evidence=f['evidence']) for f in result['features']] if result else [])
