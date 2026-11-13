@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Index,
     Numeric,
     String,
 )
@@ -20,10 +21,10 @@ class LlmRun(Base):
     __tablename__ = "llm_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    project_id: Mapped[str] = mapped_column(
+    project_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     session_id: Mapped[str | None] = mapped_column(String(128), index=True)
@@ -58,9 +59,18 @@ class LlmRun(Base):
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    operation_type: Mapped[str | None] = mapped_column(String(64))
+    execution_mode: Mapped[str | None] = mapped_column(String(32))
+    provider_invocation_count: Mapped[int | None] = mapped_column(Integer)
+    end_to_end_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    context_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    deterministic_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    telemetry: Mapped[dict | None] = mapped_column(JSON)
+
 
 class CostEvent(Base):
     __tablename__ = "cost_events"
+    __table_args__ = (Index("uq_cost_events_event_key", "event_key", unique=True),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     llm_run_id: Mapped[str] = mapped_column(
@@ -69,10 +79,10 @@ class CostEvent(Base):
         nullable=False,
         index=True,
     )
-    project_id: Mapped[str] = mapped_column(
+    project_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     llm_provider: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -85,3 +95,8 @@ class CostEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+    estimate_details: Mapped[dict | None] = mapped_column(JSON)
+    event_key: Mapped[str | None] = mapped_column(String(64))
+    priced_subtotal_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 8))
+    cost_status: Mapped[str | None] = mapped_column(String(32))

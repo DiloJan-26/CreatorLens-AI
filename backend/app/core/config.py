@@ -92,6 +92,8 @@ class Settings(BaseSettings):
         alias="LLM_OUTPUT_COST_PER_MILLION_USD",
         ge=0,
     )
+    llm_estimate_service_tier: str | None = Field(default=None, alias="LLM_ESTIMATE_SERVICE_TIER")
+    llm_cache_billing_mode: str = Field(default="unknown", alias="LLM_CACHE_BILLING_MODE")
     debug_rag_prompt: bool = Field(default=False, alias="DEBUG_RAG_PROMPT")
 
     langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")

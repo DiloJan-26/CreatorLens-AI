@@ -536,6 +536,13 @@ The accepted v1.1 core regression run recorded **20/20 passing cases**, with cit
 
 ## LLMOps and observability
 
+
+The local observability upgrade separates deterministic responses, RAG generation and semantic extraction. It records provider-reported usage categories, exact model identity where reported, thinking/cache usage, invocation counts and independent request timings. Whole-scope latency samples exclude deterministic zeros from Gemini means and preserve unknown historical invocation counts.
+
+A reviewed, versioned registry supports the exact `gemini-3.5-flash-lite` Standard paid-tier reference: $0.30 input, $2.50 output including thinking, and $0.03 cached input per million tokens. The 6,803-input/946-output fixture estimates **$0.0044059**, not an invoice. Unknown models/tiers remain unpriced; partial totals and legacy unverified estimates are labeled explicitly. See [Google's official pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
+
+The read-only dashboard presents pricing coverage, per-operation cost provenance and timing sample counts. This implementation introduces additive migration `20261113_0011`; cloud deployment remains deferred to the coordinated release. Optional `LLM_ESTIMATE_SERVICE_TIER=standard` selects a reference estimate, not an assertion about account billing. No paid evaluator or live inference was used for verification.
+
 Each RAG interaction creates an auditable operational record.
 
 ```mermaid
@@ -558,7 +565,7 @@ Tracked signals include:
 - LangSmith trace ID, retrieval-run ID, session ID, and error code
 - estimated cost when model pricing is configured; otherwise an explicit unavailable state
 
-The LLMOps dashboard is read-only and never triggers model calls. It exposes recent runs, token mix, latency composition, trace coverage, retrieval balance, and reliability signals from persisted telemetry.
+The LLMOps dashboard is read-only and never triggers model calls. It exposes recent runs, reported token mix, separate latency populations, trace coverage, retrieval balance, and reliability signals from persisted telemetry.
 
 ## Persistence model
 

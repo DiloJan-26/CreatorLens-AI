@@ -33,8 +33,8 @@ def test_sse_preserves_canonical_answer_and_tracks_real_execution(monkeypatch,mo
     monkeypatch.setattr(chat_service,'get_project_runtime_signals',lambda project_id:SimpleNamespace(cache_hit=None,cache_miss=None,transcript_provider=None,transcript_fallback_used=None,embedding_reused=None))
     monkeypatch.setattr(chat_service,'start_llm_run',lambda **kwargs:counts['provider'].append(kwargs) or 'run')
     monkeypatch.setattr(chat_service,'complete_llm_run',lambda *args,**kwargs:counts['complete'].append(kwargs))
-    def fail(run_id,*,error_code,usage=None,retrieval_latency_ms=None,llm_latency_ms=None,langsmith_trace_id=None):
-        counts['failed'].append(dict(error_code=error_code,usage=usage,retrieval_latency_ms=retrieval_latency_ms,llm_latency_ms=llm_latency_ms,langsmith_trace_id=langsmith_trace_id))
+    def fail(run_id,*,error_code,usage=None,retrieval_latency_ms=None,llm_latency_ms=None,langsmith_trace_id=None,provider_invocation_count=None):
+        counts['failed'].append(dict(error_code=error_code,usage=usage,provider_invocation_count=provider_invocation_count,retrieval_latency_ms=retrieval_latency_ms,llm_latency_ms=llm_latency_ms,langsmith_trace_id=langsmith_trace_id))
     monkeypatch.setattr(chat_service,'fail_llm_run',fail)
     monkeypatch.setattr(chat_service,'record_cost_event',lambda **kwargs:counts['cost'].append(kwargs))
     monkeypatch.setattr(chat_service,'save_chat_citations',lambda **kwargs:counts['citations'].extend(kwargs['citations']))
@@ -71,8 +71,11 @@ def test_sse_preserves_canonical_answer_and_tracks_real_execution(monkeypatch,mo
         assert counts['invoke']==1 and counts['provider'][0]['llm_provider']=='gemini'
         if mode=='timeout':
             assert counts['failed'][0]['error_code']=='ASSISTANT_PROVIDER_FAILURE'
+            assert counts['failed'][0]['provider_invocation_count']==1
             assert counts['cost'][0]['usage'].total_tokens is None
         else:assert counts['cost'][0]['usage'].total_tokens==125
+    assert len(counts['cost'])==1
+    assert counts['cost'][0]['provider_invocation_count']==(0 if mode=='deterministic' else 1)
     if mode in {'malformed','timeout'}:assert structured[0]['fallback_used'] and structured[0]['warnings']
 
 

@@ -1,5 +1,7 @@
 ﻿"""Explicit queued semantic extraction; GET paths only read compatible snapshots."""
 import asyncio
+from contextvars import ContextVar
+from app.services.llm_observability_service import annotate_operation
 from dataclasses import asdict
 from datetime import datetime, UTC
 import json
@@ -16,10 +18,10 @@ from app.services.llm_service import get_llm, _message_text
 from app.llm.token_usage import parse_token_usage
 from app.llm.tracing import OptionalTrace
 from app.services.llm_observability_service import start_llm_run, complete_llm_run, fail_llm_run, record_cost_event
-from app.llm.cost_estimation import estimate_cost_usd
 
 PROMPT_PATH = Path(__file__).resolve().parents[1] / 'llm/prompts/semantic/creative_features.yaml'
 OPERATION = 'semantic_feature_extraction'
+_INVOCATION = ContextVar('semantic_invocation',default=None)
 
 
 def semantic_identity(project_id, slot):
@@ -95,6 +97,8 @@ def queue_semantic_analysis(project_id, slot, *, retry_failed=False, recover_sta
 async def _invoke(context, prompt):
     llm = get_llm(streaming=False, temperature=0, max_output_tokens=4096, max_retries=0, timeout=60)
     messages = [('system', prompt['system_prompt']), ('human', json.dumps({'schema': CreativeFeatures.model_json_schema(), 'input':context}, ensure_ascii=False))]
+    state=_INVOCATION.get()
+    if state is not None: state.update(count=1,started=perf_counter())
     return await asyncio.wait_for(llm.ainvoke(messages, response_mime_type="application/json", response_schema=CreativeFeatures.model_json_schema()), timeout=65)
 
 
@@ -106,6 +110,9 @@ def process_semantic_snapshot(key):
     run_id = None
     usage = None
     start = perf_counter()
+    state={"count":0}; token=_INVOCATION.set(state)
+    cost_recorded=False
+    invocation_ms=None
     processing = dict(operation_type=OPERATION, cache_hit=False, actual_inference=False,
         model_id=row['model_id'], prompt_version=row['prompt_version'], content_id=row['content_id'], slot=row['slot'])
     try:
@@ -113,28 +120,33 @@ def process_semantic_snapshot(key):
         if current_key != key:
             raise ValueError('STALE_INPUT')
         run_id = start_llm_run(project_id=row['project_id'], llm_provider='gemini', llm_model=row['model_id'],
-            prompt_name=OPERATION, prompt_version=PROMPT_VERSION)
+            prompt_name=OPERATION, prompt_version=PROMPT_VERSION,operation_type=OPERATION,execution_mode="runtime",provider_invocation_count=0,
+            telemetry={"content_id":row["content_id"],"slot":row["slot"],"snapshot_id":key,"operation_version":"1.0.0","policy_versions":{"creative":CREATIVE_POLICY,"schema":SCHEMA_VERSION,"prompt":PROMPT_VERSION}})
         with OptionalTrace('creatorlens.semantic_features', run_type='llm', inputs={'snapshot_id':key},
             metadata={'operation_type':OPERATION,'project_id':row['project_id'],'content_id':row['content_id'],
                       'prompt_version':PROMPT_VERSION,'model':row['model_id']}) as span:
             processing.update(actual_inference=None, provider_invocation_status='attempted')
-            response = asyncio.run(_invoke(context, prompt))
+            try:
+                response = asyncio.run(_invoke(context, prompt))
+            finally:
+                if state.get('started') is not None: invocation_ms=round((perf_counter()-state['started'])*1000)
+            state['count']=1
             processing.update(actual_inference=True, provider_invocation_status='response_received')
             usage = parse_token_usage(response)
             processing['token_usage'] = asdict(usage)
             # Persist tokens/cost even when schema or evidence validation subsequently fails.
             record_cost_event(llm_run_id=run_id, project_id=row['project_id'], llm_provider='gemini',
                 llm_model=row['model_id'], usage=usage,
-                estimated_cost_usd=estimate_cost_usd(usage, input_cost_per_million_usd=get_settings().llm_input_cost_per_million_usd,
-                    output_cost_per_million_usd=get_settings().llm_output_cost_per_million_usd),
-                pricing_source='configured_rates' if get_settings().llm_input_cost_per_million_usd is not None and get_settings().llm_output_cost_per_million_usd is not None else None)
+                estimated_cost_usd=None,
+                pricing_source=None,provider_invocation_count=state['count'])
+            cost_recorded=True
             features = parse_features(_message_text(response), context)
             if semantic_identity(row['project_id'], row['slot'])[0] != key:
                 raise ValueError('STALE_INPUT')
             processing.update(latency_ms=round((perf_counter()-start)*1000), provider_status='completed', langsmith_trace_id=span.trace_id)
             if not store.transition(key,'running','ready', attempt=row['attempts'], result=features.model_dump(mode='json'), processing=processing, error_code=None):
                 raise ValueError('STALE_INPUT')
-            complete_llm_run(run_id, usage=usage, llm_latency_ms=processing['latency_ms'], cache_hit=False, cache_miss=True, langsmith_trace_id=span.trace_id)
+            complete_llm_run(run_id, usage=usage, provider_invocation_count=state["count"],llm_latency_ms=invocation_ms, cache_hit=False, cache_miss=True, langsmith_trace_id=span.trace_id)
             span.set_outputs({'snapshot_id':key,'status':'ready'})
         return {'status':'ready'}
     except Exception as exc:
@@ -144,5 +156,14 @@ def process_semantic_snapshot(key):
             'SEMANTIC_VALIDATION_FAILED' if isinstance(exc, ValueError) else 'SEMANTIC_EXTRACTION_FAILED')
         processing.update(latency_ms=round((perf_counter()-start)*1000), provider_status='failed', exception_type=type(exc).__name__)
         store.transition(key,'running','failed', attempt=row['attempts'], error_code=code, processing=processing)
-        fail_llm_run(run_id, error_code=code, usage=usage, llm_latency_ms=processing['latency_ms'])
+        fail_llm_run(run_id, error_code=code, usage=usage, provider_invocation_count=state["count"],llm_latency_ms=invocation_ms)
         return {'status':'failed','error_code':code}
+
+    finally:
+        if run_id is not None:
+            annotate_operation(run_id,usage=usage,provider_invocation_count=state['count'],
+                end_to_end_latency_ms=round((perf_counter()-start)*1000))
+            if not cost_recorded:
+                record_cost_event(llm_run_id=run_id,project_id=row['project_id'],llm_provider='gemini',
+                    llm_model=row['model_id'],usage=usage,provider_invocation_count=state['count'])
+        _INVOCATION.reset(token)

@@ -39,6 +39,10 @@ def build_trace_metadata(
         "source_balance": source_balance,
     }
     metadata.update({key: value for key, value in optional.items() if value is not None})
+    if prompt_name:
+        metadata['operation_type']=prompt_name if prompt_name in {'semantic_feature_extraction','deterministic_metric_answer'} else 'rag_assistant_generation'
+        metadata['operation_version']='1.0.0'
+        metadata['execution_mode']='runtime'
     return metadata
 
 

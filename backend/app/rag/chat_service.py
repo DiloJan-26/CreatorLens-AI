@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.config import get_settings
 from app.llm.prompt_registry import get_prompt
-from app.llm.cost_estimation import estimate_cost_usd
+from app.services.llm_observability_service import annotate_operation, intelligence_policy_metadata
 from app.llm.token_usage import TokenUsage, parse_token_usage
 from app.llm.tracing import build_trace_metadata, trace_span
 from app.llm.structured_output_service import (
@@ -91,6 +91,11 @@ async def stream_chat_answer(
     project_id: str,
     request: ChatStreamRequest,
 ) -> AsyncIterator[str]:
+    request_started = perf_counter()
+    provider_invocations = 0
+    cost_recorded = False
+    context_ms = None
+    direct_started = None
     assistant_answer = ""
     session_id = request.session_id
     citations: list[Citation] = []
@@ -146,6 +151,7 @@ async def stream_chat_answer(
                 session_id=session_id,
             ),
         ) as retrieval_trace:
+            context_started = perf_counter()
             rag_context = build_rag_context(
                 project_id=project_id,
                 message=question,
@@ -162,6 +168,8 @@ async def stream_chat_answer(
                     "source_balance": rag_context.source_balance,
                 }
             )
+        context_ms = round((perf_counter()-context_started)*1000)
+        direct_check_started = perf_counter()
         direct_answer = build_direct_answer_if_possible(
             project_id=project_id,
             message=question,
@@ -169,6 +177,7 @@ async def stream_chat_answer(
         )
 
         if direct_answer is not None:
+            direct_started = direct_check_started
             prompt_name = "deterministic_metric_answer"
             prompt_version = "2.0.0"
             runtime_signals = get_project_runtime_signals(project_id)
@@ -179,6 +188,8 @@ async def stream_chat_answer(
                 retrieval_run_id=rag_context.retrieval_run_id,
                 llm_provider="internal",
                 llm_model="deterministic_metric_answer",
+                operation_type="deterministic_metric_answer", execution_mode="runtime", provider_invocation_count=0,
+                telemetry=intelligence_policy_metadata(rag_context.intelligence),
                 prompt_name=prompt_name,
                 prompt_version=prompt_version,
                 retrieved_chunk_count=rag_context.retrieved_chunk_count,
@@ -249,7 +260,7 @@ async def stream_chat_answer(
                 citation_trace.set_outputs({"persisted": len(citations)})
             complete_llm_run(
                 llm_run_id,
-                usage=usage,
+                usage=usage, provider_invocation_count=provider_invocations,
                 retrieval_latency_ms=rag_context.retrieval_latency_ms,
                 llm_latency_ms=0,
                 retrieved_chunk_count=rag_context.retrieved_chunk_count,
@@ -268,8 +279,9 @@ async def stream_chat_answer(
                 llm_model="deterministic_metric_answer",
                 usage=usage,
                 estimated_cost_usd=Decimal("0"),
-                pricing_source="deterministic-no-llm",
+                pricing_source="deterministic-no-llm", provider_invocation_count=0,
             )
+            cost_recorded = True
             yield sse_event(
                 "citations",
                 {"citations": [citation.model_dump() for citation in citations]},
@@ -321,6 +333,8 @@ async def stream_chat_answer(
             retrieval_run_id=rag_context.retrieval_run_id,
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
+            operation_type="rag_assistant_generation", execution_mode="runtime", provider_invocation_count=0,
+            telemetry=intelligence_policy_metadata(rag_context.intelligence),
             prompt_name=prompt.name,
             prompt_version=prompt.version,
             retrieved_chunk_count=rag_context.retrieved_chunk_count,
@@ -403,6 +417,8 @@ async def stream_chat_answer(
             ),
         ) as llm_trace:
             try:
+                provider_invocations += 1
+                llm_started_at = perf_counter()
                 response = await asyncio.wait_for(llm.ainvoke(messages), timeout=35)
             except Exception:
                 if rag_context.intelligence is None:
@@ -493,19 +509,15 @@ async def stream_chat_answer(
             )
             citation_trace.set_outputs({"persisted": len(citations)})
 
-        estimated_cost = estimate_cost_usd(
-            usage,
-            input_cost_per_million_usd=settings.llm_input_cost_per_million_usd,
-            output_cost_per_million_usd=settings.llm_output_cost_per_million_usd,
-        )
+        estimated_cost = None  # Resolved per exact model/tier by the cost-event boundary.
         if provider_failure:
-            fail_llm_run(llm_run_id,error_code="ASSISTANT_PROVIDER_FAILURE",usage=usage,
+            fail_llm_run(llm_run_id,error_code="ASSISTANT_PROVIDER_FAILURE",usage=usage, provider_invocation_count=provider_invocations,
                 retrieval_latency_ms=rag_context.retrieval_latency_ms,llm_latency_ms=llm_latency_ms,
                 langsmith_trace_id=langsmith_trace_id)
         else:
             complete_llm_run(
                 llm_run_id,
-                usage=usage,
+                usage=usage, provider_invocation_count=provider_invocations,
                 retrieval_latency_ms=rag_context.retrieval_latency_ms,
                 llm_latency_ms=llm_latency_ms,
                 retrieved_chunk_count=rag_context.retrieved_chunk_count,
@@ -523,12 +535,13 @@ async def stream_chat_answer(
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
             usage=usage,
-            estimated_cost_usd=estimated_cost,
+            estimated_cost_usd=estimated_cost, provider_invocation_count=provider_invocations,
             pricing_source=(
                 "configured-env-per-million" if estimated_cost is not None else None
             ),
         )
 
+        cost_recorded = True
         yield sse_event(
             "citations",
             {"citations": [citation.model_dump() for citation in citations]},
@@ -549,7 +562,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="PROJECT_NOT_FOUND",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -558,7 +571,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="CHAT_SESSION_NOT_FOUND",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -570,7 +583,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="CHAT_VALIDATION_FAILED",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -579,7 +592,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="QDRANT_NOT_CONFIGURED",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -588,7 +601,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="LLM_NOT_CONFIGURED",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -597,7 +610,7 @@ async def stream_chat_answer(
         fail_llm_run(
             llm_run_id,
             error_code="CHAT_STREAM_FAILED",
-            usage=usage,
+            usage=usage, provider_invocation_count=provider_invocations,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
         )
@@ -607,7 +620,18 @@ async def stream_chat_answer(
             session_id,
         )
         yield sse_event("error", {"message": "Could not stream chat answer."})
+    except asyncio.CancelledError:
+        fail_llm_run(llm_run_id,error_code='CHAT_CANCELLED',usage=usage,
+            provider_invocation_count=provider_invocations,llm_latency_ms=llm_latency_ms)
+        raise
     finally:
+        if llm_run_id is not None:
+            annotate_operation(llm_run_id,usage=usage,provider_invocation_count=provider_invocations,
+                context_latency_ms=context_ms,end_to_end_latency_ms=round((perf_counter()-request_started)*1000),
+                deterministic_latency_ms=round((perf_counter()-direct_started)*1000) if direct_started is not None else None)
+            if not cost_recorded:
+                record_cost_event(llm_run_id=llm_run_id,project_id=project_id,llm_provider=settings.llm_provider,
+                    llm_model=settings.llm_model,usage=usage,provider_invocation_count=provider_invocations)
         if root_trace is not None:
             root_trace.set_outputs(
                 {

@@ -16,7 +16,7 @@ class LlmRunRepository:
     def start(
         self,
         *,
-        project_id: str,
+        project_id: str | None,
         llm_provider: str,
         llm_model: str,
         prompt_name: str | None,
@@ -25,9 +25,13 @@ class LlmRunRepository:
         retrieval_run_id: str | None = None,
         retrieved_chunk_count: int | None = None,
         source_balance: dict[str, Any] | None = None,
+        operation_type: str | None = None, execution_mode: str | None = None,
+        provider_invocation_count: int | None = None, telemetry: dict | None = None,
     ) -> LlmRun:
         run = LlmRun(
             id=str(uuid4()),
+            operation_type=operation_type, execution_mode=execution_mode,
+            provider_invocation_count=provider_invocation_count, telemetry=({"operation_version":"1.0.0","requested_model":llm_model,**(telemetry or {})} if operation_type else telemetry),
             project_id=project_id,
             session_id=_optional_text(session_id, 128),
             retrieval_run_id=_optional_text(retrieval_run_id, 36),
@@ -72,6 +76,7 @@ class LlmRunRepository:
         transcript_fallback_used: bool | None = None,
         embedding_reused: bool | None = None,
         langsmith_trace_id: str | None = None,
+        **details,
     ) -> bool:
         run = self.session.get(LlmRun, run_id)
         if run is None:
@@ -91,6 +96,7 @@ class LlmRunRepository:
             transcript_fallback_used=transcript_fallback_used,
             embedding_reused=embedding_reused,
             langsmith_trace_id=langsmith_trace_id,
+            **details,
         )
         run.error_code = None
         run.completed_at = utc_now()
@@ -106,6 +112,7 @@ class LlmRunRepository:
         retrieval_latency_ms: int | None = None,
         llm_latency_ms: int | None = None,
         langsmith_trace_id: str | None = None,
+        **details,
     ) -> bool:
         run = self.session.get(LlmRun, run_id)
         if run is None:
@@ -118,6 +125,7 @@ class LlmRunRepository:
             retrieval_latency_ms=retrieval_latency_ms,
             llm_latency_ms=llm_latency_ms,
             langsmith_trace_id=langsmith_trace_id,
+            **details,
         )
         run.error_code = _required_text(error_code, 64)
         run.completed_at = utc_now()
@@ -173,8 +181,15 @@ class LlmRunRepository:
         transcript_fallback_used: bool | None = None,
         embedding_reused: bool | None = None,
         langsmith_trace_id: str | None = None,
+        **details,
     ) -> None:
+        for name,value in details.items():
+            if name not in {'operation_type','execution_mode','provider_invocation_count','end_to_end_latency_ms','context_latency_ms','deterministic_latency_ms','telemetry'}:
+                raise TypeError('Unsupported operation telemetry field.')
+            setattr(run,name,value)
         if usage is not None:
+            run.telemetry={**(run.telemetry or {}),'usage':usage.safe_dict()}
+            if usage.model_id: run.llm_model=usage.model_id
             run.input_tokens = _optional_count(usage.input_tokens)
             run.output_tokens = _optional_count(usage.output_tokens)
             run.total_tokens = _optional_count(usage.total_tokens)

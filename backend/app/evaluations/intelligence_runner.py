@@ -143,6 +143,7 @@ def run_intelligence_regression(name,*,session=None,persist=False):
                 failure_reasons=reasons,skip_reason=skip,references=case.references))
             measurements.append(metrics)
     details=aggregate_reports(reports,measurements,dataset_fingerprint(name))
+    details['telemetry_context']=dict(execution_mode='offline_evaluation',provider_invocation_count=0,provider_usage='not_measured',cost_events_created=False,dataset_version=DATASET_VERSION,evaluator=EVALUATOR)
     report=EvaluationRunReport(run_id=str(uuid4()),dataset=name,dataset_version=DATASET_VERSION,evaluator=EVALUATOR,status='COMPLETED',
         total_cases=len(reports),passed_cases=sum(r.status=='PASSED' for r in reports),failed_cases=sum(r.status=='FAILED' for r in reports),skipped_cases=details['skipped_cases'],
         aggregate_metrics={'_evaluation':details},evaluation_details=details,cases=reports,created_at=started,completed_at=datetime.now(UTC),persisted=False)

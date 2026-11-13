@@ -82,8 +82,8 @@ export function CostDashboard() {
 
   const averages = useMemo(
     () => ({
-      retrieval: averageKnown(metrics?.runs, "retrieval_latency_ms"),
-      llm: averageKnown(metrics?.runs, "llm_latency_ms"),
+      retrieval: metrics?.analytics?.latencies?.retrieval?.mean_ms ?? null,
+      llm: metrics?.analytics?.latencies?.gemini_inference?.mean_ms ?? null,
     }),
     [metrics],
   );
@@ -127,9 +127,7 @@ export function CostDashboard() {
         <details className="notice text-sm observations-note">
           <summary>About these observations</summary>
           <p>
-            Totals reflect the API scope. Latency is averaged over known values
-            in the {metrics?.runs.length ?? 0} returned runs; it is not
-            end-to-end response time. Refreshing does not trigger inference.
+            Totals and latency samples reflect the entire API scope, independently of recent-history pagination. Inference excludes deterministic responses and historical unknown invocation counts. Actual billed cost is unavailable. Refreshing does not trigger inference.
           </p>
         </details>
         {error ? <ErrorBanner message={error} onRetry={loadMetrics} /> : null}
@@ -144,6 +142,7 @@ export function CostDashboard() {
               </p>
             )}
             <SummaryCards metrics={metrics} averages={averages} />
+            <OperationCoverage metrics={metrics} />
             <div className="engineering-grid">
               <UsagePanel metrics={metrics} averages={averages} />
               <RunInspection run={selectedRun} />
@@ -169,28 +168,28 @@ function SummaryCards({
 }) {
   const cards = [
     {
-      label: "Tracked generations",
-      value: formatInteger(metrics.totals.event_count),
-      note: `${metrics.runs.length} recent runs visible`,
+      label: "Application operations",
+      value: formatInteger(metrics.totals.total_operations ?? metrics.totals.event_count),
+      note: `${metrics.totals.model_invocations ?? 0} reported model invocations / ${metrics.runs.length} recent runs`,
     },
     {
-      label: "Total tokens",
+      label: "Reported token subtotal",
       value: formatInteger(metrics.totals.total_tokens),
       note: `${formatInteger(metrics.totals.input_tokens)} in · ${formatInteger(metrics.totals.output_tokens)} out`,
     },
     {
-      label: "Estimated cost",
-      value: formatCost(metrics.totals.estimated_cost_usd),
+      label: metrics.totals.cost_status === "partial" ? "Partial inference estimate" : "Inference estimate",
+      value: formatCost(metrics.totals.estimated_cost_usd ?? metrics.totals.priced_subtotal_usd ?? null),
       note:
-        metrics.totals.estimated_cost_usd === null
-          ? "Estimate not provided"
-          : "Configured model-rate estimate",
+        metrics.totals.cost_status === "partial" ? "Partial subtotal / incomplete pricing" : metrics.totals.estimated_cost_usd === null
+          ? "Estimate unavailable / inspect coverage"
+          : "Paid-tier equivalent / not actual billing",
     },
     {
-      label: "Mean LLM latency",
+      label: "Mean Gemini inference latency",
       value:
         averages.llm === null ? "Unavailable" : formatDuration(averages.llm),
-      note: `${formatDuration(averages.retrieval)} retrieval · ${formatDuration(averages.llm)} LLM`,
+      note: `${metrics.analytics?.latencies?.gemini_inference?.samples ?? 0} invocation samples / ${formatDuration(averages.retrieval)} retrieval · ${formatDuration(averages.llm)} LLM`,
     },
   ];
 
@@ -220,20 +219,9 @@ function UsagePanel({
   metrics: CostMetricsResponse;
   averages: { retrieval: number | null; llm: number | null };
 }) {
-  const totalTokens = metrics.totals.total_tokens;
-  const inputShare =
-    totalTokens > 0 ? metrics.totals.input_tokens / totalTokens : null;
-  const outputShare =
-    totalTokens > 0 ? metrics.totals.output_tokens / totalTokens : null;
-  const totalLatency = (averages.retrieval ?? 0) + (averages.llm ?? 0);
-  const retrievalShare =
-    totalLatency > 0 && averages.retrieval !== null
-      ? averages.retrieval / totalLatency
-      : null;
-  const llmShare =
-    totalLatency > 0 && averages.llm !== null
-      ? averages.llm / totalLatency
-      : null;
+  const totalTokens = metrics.totals.input_tokens != null && metrics.totals.output_tokens != null ? metrics.totals.input_tokens + metrics.totals.output_tokens : 0;
+  const inputShare = totalTokens > 0 ? (metrics.totals.input_tokens ?? 0) / totalTokens : null;
+  const outputShare = totalTokens > 0 ? (metrics.totals.output_tokens ?? 0) / totalTokens : null;
 
   return (
     <section className="usage-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
@@ -242,7 +230,7 @@ function UsagePanel({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
             Usage signals
           </p>
-          <h2 className="mt-2 text-xl font-semibold">Token and latency mix</h2>
+          <h2 className="mt-2 text-xl font-semibold">Reported token mix and separate timing populations</h2>
         </div>
         <p className="text-xs text-slate-500">
           Based on available persisted observations
@@ -265,12 +253,12 @@ function UsagePanel({
           <SignalBar
             label="Average retrieval"
             value={formatDuration(averages.retrieval)}
-            share={retrievalShare}
+            share={null}
           />
           <SignalBar
             label="Average LLM generation"
             value={formatDuration(averages.llm)}
-            share={llmShare}
+            share={null}
           />
         </div>
       </div>
@@ -295,12 +283,12 @@ function SignalBar({
         <span className="font-medium text-slate-700">{label}</span>
         <span className="font-mono text-xs text-slate-500">{value}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+      {share !== null && <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-full rounded-full bg-teal-500"
           style={{ width: `${bounded * 100}%` }}
         />
-      </div>
+      </div>}
     </div>
   );
 }
@@ -319,7 +307,7 @@ function RunHistory({
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
         History
       </p>
-      <h2 className="mt-2 text-xl font-semibold">Recent LLM runs</h2>
+      <h2 className="mt-2 text-xl font-semibold">Recent intelligence operations</h2>
       <div className="mt-5 max-h-[760px] space-y-3 overflow-y-auto pr-1">
         {runs.map((run) => {
           const active = run.id === selectedRunId;
@@ -338,7 +326,7 @@ function RunHistory({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
-                    {friendlyPrompt(run.prompt_name)}
+                    {run.operation_type?.replaceAll("_", " ") ?? friendlyPrompt(run.prompt_name)}
                   </p>
                   <p className="mt-1 truncate text-xs text-slate-500">
                     {run.llm_model}
@@ -388,7 +376,21 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+          <div className="mb-4 space-y-2 text-sm">
+        <p>{run.operation_type?.replaceAll("_", " ") ?? "Legacy operation / classification unavailable"}</p>
+        <p>{run.provider_invocation_count == null ? "Historical invocation count unknown" : `${run.provider_invocation_count} ${run.execution_mode === "runtime" ? "actual provider invocations" : "recorded invocation markers"}`} / {run.execution_mode ?? "legacy mode unknown"}</p>
+        <p>End-to-end: {formatDuration(run.end_to_end_latency_ms ?? null)} / context: {formatDuration(run.context_latency_ms ?? null)}</p>
+        {run.cost_events?.map((event,index) => <div className="rounded-lg border p-3" key={index}>
+          <strong>Inference estimate: {event.estimate_details?.status ?? "legacy estimate / identity unverified"}</strong>
+          <p>{formatCost(event.estimated_cost_usd)} / {event.estimate_details?.service_tier ?? "tier unknown"} / {event.estimate_details?.policy_version ?? "historical policy unknown"}</p>
+          {Object.entries(event.estimate_details?.components ?? {}).map(([name,value]) => <p key={name}>{name.replaceAll("_", " ")}: {formatCost(value)}</p>)}
+          <p>{event.estimate_details?.reason ?? "Historical estimate retained without recalculation."}</p>
+        </div>)}
+        <details><summary>Usage categories and estimate provenance</summary>
+          <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({usage: run.telemetry?.usage ?? null, estimates: run.cost_events ?? []}, null, 2)}</pre>
+        </details>
+      </div>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
             Inspection
           </p>
           <h2 className="mt-2 text-xl font-semibold">Run telemetry</h2>
@@ -469,8 +471,8 @@ function RunInspection({ run }: { run: LlmRunSummary | null }) {
                 label="LangSmith trace"
                 value={Boolean(run.langsmith_trace_id)}
               />
-              <SignalPill label="Cache hit" value={run.cache_hit} />
-              <SignalPill label="Cache miss" value={run.cache_miss} />
+              <SignalPill label="Extraction cache hit" value={run.cache_hit} />
+              <SignalPill label="Extraction cache miss" value={run.cache_miss} />
               <SignalPill
                 label="Embedding reused"
                 value={run.embedding_reused}
@@ -695,21 +697,6 @@ function DashboardSkeleton() {
   );
 }
 
-function averageKnown(
-  runs: LlmRunSummary[] | undefined,
-  key: "retrieval_latency_ms" | "llm_latency_ms",
-): number | null {
-  const values = (runs ?? [])
-    .map((run) => run[key])
-    .filter((value): value is number => typeof value === "number");
-
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function formatCost(value: NumericValue | null): string {
   if (value === null) {
     return "Unavailable";
@@ -723,8 +710,8 @@ function formatCost(value: NumericValue | null): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: parsed < 0.01 ? 4 : 2,
-    maximumFractionDigits: 6,
+    minimumFractionDigits: parsed > 0 && parsed < 0.01 ? 8 : 2,
+    maximumFractionDigits: 10,
   }).format(parsed);
 }
 
@@ -740,7 +727,8 @@ function formatDuration(value: number | null): string {
   return `${(value / 1000).toFixed(2)} s`;
 }
 
-function formatInteger(value: number): string {
+function formatInteger(value: number | null): string {
+  if (value === null) return "Unavailable";
   return new Intl.NumberFormat("en-US").format(value);
 }
 
@@ -778,4 +766,21 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
     : "Could not load cost and latency telemetry.";
+}
+
+
+function OperationCoverage({metrics}: {metrics: CostMetricsResponse}) {
+  const totals = metrics.totals;
+  return <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm space-y-3">
+    <h2 className="font-semibold">Pricing coverage and timing populations</h2>
+    <p>{totals.priced_inference_events ?? 0} of {totals.inference_events ?? 0} inference events with stored estimates; {totals.unpriced_inference_events ?? 0} unpriced. Status: {totals.cost_status ?? "legacy unknown"}.</p>
+    <p>{totals.deterministic_operations ?? 0} deterministic operations / {totals.legacy_invocation_unknown ?? 0} historical operations with unknown invocation counts. Token totals are sums of reported categories; inspect each operation for usage completeness.</p>
+    <p>{totals.legacy_estimate_events ?? 0} historical estimates lack verified pricing provenance. Verified policy coverage: {totals.verified_pricing_coverage == null ? "Not measured" : `${Math.round(totals.verified_pricing_coverage * 100)}%`}.</p>
+    <p>Estimated paid-tier equivalent only. Actual billed cost unavailable. Missing prices, partial usage and unresolved tiers remain unknown.</p>
+    <div className="grid gap-3 sm:grid-cols-2">{Object.entries(metrics.analytics?.latencies ?? {}).map(([name,value]) => <div key={name} className="rounded-lg border p-3">
+      <strong>{name.replaceAll("_", " ")}</strong><p>{value.samples} samples / mean {formatDuration(value.mean_ms)} / p50 {formatDuration(value.p50_ms)} / p95 {formatDuration(value.p95_ms)}</p>
+    </div>)}</div>
+    <details><summary>Operation mix and daily reported activity</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify({operations:metrics.analytics?.operations,daily:metrics.analytics?.daily},null,2)}</pre></details>
+    <p className="text-slate-600">{metrics.analytics?.latency_policy}</p>
+  </section>;
 }
