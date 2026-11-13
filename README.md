@@ -76,6 +76,14 @@ The existing insight-summary endpoint accepts `?objective=balanced|reach|engagem
 
 Reach and Engagement work without semantic analysis. Balanced and Creative Quality require compatible current semantic snapshots. Cross-platform metric comparisons remain descriptive without a winner; semantic creative comparison uses a shared textual rubric with matching versions and coverage. Heuristic tie tolerances are explicit and do not represent statistical confidence. Existing `comparison` fields remain labeled legacy for later consumer migration. No Phase 4 cloud deployment was performed.
 
+## Evidence-grounded creator recommendations
+
+The insight summary adds `creator_recommendations` under `creator-recommendations-1.0.0`. It consumes the selected `goal_comparison` decision and current validated semantic snapshots. Fixed rules identify supported individual weaknesses, attach owned excerpts/revisions, and propose specific manual experiments. A weaker count or unavailable metric alone is not a creative defect. Winning videos can receive advice; ties never select a default target.
+
+Recommendations expose stable project/content IDs, observed labels, trigger rules, evidence provenance, priority breakdowns, actions, experiments and limitations. Ordinal priority combines severity, evidence support, objective relevance and actionability; overlapping interventions merge without a priority bonus. At most five actions are returned. Reach/efficiency remain descriptive where actionable creative evidence is absent; eligible Engagement can support a controlled interaction experiment without asserting a creative cause.
+
+The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. Existing Assistant generation still uses its established context and will consume the canonical contracts in the next approved upgrade. No live rollout or new migration is included in this change.
+
 ## Semantic creative analysis
 
 An optional, explicitly queued Gemini operation now extracts versioned creative labels from validated transcript and description evidence. `POST /api/projects/{project_id}/semantic/{slot}?allow_inference=true` queues the existing Celery worker; GET only reads compatible persisted snapshots. This operation can incur Gemini charges and is deferred to the coordinated release for live acceptance.

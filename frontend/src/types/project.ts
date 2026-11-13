@@ -441,6 +441,7 @@ export type CreatorScoring = {
 };
 
 export type ContentInsight = {
+  content_id?: string | null;
   scoring?: CreatorScoring | null;
   slot: string;
   label: string;
@@ -470,6 +471,7 @@ export type ComparisonInsight = {
 };
 
 export type CreatorInsightSummaryResponse = {
+  creator_recommendations?: CreatorRecommendationBundle | null;
   project_id: string;
   content_1?: ContentInsight | null;
   content_2?: ContentInsight | null;
@@ -517,4 +519,66 @@ export type LlmGenerationTestResponse = {
   model: string;
   generated_text?: string | null;
   message?: string | null;
+};
+
+export type RecommendationEvidence = {
+  evidence_id: string;
+  project_id: string;
+  content_id: string;
+  slot: "content_1" | "content_2";
+  platform: string;
+  role: "target" | "comparison_context";
+  source_type: "opening" | "transcript" | "description" | "metric_snapshot";
+  excerpt: string | null;
+  start_time: number | null;
+  end_time: number | null;
+  metric_values: Record<string, number | null>;
+  metric_provenance: Record<string, unknown>;
+  input_revision: string;
+  transcript_revision: string | null;
+  semantic_snapshot_id: string | null;
+};
+
+export type GroundedCreatorRecommendation = {
+  id: string;
+  project_id: string;
+  target_content_id: string;
+  target_slot: "content_1" | "content_2";
+  target_platform: string;
+  selected_objective: string;
+  category: string;
+  detected_weakness: string;
+  observed_signal: string;
+  evidence_status: string;
+  evidence: RecommendationEvidence[];
+  title: string;
+  recommended_change: string;
+  rationale: string;
+  experiment: string;
+  hypothesis: string;
+  limitation: string;
+  basis: string;
+  priority: { label: "high" | "medium" | "low"; score: number; explanation: string };
+  comparison: { selected_objective_status: string; dimension: string | null; dimension_status: string | null };
+  example: { target_content_id: string; method: "deterministic_template"; text: string; limitation: string; source_evidence_ids: string[] } | null;
+};
+
+export type CreatorRecommendationBundle = {
+  policy_version: string;
+  project_id: string;
+  selected_objective: string;
+  status: "ready" | "no_supported_actions" | "unavailable";
+  recommendations: GroundedCreatorRecommendation[];
+  findings: {
+    id: string;
+    target_content_id: string | null;
+    target_slot: string | null;
+    category: string;
+    status: string;
+    observation: string;
+    missing_evidence: string[];
+    limitations: string[];
+    evidence: RecommendationEvidence[];
+  }[];
+  limitations: string[];
 };

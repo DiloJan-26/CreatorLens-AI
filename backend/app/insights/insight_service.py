@@ -1,4 +1,5 @@
 from typing import Any
+from app.insights.recommendation_engine import build_creator_recommendations
 from app.insights.comparison_engine import build_goal_comparison
 from app.insights.comparison_models import ComparisonObjective
 from app.insights.deterministic_scoring import calculate_scoring, comparison_eligibility
@@ -58,12 +59,17 @@ def get_creator_insight_summary(project_id: str, objective: ComparisonObjective 
         content_2_insight=content_2_insight,
     )
 
+    goal_comparison = build_goal_comparison(project_id, content_1, content_2, content_1_insight, content_2_insight, objective)
+    creator_recommendations = build_creator_recommendations(project_id, goal_comparison,
+        [(content_1, content_1_insight), (content_2, content_2_insight)])
+
     return CreatorInsightSummaryResponse(
         project_id=project_id,
         content_1=content_1_insight,
         content_2=content_2_insight,
         comparison=comparison,
-        goal_comparison=build_goal_comparison(project_id, content_1, content_2, content_1_insight, content_2_insight, objective),
+        goal_comparison=goal_comparison,
+        creator_recommendations=creator_recommendations,
         notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; Authoritative objective decisions are in goal_comparison; legacy winners are not V2 decisions."],
     )
 
@@ -141,6 +147,7 @@ def _build_content_insight(
         semantic_analysis = {"status": "unavailable", "reason": "Semantic storage or current evidence unavailable."}
 
     return ContentInsight(
+        content_id=content_item.get("id") or content_item.get("content_item_id") or content_item.get("content_id"),
         slot=slot,
         label=_slot_label(slot),
         platform=platform,

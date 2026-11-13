@@ -64,7 +64,7 @@ def _semantic(subject: Subject) -> CreatorScoring | None:
     return getattr(subject.insight, 'semantic_scoring', None)
 
 
-def _semantic_problem(subject):
+def _semantic_problem(subject, *, require_score=True):
     """Semantic read service validates current fingerprint/text; also bind identity and policy here."""
     score = _semantic(subject)
     analysis = getattr(subject.insight, 'semantic_analysis', {}) or {}
@@ -100,7 +100,7 @@ def _semantic_problem(subject):
             sources=sources,complete=analysis.get('evidence_complete',False)))
     except (ValueError, TypeError, KeyError, AttributeError):
         return 'insufficient_evidence', 'Semantic citation/type/text/timing or coverage validation failed.'
-    if not _available(score.creative_structure) or score.creative_structure.coverage < .70 or not {"verbal_hook_clarity","topic_specificity"}.issubset({p.feature for p in score.creative_structure.components if p.score is not None and p.weight > 0}):
+    if require_score and (not _available(score.creative_structure) or score.creative_structure.coverage < .70 or not {"verbal_hook_clarity","topic_specificity"}.issubset({p.feature for p in score.creative_structure.components if p.score is not None and p.weight > 0})):
         return 'insufficient_evidence', 'Semantic creative score lacks required feature coverage.'
     return None
 
@@ -284,3 +284,19 @@ def build_goal_comparison(project_id: str, content_1: dict | None, content_2: di
         raw_objective_values=selected.values,eligible_scoring_inputs={s.identity.slot: ((['views'] if objective == ComparisonObjective.REACH else ['views',*s.metrics.interaction_definition]) if selected.eligibility.status == 'eligible' and objective in {ComparisonObjective.REACH,ComparisonObjective.ENGAGEMENT} else [p['feature'] for p in selected.contributions.get(s.identity.slot,[]) if p['score'] is not None and p['weight'] > 0]) for s in (left,right)},
         key_contributions=selected.contributions,explanation=selected.explanation,missing_evidence=selected.eligibility.missing_evidence,
         limitations=selected.limitations,objective_decisions=objectives,dimension_leaders=leaders)
+
+
+def validate_semantic_content(project_id: str, item: dict, insight: Any):
+    """Validate individual semantic evidence without requiring a comparable aggregate score."""
+    slot = item.get('slot')
+    if slot not in {'content_1','content_2'}:
+        return 'insufficient_evidence', 'Content slot is invalid.'
+    subject = _subject(project_id, slot, item, insight)
+    if not subject.identity.content_id or subject.identity.project_id != project_id or insight is None:
+        return 'insufficient_evidence', 'Content identity or insight is unavailable.'
+    if insight.slot != slot or insight.platform != subject.identity.platform:
+        return 'incomparable', 'Semantic insight identity conflicts with content.'
+    evidence = item.get('transcript_evidence') or {}
+    if evidence.get('status') not in {'valid','partial'} or (evidence.get('provenance') or {}).get('caption_kind') == 'translated':
+        return 'insufficient_evidence', 'Usable validated transcript evidence required; translated captions are not eligible.'
+    return _semantic_problem(subject, require_score=False)

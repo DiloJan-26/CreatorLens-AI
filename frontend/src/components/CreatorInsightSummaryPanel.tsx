@@ -12,6 +12,7 @@ import type {
 import { HookComparisonCard } from "./HookComparisonCard";
 import { InsightScoreCard } from "./InsightScoreCard";
 import { RecommendationList } from "./RecommendationList";
+import { CreatorRecommendationList } from "./CreatorRecommendationList";
 import { Icon } from "./ui";
 
 type CreatorInsightSummaryPanelProps = {
@@ -133,18 +134,26 @@ export function CreatorInsightSummaryPanel({
 
       {activeSummary ? (
         <div className="mt-5 grid gap-4">
-          <RecommendationList
-            recommendations={activeSummary.comparison.top_recommendations}
-            exampleRewrite={
-              activeSummary.comparison.example_rewrite_for_content_2
-            }
-          />
+          {activeSummary.creator_recommendations ? (
+            <>
+              <CreatorRecommendationList bundle={activeSummary.creator_recommendations} contents={[activeSummary.content_1, activeSummary.content_2]} />
+              <details className="detail-disclosure">
+                <summary>Legacy recommendations / legacy-1.0.0</summary>
+                <RecommendationList recommendations={activeSummary.comparison.top_recommendations} exampleRewrite={activeSummary.comparison.example_rewrite_for_content_2} />
+              </details>
+            </>
+          ) : (
+            <div>
+              <p className="text-sm text-slate-600">Legacy recommendations / legacy-1.0.0</p>
+              <RecommendationList recommendations={activeSummary.comparison.top_recommendations} exampleRewrite={activeSummary.comparison.example_rewrite_for_content_2} />
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             {[activeSummary.content_1, activeSummary.content_2].map((content) =>
               content?.scoring ? <EvidenceScoring key={content.slot} content={content} /> : null,
             )}
           </div>
-          <p className="text-sm text-slate-600">The existing comparison and recommendation panels below use legacy-1.0.0. The versioned evidence-aware scores above do not select a winner.</p>
+          <p className="text-sm text-slate-600">The comparison panels below retain legacy-1.0.0. Evidence-grounded recommendations above have their own policy label. The versioned evidence-aware scores above do not select a winner.</p>
           <ScoreComparison summary={activeSummary} />
           <details className="detail-disclosure">
             <summary>Detailed comparison rationale</summary>

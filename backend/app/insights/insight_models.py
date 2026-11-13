@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from app.insights.scoring_models import CreatorScoring
 from app.insights.comparison_models import ComparisonDecision
+from app.insights.recommendation_models import CreatorRecommendationBundle
 
 
 class HookAnalysis(BaseModel):
@@ -28,6 +29,7 @@ class InsightScores(BaseModel):
 
 
 class ContentInsight(BaseModel):
+    content_id: str | None = None
     semantic_analysis: dict = Field(default_factory=dict)
     semantic_scoring: CreatorScoring | None = None
     scoring: CreatorScoring | None = None
@@ -61,6 +63,7 @@ class ComparisonInsight(BaseModel):
 
 
 class CreatorInsightSummaryResponse(BaseModel):
+    creator_recommendations: CreatorRecommendationBundle | None = None
     goal_comparison: ComparisonDecision | None = None
     project_id: str
     content_1: ContentInsight | None = None
