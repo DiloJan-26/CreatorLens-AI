@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:ui": "node scripts/verify-intelligence-ui.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

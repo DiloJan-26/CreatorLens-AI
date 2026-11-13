@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { GoalComparisonPanel } from "./GoalComparisonPanel";
+import { SemanticAnalysisPanel } from "./SemanticAnalysisPanel";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -511,6 +513,7 @@ export function ComparisonWorkspace() {
       </div>
       {hasResults && (
         <>
+          {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} />}
           <nav className="section-tabs" aria-label="Comparison sections">
             {[
               ["overview", "Overview"],
@@ -546,15 +549,15 @@ export function ComparisonWorkspace() {
             <div className="content-pair">
               <ContentCard
                 label="Content 1"
+                hookScore={insightSummary?.content_1?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_1")}
                 isPending={isSubmitting}
-                hookScore={insightSummary?.content_1?.hook_analysis.hook_score}
               />
               <ContentCard
                 label="Content 2"
+                hookScore={insightSummary?.content_2?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_2")}
                 isPending={isSubmitting}
-                hookScore={insightSummary?.content_2?.hook_analysis.hook_score}
               />
             </div>
             <ComparisonHighlights summary={insightSummary} />
@@ -564,6 +567,7 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "insights"}
             className="section-panel"
           >
+            <div className="grid gap-4 lg:grid-cols-2 mb-5">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
             <CreatorInsightSummaryPanel
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}

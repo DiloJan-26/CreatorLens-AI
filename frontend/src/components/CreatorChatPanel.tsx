@@ -8,6 +8,7 @@ import { Icon } from "./ui";
 import { PlatformIcon } from "./PlatformIcon";
 
 import { StructuredAnswerCard } from "@/components/StructuredAnswerCard";
+import { getComparisonObjective, setComparisonObjective } from "@/lib/app-session";
 import { getChatHistory, streamChatResponse } from "@/lib/api";
 import {
   clearChatSessionId,
@@ -61,6 +62,13 @@ export function CreatorChatPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isStreaming]);
   const canChat = Boolean(projectId && indexReady && !isRestoringSession);
+  useEffect(() => {
+    function changed(event: Event) {
+      if ((event as CustomEvent).detail.projectId === projectId && projectId) setObjective(getComparisonObjective(projectId));
+    }
+    window.addEventListener("creatorlens_objective_changed", changed);
+    return () => window.removeEventListener("creatorlens_objective_changed", changed);
+  }, [projectId]);
 
   useEffect(() => {
     let isActive = true;
@@ -77,6 +85,7 @@ export function CreatorChatPanel({
         return;
       }
 
+      setObjective(getComparisonObjective(projectId));
       const restoredDraft = getChatDraft(projectId);
       const restoredSessionId = getChatSessionId(projectId);
 
@@ -234,7 +243,7 @@ export function CreatorChatPanel({
     <section className="chat-panel" aria-label="Evidence-grounded conversation">
       <div className="chat-top flex-wrap">
           <label className="flex items-center gap-2 text-sm">Objective
-            <select aria-label="Comparison objective" className="max-w-full rounded-md border border-slate-300 bg-white p-2 text-sm" value={objective} disabled={isStreaming} onChange={(event) => setObjective(event.target.value as ComparisonObjective)}>
+            <select aria-label="Comparison objective" className="max-w-full rounded-md border border-slate-300 bg-white p-2 text-sm" value={objective} disabled={isStreaming} onChange={(event) => { const next = event.target.value as ComparisonObjective; setObjective(next); if (projectId) setComparisonObjective(projectId, next); }}>
               <option value="balanced">Balanced</option><option value="reach">Reach</option><option value="engagement">Engagement</option><option value="creative_quality">Creative quality</option>
             </select>
           </label>

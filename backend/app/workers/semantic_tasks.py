@@ -4,4 +4,6 @@ from app.services.semantic_service import process_semantic_snapshot
 
 @celery_app.task(name='creatorlens.semantic_features', max_retries=0)
 def extract_semantic_features(snapshot_id: str):
+    from app.core.demo_access import require_local_worker
+    require_local_worker()
     return process_semantic_snapshot(snapshot_id)

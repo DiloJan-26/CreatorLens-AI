@@ -179,7 +179,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
               <span className="truncate">{active?.label ?? "CreatorLens"}</span>
             </div>
             <div className="header-actions">
-              <span className="demo-label">Demo mode</span>
+              <span className="demo-label">Restricted demo</span>
             </div>
           </header>
         </>
@@ -228,8 +228,9 @@ export function AppNavbar({ children }: { children: ReactNode }) {
         title="Explore without an account"
       >
         <p className="muted">
-          CreatorLens is currently an open demo. You can use the existing
-          workspace without signing in.
+          CreatorLens is currently a restricted demonstration. No account is
+          required for the isolated local experience. Public project access and
+          provider generation are disabled by default.
         </p>
         <Link
           href="/analyze"

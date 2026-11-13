@@ -54,5 +54,8 @@ jobs:
       - name: Type-check frontend
         run: npx tsc --noEmit
 
+      - name: Verify intelligence presentation contracts
+        run: npm run test:ui
+
       - name: Build frontend
         run: npm run build

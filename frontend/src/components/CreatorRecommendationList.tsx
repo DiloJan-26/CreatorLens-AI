@@ -37,10 +37,10 @@ export function CreatorRecommendationList({ bundle, contents }: Props) {
         const target = contents.find((content) => content?.content_id === recommendation.target_content_id && content.slot === recommendation.target_slot && content.platform === recommendation.target_platform);
         if (!target || recommendation.project_id !== bundle.project_id || recommendation.selected_objective !== bundle.selected_objective) return <li key={recommendation.id} className="text-sm text-amber-800">Recommendation withheld because its target could not be verified.</li>;
         return (
-          <li key={recommendation.id} className="rounded-md border border-slate-200 p-4">
+          <li key={recommendation.id} data-recommendation-id={recommendation.id} className="rounded-md border border-slate-200 p-4">
             <p className="text-sm font-medium text-teal-800">{target.label} · {target.platform} · {recommendation.priority.label} priority</p>
             <h4 className="mt-1 font-semibold">{recommendation.title}</h4>
-            <p className="mt-2 text-sm leading-6">{recommendation.observed_signal}</p>
+            <p className="mt-2 text-sm leading-6"><strong>Supported finding: </strong>{recommendation.detected_weakness}</p><p className="mt-2 text-sm leading-6">{recommendation.observed_signal}</p>
             <p className="mt-3 leading-6"><strong>Try: </strong>{recommendation.recommended_change}</p>
             <p className="mt-2 text-sm leading-6"><strong>Experiment: </strong>{recommendation.experiment}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{recommendation.limitation}</p>

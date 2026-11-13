@@ -259,12 +259,12 @@ function ContentSummary({
       {insight ? (
         <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
           <ContextMetric
-            label="Hook score"
+            label="Legacy hook / legacy-1.0.0"
             value={`${insight.hook_analysis.hook_score}/10`}
           />
           <ContextMetric
             label="Creator Insight Score"
-            value={`${insight.scores.overall_score}/10`}
+            value={(insight.semantic_scoring?.overall.score == null) ? "Not assessable" : `${insight.semantic_scoring.overall.score}/10`}
           />
         </dl>
       ) : null}

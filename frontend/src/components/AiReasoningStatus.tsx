@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { checkLlmHealth, testLlmGeneration } from "@/lib/api";
+import { getDemoCapabilities, checkLlmHealth, testLlmGeneration } from "@/lib/api";
 
 type ReasoningState = "untested" | "active" | "unavailable";
 
 export function AiReasoningStatus() {
   const [state, setState] = useState<ReasoningState>("untested");
   const [checking, setChecking] = useState(false);
+  const [providerAllowed, setProviderAllowed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const initialized = useRef(false);
 
@@ -16,6 +17,7 @@ export function AiReasoningStatus() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
+    getDemoCapabilities().then(value => setProviderAllowed(value.provider_calls_enabled)).catch(() => {});
 
     checkLlmHealth()
       .then((res) => {
@@ -33,7 +35,7 @@ export function AiReasoningStatus() {
   }, []);
 
   const handleCheck = useCallback(async () => {
-    if (checking) return;
+    if (checking || !providerAllowed) return;
     setChecking(true);
     setMessage(null);
 
@@ -53,7 +55,7 @@ export function AiReasoningStatus() {
     } finally {
       setChecking(false);
     }
-  }, [checking]);
+  }, [checking, providerAllowed]);
 
   const dot =
     state === "active"
@@ -82,7 +84,7 @@ export function AiReasoningStatus() {
       <button
         type="button"
         onClick={handleCheck}
-        disabled={checking}
+        disabled={checking || !providerAllowed}
         aria-label="Check AI Reasoning"
         className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
       >

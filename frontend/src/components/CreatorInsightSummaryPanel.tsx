@@ -33,7 +33,7 @@ export function CreatorInsightSummaryPanel({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const visibleSummary = summary ?? initialSummary;
+  const visibleSummary = initialSummary ?? summary;
   const activeSummary =
     projectId && visibleSummary?.project_id === projectId
       ? visibleSummary
@@ -104,8 +104,8 @@ export function CreatorInsightSummaryPanel({
         <summary>How scores are calculated</summary>
         <p className="py-2 leading-6">
           Creator Insight Score is a deterministic review signal combining
-          public performance, creator efficiency, creative structure, and metric
-          confidence. Metadata Availability is informational and is not a
+          eligible public performance, creator efficiency and validated semantic
+          creative structure. Evidence confidence is reported separately. Metadata Availability is informational and is not a
           creative strength or performance score.
           {!indexReady
             ? " Vector search is not required for this summary."
@@ -154,14 +154,14 @@ export function CreatorInsightSummaryPanel({
             )}
           </div>
           <p className="text-sm text-slate-600">The comparison panels below retain legacy-1.0.0. Evidence-grounded recommendations above have their own policy label. The versioned evidence-aware scores above do not select a winner.</p>
-          <ScoreComparison summary={activeSummary} />
+          <details className="detail-disclosure"><summary>Legacy scores / legacy-1.0.0</summary><ScoreComparison summary={activeSummary} /></details>
           <details className="detail-disclosure">
-            <summary>Detailed comparison rationale</summary>
+            <summary>Legacy comparison rationale / legacy-1.0.0</summary>
             <OverallComparisonCard comparison={activeSummary.comparison} />
           </details>
 
           <details className="detail-disclosure">
-            <summary>Per-content score breakdown & evidence gaps</summary>
+            <summary>Legacy per-content scores & evidence gaps / legacy-1.0.0</summary>
             <div className="grid gap-4 lg:grid-cols-2">
               {activeSummary.content_1 ? (
                 <InsightScoreCard content={activeSummary.content_1} />
@@ -176,11 +176,11 @@ export function CreatorInsightSummaryPanel({
             </div>
           </details>
 
-          <HookComparisonCard
+          <details className="detail-disclosure"><summary>Legacy verbal-hook analysis / legacy-1.0.0</summary><HookComparisonCard
             content1={activeSummary.content_1 ?? null}
             content2={activeSummary.content_2 ?? null}
             comparison={activeSummary.comparison}
-          />
+          /></details>
 
           {activeSummary.notes.length > 0 ? (
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
@@ -362,20 +362,19 @@ function EvidenceScoring({ content }: { content: ContentInsight }) {
   const scoring = content.scoring;
   if (!scoring) return null;
   const fields = ["reach", "engagement", "public_performance", "creator_efficiency", "creative_structure", "overall"] as const;
-  return (
-    <section className="rounded-lg border border-slate-200 p-4" aria-label={`${content.label} evidence-aware scores`}>
-      <h3 className="font-semibold">{content.label} ? Evidence-aware scoring</h3>
-      <p className="text-sm text-slate-600">{scoring.policy.version} ? Uncalibrated heuristics</p>
-      <dl className="mt-3 grid gap-3">
-        {fields.map((field) => {
-          const value = scoring[field];
-          return <div key={field}>
-            <dt className="font-medium capitalize">{field.replaceAll("_", " ")}</dt>
-            <dd>{value.score == null ? "Not assessable" : `${value.score.toFixed(2)} / 10`} ? Coverage {(value.coverage * 100).toFixed(0)}%</dd>
-            <dd className="text-sm text-slate-600">{value.rationale}{value.missing_inputs.length ? ` Missing: ${value.missing_inputs.join(", ")}.` : ""}</dd>
-          </div>;
-        })}
-      </dl>
-    </section>
-  );
+  return <section className="rounded-lg border border-slate-200 p-4" aria-label={`${content.label} evidence-aware scores`}>
+    <h3 className="font-semibold">{content.label} / Evidence-aware scoring</h3>
+    <p className="text-sm muted">{scoring.policy.version} / Uncalibrated heuristics</p>
+    <dl className="mt-3 grid gap-3">{fields.map(field => {
+      const semantic = field === "creative_structure" || field === "overall";
+      const value = semantic ? content.semantic_scoring?.[field] : scoring[field];
+      return <div key={field}>
+        <dt className="font-medium capitalize">{field === "creative_structure" ? "Semantic creative score" : field.replaceAll("_", " ")}</dt>
+        <dd>{value?.score == null ? "Not assessable" : `${value.score.toFixed(2)} / 10`}{value ? ` / Coverage ${(value.coverage * 100).toFixed(0)}%` : " / Compatible semantic evidence required"}</dd>
+        {value && <><dd className="text-sm muted">{value.rationale}{value.missing_inputs.length ? ` Missing: ${value.missing_inputs.join(", ")}.` : ""}</dd><dd><details className="text-sm mt-2"><summary>Score contributions and limitations</summary><ul>{value.components?.map((part, index) => <li key={`${part.feature}-${index}`} className="mt-2 break-words">{part.feature}: {part.contribution == null ? "Unavailable" : part.contribution.toFixed(3)} / {part.rule} / Source: {part.source}</li>)}</ul><p className="muted mt-2">{value.limitations?.join(" ")}</p></details></dd></>}
+      </div>;
+    })}</dl>
+    {scoring.metrics && <details className="detail-disclosure mt-4"><summary>Normalized metric inputs and context</summary><dl className="mt-3 grid gap-2">{Object.entries(scoring.metrics.rates_percent).map(([name, value]) => <div key={name}><dt className="capitalize">{name.replaceAll("_", " ")}</dt><dd>{value == null ? "Unavailable" : `${value.toFixed(3)}%`}</dd></div>)}</dl><p className="mt-3 text-sm muted">Engagement eligibility: {scoring.metrics.engagement_status}. Views per current creator size: {scoring.metrics.views_per_current_creator_size ?? "Unavailable"}. Published: {scoring.metrics.publication_date ?? "Unavailable"}. Observed: {scoring.metrics.observed_at ?? "Unavailable"}. {scoring.metrics.limitations.join(" ")}</p></details>}
+    {scoring.evidence && <p className="text-sm muted mt-4">Evidence assessment: {scoring.evidence.transcript_status} transcript / {scoring.evidence.source_reliability} source reliability / {(scoring.evidence.metric_completeness * 100).toFixed(0)}% metric completeness. {scoring.evidence.limitations.join(" ")} Evidence confidence is not a content-quality bonus.</p>}
+  </section>;
 }

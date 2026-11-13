@@ -64,7 +64,7 @@ export function ContentCard({
             />
             <Metric label="Comments" value={formatNumber(item.comments)} />
             <Metric
-              label="Hook score"
+              label="Semantic verbal hook"
               value={hookScore == null ? null : `${hookScore}/10`}
             />
           </dl>
@@ -73,7 +73,7 @@ export function ContentCard({
       <div className="video-card-footnote">
         <span>
           Public metric snapshot{" "}
-          <span className="muted">/ Hook score is heuristic</span>
+          <span className="muted">/ Verbal hook score uses validated semantic features</span>
         </span>
         <a
           className="source-link"

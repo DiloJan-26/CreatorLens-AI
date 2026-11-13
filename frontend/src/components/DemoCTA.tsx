@@ -7,21 +7,22 @@ export function DemoCTA() {
         <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-200">
-              No signup demo
+              Restricted demonstration
             </p>
             <h2 className="mt-3 text-3xl font-semibold">
               Ready to compare two pieces of content?
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-              Paste any supported YouTube, Instagram, or Facebook short-form URLs.
-              CreatorLens AI will build evidence, insights, and a cited creator chat.
+              Explore the evidence-first workflow. Live extraction and model generation
+              are disabled by default; the labeled offline demo demonstrates the
+              intelligence pipeline without provider calls.
             </p>
           </div>
           <Link
             href="/analyze"
             className="inline-flex h-12 items-center justify-center rounded-md bg-white px-6 text-sm font-semibold text-slate-950 transition hover:bg-teal-50"
           >
-            Analyze Two URLs
+            Explore workspace
           </Link>
         </div>
       </div>

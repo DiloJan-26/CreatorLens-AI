@@ -1,3 +1,5 @@
+import { getComparisonObjective } from "./app-session";
+import type { ComparisonObjective, SemanticAnalysis, DemoCapabilities } from "@/types/project";
 import type {
   ChatCitation,
   ChatHistoryResponse,
@@ -177,9 +179,10 @@ export async function getMetadataAvailability(
 
 export async function getCreatorInsightSummary(
   projectId: string,
+  objective: ComparisonObjective = getComparisonObjective(projectId),
 ): Promise<CreatorInsightSummaryResponse> {
   return request<CreatorInsightSummaryResponse>(
-    `/api/projects/${projectId}/insights/summary`,
+    `/api/projects/${projectId}/insights/summary?objective=${encodeURIComponent(objective)}`,
   );
 }
 
@@ -552,4 +555,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+
+export function getDemoCapabilities() {
+  return request<DemoCapabilities>("/api/demo/capabilities");
+}
+export function getSemanticAnalysis(projectId: string, slot: ContentSlot, signal?: AbortSignal) {
+  return request<SemanticAnalysis>(`/api/projects/${encodeURIComponent(projectId)}/semantic/${slot}`, { signal });
+}
+export function requestSemanticAnalysis(projectId: string, slot: ContentSlot, retry: boolean) {
+  return request<SemanticAnalysis>(`/api/projects/${encodeURIComponent(projectId)}/semantic/${slot}?allow_inference=true&retry_failed=${retry}`, { method: "POST" });
 }

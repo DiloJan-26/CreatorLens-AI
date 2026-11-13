@@ -39,7 +39,7 @@ export default function Home() {
                       : "Facebook"}
                 </span>
               ))}
-              <span>No sign-in required</span>
+              <span>Restricted demo / no public inference</span>
             </div>
           </div>
           <LandingComparisonPreview />

@@ -33,9 +33,16 @@ jobs:
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build and push worker image
+        id: worker
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:ingestion-0ec931c
+          tags: ${{ vars.ACR_LOGIN_SERVER }}/creatorlens-worker:${{ github.sha }}
+
+      - name: Record reviewed worker image identity
+        shell: bash
+        run: |
+          echo "Worker commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image digest: ${{ steps.worker.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"

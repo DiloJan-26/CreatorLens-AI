@@ -166,6 +166,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# All routers remain gated; outer CORS makes denial responses readable to configured frontends.
+from app.core.demo_access import DemoAccessMiddleware
+app.add_middleware(DemoAccessMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -183,3 +187,10 @@ app.include_router(cost_router)
 app.include_router(insights_router)
 app.include_router(semantic_router)
 app.include_router(evaluations_router)
+
+
+
+@app.get('/api/demo/capabilities', include_in_schema=False)
+def demo_capabilities():
+    from app.core.demo_access import provider_calls_enabled
+    return {'access': 'local_only', 'provider_calls_enabled': provider_calls_enabled(get_settings())}

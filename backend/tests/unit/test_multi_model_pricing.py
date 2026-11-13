@@ -107,6 +107,8 @@ def test_multi_model_api_worker_share_exact_configuration(model, monkeypatch):
     settings = Settings(_env_file=None, ENVIRONMENT='production', LLM_MODEL=model,
         GEMINI_API_KEY='offline-test-value')
     assert model_configuration_error(settings) is None
+    # Production model policy remains checked above; mocked client runs in explicitly local demo mode.
+    settings = settings.model_copy(update={'environment': 'test', 'demo_access_mode': 'local', 'demo_allow_provider_calls': True})
     monkeypatch.setattr(llm_service, 'get_settings', lambda: settings)
     options = []
     monkeypatch.setattr(llm_service, '_get_gemini_llm', lambda **kwargs: options.append(kwargs))
@@ -133,7 +135,7 @@ def test_multi_model_missing_production_setting_does_not_silently_fallback(monke
     {'max_retries': 1}, {'timeout': 0}, {'timeout': 66}])
 def test_multi_model_inference_bounds_fail_before_client_creation(monkeypatch, options):
     from app.services import llm_service
-    monkeypatch.setattr(llm_service, 'get_settings', lambda: Settings(_env_file=None, GEMINI_API_KEY='offline-test-value'))
+    monkeypatch.setattr(llm_service, 'get_settings', lambda: Settings(_env_file=None, GEMINI_API_KEY='offline-test-value', DEMO_ACCESS_MODE='local', DEMO_ALLOW_PROVIDER_CALLS=True))
     monkeypatch.setattr(llm_service, '_get_gemini_llm', lambda **_: pytest.fail('Client must not be created'))
     with pytest.raises(llm_service.LLMConfigurationError):
         llm_service.get_llm(**options)

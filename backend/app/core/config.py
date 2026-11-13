@@ -1,3 +1,4 @@
+from typing import Literal
 from functools import lru_cache
 from app.core.model_policy import DEFAULT_GEMINI_MODEL
 
@@ -13,6 +14,8 @@ class Settings(BaseSettings):
     )
 
     environment: str = Field(default="local", alias="ENVIRONMENT")
+    demo_access_mode: Literal["disabled", "local"] = Field(default="disabled", alias="DEMO_ACCESS_MODE")
+    demo_allow_provider_calls: bool = Field(default=False, alias="DEMO_ALLOW_PROVIDER_CALLS")
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
