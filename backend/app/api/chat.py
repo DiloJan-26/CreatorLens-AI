@@ -139,6 +139,7 @@ def preview_chat_context_endpoint(
             project_id=project_id,
             message=payload.message,
             recent_messages=recent_messages,
+            objective=payload.objective,
         )
     except RagContextProjectNotFoundError:
         raise HTTPException(

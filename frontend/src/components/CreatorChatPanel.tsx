@@ -17,6 +17,7 @@ import {
   setChatSessionId,
 } from "@/lib/app-session";
 import type {
+  ComparisonObjective,
   ChatCitation,
   ChatMessage,
   StoredChatMessage,
@@ -42,6 +43,7 @@ export function CreatorChatPanel({
   projectId,
   indexReady,
 }: CreatorChatPanelProps) {
+  const [objective, setObjective] = useState<ComparisonObjective>("balanced");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -230,7 +232,12 @@ export function CreatorChatPanel({
 
   return (
     <section className="chat-panel" aria-label="Evidence-grounded conversation">
-      <div className="chat-top">
+      <div className="chat-top flex-wrap">
+          <label className="flex items-center gap-2 text-sm">Objective
+            <select aria-label="Comparison objective" className="max-w-full rounded-md border border-slate-300 bg-white p-2 text-sm" value={objective} disabled={isStreaming} onChange={(event) => setObjective(event.target.value as ComparisonObjective)}>
+              <option value="balanced">Balanced</option><option value="reach">Reach</option><option value="engagement">Engagement</option><option value="creative_quality">Creative quality</option>
+            </select>
+          </label>
         <span className="platform-label">
           <Icon name="shield" size={16} />
           Evidence-grounded conversation

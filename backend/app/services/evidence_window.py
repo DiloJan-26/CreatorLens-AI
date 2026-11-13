@@ -50,3 +50,10 @@ def select_evidence_window(segments: list[dict[str, Any]], *, start: float = 0.0
         window.segments.append(segment)
         previous_end = right
     return window
+
+
+def requested_verbal_window(query: str) -> float | None:
+    """The existing supported explicit first-seconds query policy."""
+    import re
+    match=re.search(r"first\s+(5|five|[1-8])\s+seconds",query,re.IGNORECASE)
+    return (5.0 if match.group(1).lower()=='five' else float(match.group(1))) if match else None

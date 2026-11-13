@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from app.insights.comparison_models import ComparisonObjective
 
 
 ChatRole = Literal["user", "assistant", "system"]
@@ -67,16 +68,24 @@ class CreateChatSessionResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    objective: ComparisonObjective | None = None
     message: str
     session_id: str | None = None
 
 
 class ChatStreamRequest(BaseModel):
+    objective: ComparisonObjective | None = None
     message: str
     session_id: str | None = None
 
 
 class Citation(BaseModel):
+    project_id: str | None = None
+    content_id: str | None = None
+    evidence_id: str | None = None
+    evidence_revision: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
     slot: str | None = None
     platform: str
     source_type: str
@@ -86,6 +95,7 @@ class Citation(BaseModel):
 
 
 class RagContext(BaseModel):
+    intelligence: dict | None = None
     project_id: str
     intent: QuestionIntent
     structured_context: str

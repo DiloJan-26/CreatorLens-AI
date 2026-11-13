@@ -224,6 +224,11 @@ export type StructuredMetricItem = {
 };
 
 export type StructuredRecommendationItem = {
+  recommendation_id?: string | null;
+  target_content_id?: string | null;
+  target_slot?: ContentSlot | null;
+  experiment?: string | null;
+  limitation?: string | null;
   recommendation: string;
   rationale: string;
   priority: "high" | "medium" | "low";
@@ -231,6 +236,8 @@ export type StructuredRecommendationItem = {
 };
 
 export type MetricStructuredAnswer = {
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "metric";
   summary: string;
   metrics: StructuredMetricItem[];
@@ -239,6 +246,9 @@ export type MetricStructuredAnswer = {
 };
 
 export type ComparisonStructuredAnswer = {
+  decision_status?: string | null;
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "comparison";
   winner: "content_1" | "content_2" | "tie" | "insufficient_evidence";
   confidence: number;
@@ -249,6 +259,9 @@ export type ComparisonStructuredAnswer = {
 };
 
 export type RecommendationStructuredAnswer = {
+  hypothetical_draft?: { target_content_id: string; recommendation_id: string; text: string; status: "hypothesis" } | null;
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "recommendation";
   summary: string;
   recommendations: StructuredRecommendationItem[];
@@ -294,7 +307,10 @@ export type ChatHistoryResponse = {
   messages: StoredChatMessage[];
 };
 
+export type ComparisonObjective = "balanced" | "reach" | "engagement" | "creative_quality";
+
 export type ChatStreamRequest = {
+  objective?: ComparisonObjective | null;
   message: string;
   session_id?: string | null;
 };

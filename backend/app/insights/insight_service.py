@@ -33,8 +33,8 @@ class CreatorInsightProjectNotFoundError(Exception):
     """Raised when a Creator Insight Summary is requested for a missing project."""
 
 
-def get_creator_insight_summary(project_id: str, objective: ComparisonObjective = ComparisonObjective.BALANCED) -> CreatorInsightSummaryResponse:
-    project = get_project_detail_record(project_id)
+def get_creator_insight_summary(project_id: str, objective: ComparisonObjective = ComparisonObjective.BALANCED, *, project_record: dict | None = None) -> CreatorInsightSummaryResponse:
+    project = project_record if project_record is not None else get_project_detail_record(project_id)
 
     if project is None:
         raise CreatorInsightProjectNotFoundError("Project not found.")

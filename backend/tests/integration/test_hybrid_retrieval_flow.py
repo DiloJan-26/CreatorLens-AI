@@ -20,6 +20,7 @@ def _evidence_records() -> list[dict[str, Any]]:
             "title": "First",
             "creator": "Creator One",
             "text": "A direct opening hook explains the result immediately.",
+            "evidence_revision": "revision-1",
             "content_hash": "a" * 64,
             "citation_label": "Content 1 hook",
         },
@@ -36,6 +37,7 @@ def _evidence_records() -> list[dict[str, Any]]:
             "title": "Second",
             "creator": "Creator Two",
             "text": "This opening builds curiosity before revealing the result.",
+            "evidence_revision": "revision-2",
             "content_hash": "b" * 64,
             "citation_label": "Content 2 transcript",
         },
@@ -75,16 +77,17 @@ def test_comparison_retrieval_returns_both_slots_and_citation_fields(monkeypatch
     assert response.retrieval_mode == RetrievalMode.BALANCED_COMPARE
     assert {chunk.slot for chunk in response.results} == {"content_1", "content_2"}
 
-    monkeypatch.setattr(
-        context_builder,
-        "get_project_detail_record",
-        lambda _project_id: {"id": "project-1", "content_items": []},
-    )
-    monkeypatch.setattr(
-        context_builder,
-        "build_structured_metadata_context",
-        lambda _project_id: "Structured metadata",
-    )
+    from app.rag import intelligence_context
+    from app.insights import insight_service
+    from app.services import semantic_service,storage_compat_service
+    project={"id":"project-1","content_items":[dict(id='item-1',project_id='project-1',slot='content_1',platform='youtube',views=1000,
+        transcript_evidence={'status':'valid','revision':'revision-1'}),dict(id='item-2',project_id='project-1',slot='content_2',platform='instagram',views=1000,
+        transcript_evidence={'status':'valid','revision':'revision-2'})]}
+    monkeypatch.setattr(context_builder,'get_project_detail_record',lambda _project_id:project)
+    monkeypatch.setattr(intelligence_context,'get_project_detail_record',lambda _project_id:project)
+    monkeypatch.setattr(insight_service,'get_transcript_segments',lambda **kwargs:[])
+    monkeypatch.setattr(semantic_service,'get_semantic_analysis',lambda *args:{'status':'unavailable'})
+    monkeypatch.setattr(storage_compat_service,'get_rag_chunks',lambda _project_id:_evidence_records())
     monkeypatch.setattr(context_builder, "retrieve_project_chunks", lambda **_kwargs: response)
     context = context_builder.build_rag_context(
         "project-1",
@@ -92,7 +95,8 @@ def test_comparison_retrieval_returns_both_slots_and_citation_fields(monkeypatch
     )
 
     assert {citation.slot for citation in context.citations} == {"content_1", "content_2"}
-    assert {citation.source_type for citation in context.citations} == {"hook", "transcript"}
+    assert {citation.source_type for citation in context.citations} == {"metadata", "hook", "transcript"}
+    assert all(citation.content_id and citation.evidence_revision for citation in context.citations)
     assert completed_runs[0]["result_chunk_ids"] == [
         chunk.chunk_id for chunk in response.results
     ]

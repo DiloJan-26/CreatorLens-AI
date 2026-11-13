@@ -15,6 +15,7 @@ from app.rag.query_router import (
 )
 from app.rag.retrieval_service import retrieve_project_chunks
 from app.services.metric_source_service import get_metric_summary
+from app.services.qdrant_service import QdrantConfigurationError
 from app.services.storage_compat_service import get_project_detail_record
 
 
@@ -51,25 +52,9 @@ def build_structured_metadata_context(project_id: str) -> str:
 
 
 def build_creator_insight_context(project_id: str) -> str:
-    try:
-        summary = get_creator_insight_summary(project_id)
-    except Exception:
-        return ""
-
-    lines = ["Creator Insight Summary:"]
-
-    if summary.content_1 is not None:
-        lines.extend(_content_insight_lines(summary.content_1))
-
-    if summary.content_2 is not None:
-        lines.extend(_content_insight_lines(summary.content_2))
-
-    lines.extend(_comparison_insight_lines(summary.comparison))
-
-    for note in summary.notes:
-        lines.append(f"- Missing metadata note: {note}")
-
-    return "\n".join(lines)
+    from app.rag.intelligence_context import build_intelligence_context,compact_prompt_context
+    context=build_intelligence_context(project_id,"Current Balanced decision")
+    return compact_prompt_context(context,"Current Balanced decision")
 
 
 def build_metric_source_context(project_id: str) -> str:
@@ -110,62 +95,73 @@ def build_rag_context(
     project_id: str,
     message: str,
     recent_messages: list[ChatMessage] | None = None,
+    objective=None,
 ) -> RagContext:
-    query = message.strip()
-
-    if not query:
-        raise RagContextValidationError("Message must not be empty.")
-
-    project = get_project_detail_record(project_id)
-
-    if project is None:
-        raise RagContextProjectNotFoundError("Project not found.")
-
-    intent = classify_question(query)
-    plan = get_retrieval_plan(intent=intent, message=query)
-    structured_context = build_structured_metadata_context(project_id)
-    retrieved_context = ""
-    citations: list[Citation] = []
-
-    retrieval_response = retrieve_project_chunks(
-        project_id=project_id,
-        request=RetrieveRequest(
-            query=query,
-            top_k=plan["top_k"],
-            platform=plan["platform"],  # type: ignore[arg-type]
-            slot=plan["slot"],  # type: ignore[arg-type]
-            source_type=plan["source_type"],  # type: ignore[arg-type]
-            retrieval_mode=plan["mode"],
-        ),
-    )
-
-    if plan["retrieve"]:
-        retrieved_context = _retrieved_context_text(retrieval_response.results)
-        citations = [_citation_from_chunk(chunk) for chunk in retrieval_response.results]
-
-        if not citations:
-            citations = _fallback_context_citations(project, structured_context)
-    else:
-        citations = _fallback_context_citations(project, structured_context)
-
-    if recent_messages:
-        history_text = _history_text(recent_messages)
-        if history_text and retrieved_context:
-            retrieved_context = f"Recent conversation:\n{history_text}\n\n{retrieved_context}"
-        elif history_text:
-            retrieved_context = f"Recent conversation:\n{history_text}"
-
-    return RagContext(
-        project_id=project_id,
-        intent=intent,
-        structured_context=structured_context,
-        retrieved_context=retrieved_context,
-        citations=citations,
-        retrieval_run_id=retrieval_response.retrieval_run_id,
-        retrieval_latency_ms=retrieval_response.retrieval_latency_ms,
-        retrieved_chunk_count=retrieval_response.total_results,
-        source_balance=_source_balance(retrieval_response.results),
-    )
+    from app.rag.intelligence_context import build_intelligence_context, compact_prompt_context, snapshot_fingerprint
+    from app.rag.query_router import is_canonical_direct_question
+    from app.services.storage_compat_service import get_rag_chunks
+    query=message.strip()
+    if not query:raise RagContextValidationError("Message must not be empty.")
+    try:intelligence=build_intelligence_context(project_id,query,objective)
+    except ValueError as exc:
+        if str(exc)=="Project not found.":raise RagContextProjectNotFoundError(str(exc)) from exc
+        raise RagContextValidationError(str(exc)) from exc
+    intent=classify_question(query)
+    plan=get_retrieval_plan(intent,query)
+    citations=[Citation.model_validate(c) for c in intelligence['citations']]
+    retrieved_context=''
+    response=None
+    if intelligence['status']=='ready' and not is_canonical_direct_question(query,intent) and plan['retrieve']:
+        try:
+            response=retrieve_project_chunks(project_id=project_id,request=RetrieveRequest(query=query,top_k=plan['top_k'],
+                platform=plan['platform'],slot=plan['slot'],source_type=plan['source_type'],retrieval_mode=plan['mode']))
+            records={r['chunk_id']:r for r in get_rag_chunks(project_id)}
+            retained=[]
+            for chunk in response.results:
+                record=records.get(chunk.chunk_id)
+                identity=(intelligence['summary']['goal_comparison'].get(chunk.slot or '') or {})
+                quality=(intelligence['content_evidence'].get(chunk.slot) or {}).get('quality',{})
+                fields=('content_id','slot','platform','source_type','text','evidence_revision','start_time','end_time','citation_label')
+                if (not record or record.get('project_id')!=project_id or not chunk.content_id or chunk.content_id!=identity.get('content_id')
+                    or chunk.platform!=identity.get('platform') or not chunk.evidence_revision or chunk.evidence_revision!=identity.get('transcript_revision')
+                    or any(record.get(k)!=getattr(chunk,k) for k in fields) or chunk.source_type not in {'hook','transcript','description'}
+                    or quality.get('status') not in {'valid','partial'}):
+                    intelligence['limitations'].append('A retrieved source was withheld because ownership, current revision, type or stored text/timing could not be verified.')
+                    continue
+                if chunk.start_time is not None or chunk.end_time is not None:
+                    duration=intelligence['content_evidence'][chunk.slot]['duration']
+                    if chunk.start_time is None or chunk.end_time is None or not 0<=chunk.start_time<chunk.end_time or duration is not None and chunk.end_time>duration:
+                        intelligence['limitations'].append('A retrieved source has invalid timestamp coverage.');continue
+                retained.append(chunk)
+                citations.append(Citation(project_id=project_id,content_id=chunk.content_id,slot=chunk.slot,platform=chunk.platform,
+                    source_type=chunk.source_type,citation_label=chunk.citation_label,text=chunk.text,evidence_id=chunk.chunk_id,
+                    evidence_revision=chunk.evidence_revision,start_time=chunk.start_time,end_time=chunk.end_time,score=chunk.score))
+            retrieved_context=_retrieved_context_text(retained)
+            if len(retrieved_context)>14000:
+                retrieved_context=retrieved_context[:14000]+"\nSource context truncated; timestamps describe actual segments, not word-level clipping."
+        except QdrantConfigurationError:
+            intelligence['limitations'].append('Vector retrieval is unavailable; only current canonical evidence is available.')
+    if intelligence['status']=='ready':
+        latest=get_project_detail_record(project_id)
+        if latest is None or snapshot_fingerprint(latest)!=intelligence['snapshot_fingerprint']:
+            intelligence.update(status='evidence_changed',summary=None,citations=[],limitations=['Evidence changed during retrieval; retry the question.'])
+            citations=[];retrieved_context=''
+    # Colliding display labels are ambiguous: retain neither source under that label.
+    by_label={}
+    for citation in citations:by_label.setdefault(citation.citation_label,[]).append(citation)
+    citations=[items[0] for items in by_label.values() if len({c.model_dump_json() for c in items})==1]
+    from app.services.evidence_window import requested_verbal_window
+    window=requested_verbal_window(query)
+    if window is not None:
+        citations=[c for c in citations if c.source_type not in {'opening','hook','transcript'} or c.start_time is not None and c.end_time is not None and 0<=c.start_time<c.end_time<=window]
+        intelligence['limitations'].append(f'Only whole timed verbal sources inside 0-{window:g}s are supplied for this question; no word-level clipping is possible. The canonical Creative Quality decision remains the full configured rubric, not a newly scored narrower-window winner.')
+    intelligence['citations']=[c.model_dump(mode='json') for c in citations]
+    return RagContext(project_id=project_id,intent=intent,intelligence=intelligence,
+        structured_context=compact_prompt_context(intelligence,query),retrieved_context=retrieved_context,
+        citations=citations,retrieval_run_id=response.retrieval_run_id if response else None,
+        retrieval_latency_ms=response.retrieval_latency_ms if response else 0,
+        retrieved_chunk_count=len([c for c in citations if c.score is not None]),
+        source_balance={slot:sum(c.slot==slot and c.score is not None for c in citations) for slot in ('content_1','content_2')})
 
 
 def _source_balance(results: list[RetrievedChunk]) -> dict[str, int]:
@@ -201,6 +197,15 @@ def build_direct_answer_if_possible(
     message: str,
     rag_context: RagContext,
 ) -> dict[str, Any] | None:
+    if rag_context.intelligence is not None:
+        from app.rag.intelligence_context import canonical_answer
+        from app.rag.query_router import is_canonical_direct_question
+        from app.llm.structured_output_service import render_structured_answer
+        no_actions=rag_context.intelligence['status']=='ready' and rag_context.intent in {'improvement_suggestions','rewrite_request'} and not canonical_answer(rag_context.intelligence,message,rag_context.intent,rag_context.citations).recommendations
+        if rag_context.intelligence['status']!='ready' or is_canonical_direct_question(message,rag_context.intent) or no_actions:
+            structured=canonical_answer(rag_context.intelligence,message,rag_context.intent,rag_context.citations)
+            return dict(answer=render_structured_answer(structured),citations=rag_context.citations,structured_answer=structured)
+        return None
     normalized_message = _normalize(message)
     project = get_project_detail_record(project_id)
 

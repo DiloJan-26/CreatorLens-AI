@@ -6,7 +6,7 @@ from app.llm.prompt_registry import PromptRegistryError, get_prompt
 def test_registry_loads_versioned_comparison_prompt() -> None:
     prompt = get_prompt("comparison")
 
-    assert prompt.version == "1.0.0"
+    assert prompt.version == "2.0.0"
     assert prompt.answer_type == "comparison"
     assert "question" in prompt.required_variables
     assert "citation_catalog" in prompt.required_variables

@@ -110,8 +110,8 @@ def retrieve_project_chunks(
             )
             return response
 
-        match = re.search(r"first\s+(5|five|[1-8])\s+seconds", query, re.IGNORECASE)
-        window_seconds = (5.0 if match and match.group(1).lower() == "five" else float(match.group(1))) if match else None
+        from app.services.evidence_window import requested_verbal_window
+        window_seconds = requested_verbal_window(query)
         evidence_records = _filtered_evidence_records(
             project_id=project_id,
             platform=request.platform,

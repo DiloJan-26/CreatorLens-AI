@@ -82,7 +82,15 @@ The insight summary adds `creator_recommendations` under `creator-recommendation
 
 Recommendations expose stable project/content IDs, observed labels, trigger rules, evidence provenance, priority breakdowns, actions, experiments and limitations. Ordinal priority combines severity, evidence support, objective relevance and actionability; overlapping interventions merge without a priority bonus. At most five actions are returned. Reach/efficiency remain descriptive where actionable creative evidence is absent; eligible Engagement can support a controlled interaction experiment without asserting a creative cause.
 
-The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. Existing Assistant generation still uses its established context and will consume the canonical contracts in the next approved upgrade. No live rollout or new migration is included in this change.
+The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. The Assistant now consumes these canonical contracts for decisions and supported experiments; legacy advice is not used as a V2 fallback. No live rollout or new migration is included in this change.
+
+## Canonical RAG Assistant
+
+The Assistant resolves Balanced, Reach, Engagement or Creative Quality from the question and optional selected objective. Deterministic metric, comparison, insight and supported-recommendation requests read the same canonical intelligence contracts as Insights, without Gemini or vector retrieval. Missing Balanced evidence still permits eligible Reach and Engagement observations.
+
+Deeper questions reuse the existing five-mode retrieval pipeline and Gemini client. Current project/content ownership, SQL source text, revisions and timestamp ranges are checked before evidence enters the prompt. Structured output is checked against canonical winners, metric values, recommendation IDs, targets and priorities; malformed or rejected output falls back to available canonical facts. Qualitative explanations remain explicitly evidence-limited, and citation matching is not claimed to prove semantic entailment.
+
+The existing SSE/history/telemetry flow remains intact. The chat UI exposes the selected objective and evidence status instead of numerical model confidence. Prompt-injection defenses treat retrieved material as untrusted data; offline mocked regressions cover these boundaries, not live model robustness. Cloud rollout remains deferred.
 
 ## Semantic creative analysis
 
