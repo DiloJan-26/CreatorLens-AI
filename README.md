@@ -720,7 +720,7 @@ This repository is provided for portfolio review and technical evaluation. See [
 
 ### Project Origin & Attribution
 
-CreatorLens AI was independently implemented as part of a technical assessment based on a project concept presented during an interview process.
+CreatorLens AI was independently implemented as part of a technical assessment based on a project concept presented.
 
 The underlying project idea was not originated by me and may have been provided to other candidates.
 
