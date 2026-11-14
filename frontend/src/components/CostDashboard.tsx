@@ -1,5 +1,6 @@
 "use client";
 
+import { useAccount } from "./AccountProvider";
 import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
@@ -15,6 +16,7 @@ import type {
 } from "@/types/cost";
 
 export function CostDashboard() {
+  const {enabled,account}=useAccount();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [scopeReady, setScopeReady] = useState(false);
   const requestVersion = useRef(0);
@@ -29,6 +31,7 @@ export function CostDashboard() {
     setError(null);
 
     try {
+      if(enabled && !projectId && account?.role!=="admin") throw new Error("Select one of your analyses to view its usage. Global analytics are administrator-only.");
       const response = await getCostMetrics(projectId);
       if (version !== requestVersion.current) return;
       setMetrics(response);
@@ -42,7 +45,7 @@ export function CostDashboard() {
     } finally {
       if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId,enabled,account]);
 
   useEffect(() => {
     const invalidateRequests = () => {

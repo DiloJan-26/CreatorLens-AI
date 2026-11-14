@@ -16,6 +16,12 @@ class ChatRepository:
         self, project_id: str, session_id: str | None = None
     ) -> dict[str, Any]:
         identifier = (session_id or "").strip() or str(uuid4())
+        existing = self.session.get(ChatSession, identifier)
+        if existing is not None:
+            if existing.project_id != project_id:
+                from fastapi import HTTPException
+                raise HTTPException(404,"Chat session not found.")
+            return self.session_record(existing)
         timestamp = utc_now()
         model = ChatSession(
             id=identifier,
@@ -41,6 +47,8 @@ class ChatRepository:
     def save_message(
         self, project_id: str, session_id: str, role: str, content: str
     ) -> dict[str, Any]:
+        if self.get_session(project_id,session_id) is None:
+            raise ValueError("Chat session does not belong to the project.")
         timestamp = utc_now()
         message = ChatMessage(
             id=str(uuid4()),
@@ -92,6 +100,9 @@ class ChatRepository:
         session_id: str,
         citations: list[dict[str, Any]],
     ) -> None:
+        message = self.session.get(ChatMessage,message_id)
+        if message is None or message.project_id != project_id or message.session_id != session_id:
+            raise ValueError("Citation parent does not belong to the project/session.")
         timestamp = utc_now()
         self.session.add_all(
             [

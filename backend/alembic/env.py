@@ -46,6 +46,16 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    supplied = config.attributes.get("connection")
+    if supplied is not None:
+        from sqlalchemy.engine import make_url
+        url = make_url(_database_url())
+        actual = supplied.engine.url
+        if context.get_x_argument(as_dictionary=True).get("database") != "test" or url.host not in {"localhost","127.0.0.1"} or url.database != "creatorlens_test" or actual.host not in {"localhost","127.0.0.1"} or actual.database != "creatorlens_test":
+            raise RuntimeError("An injected migration connection is restricted to disposable PostgreSQL tests.")
+        context.configure(connection=supplied,target_metadata=target_metadata,compare_type=True)
+        with context.begin_transaction():context.run_migrations()
+        return
     settings = get_settings()
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = _database_url()

@@ -94,3 +94,13 @@ export function setComparisonObjective(projectId: string, objective: import("@/t
   try { window.sessionStorage.setItem(`creatorlens_objective_${projectId}`, objective); } catch {}
   window.dispatchEvent(new CustomEvent("creatorlens_objective_changed", { detail: { projectId, objective } }));
 }
+
+export function clearAccountWorkspace() {
+  activeProjectId=null;chatSessionIds.clear();chatDrafts.clear();comparisonObjectives.clear();
+  if(typeof window!=="undefined") {
+    for(const storage of [window.localStorage,window.sessionStorage]) {
+      for(let i=storage.length-1;i>=0;i--) { const key=storage.key(i);if(key?.startsWith("creatorlens_")) storage.removeItem(key); }
+    }
+    dispatchProjectChanged();
+  }
+}

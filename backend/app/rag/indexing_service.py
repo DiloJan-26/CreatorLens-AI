@@ -225,6 +225,9 @@ def _stored_points_exist(chunks: list[RagChunk]) -> bool:
 
 
 def _reusable_vectors(chunks: list[RagChunk]) -> list[list[float]] | None:
+    from app.core.access import current_principal
+    if current_principal.get() is not None:
+        return None  # Shared cross-project vector reuse is disabled for private accounts.
     embedding_hashes = [
         str(chunk.embedding_hash) for chunk in chunks if chunk.embedding_hash
     ]

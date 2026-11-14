@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from datetime import datetime, UTC
 import json
 import asyncio
@@ -329,6 +330,9 @@ async def stream_chat_answer(
                 {"prompt_name": prompt.name, "prompt_version": prompt.version}
             )
         runtime_signals = get_project_runtime_signals(project_id)
+        from app.services.provider_admission import admit_current,active_operation
+        admitted_operation = admit_current(project_id,"assistant")
+        provider_handle = active_operation.set(admitted_operation)
         llm_run_id = start_llm_run(
             project_id=project_id,
             session_id=session_id,
@@ -336,7 +340,7 @@ async def stream_chat_answer(
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
             operation_type="rag_assistant_generation", execution_mode="runtime", provider_invocation_count=0,
-            telemetry=intelligence_policy_metadata(rag_context.intelligence),
+            telemetry={**intelligence_policy_metadata(rag_context.intelligence),"provider_operation_id":admitted_operation},
             prompt_name=prompt.name,
             prompt_version=prompt.version,
             retrieved_chunk_count=rag_context.retrieved_chunk_count,
@@ -422,6 +426,8 @@ async def stream_chat_answer(
                 inference_at = datetime.now(UTC)
                 provider_invocations += 1
                 llm_started_at = perf_counter()
+                from app.services.provider_admission import check_input
+                check_input(messages)
                 response = await asyncio.wait_for(llm.ainvoke(messages), timeout=35)
             except Exception:
                 if rag_context.intelligence is None:
@@ -609,6 +615,9 @@ async def stream_chat_answer(
             langsmith_trace_id=langsmith_trace_id,
         )
         yield sse_event("error", {"message": str(exc)})
+    except HTTPException as exc:
+        fail_llm_run(llm_run_id,error_code="USAGE_ADMISSION_DENIED",usage=usage,provider_invocation_count=provider_invocations,llm_latency_ms=llm_latency_ms)
+        yield sse_event("error",{"message":str(exc.detail),"status":exc.status_code,"retry_after":(exc.headers or {}).get("Retry-After")})
     except Exception:
         fail_llm_run(
             llm_run_id,
@@ -628,6 +637,12 @@ async def stream_chat_answer(
             provider_invocation_count=provider_invocations,llm_latency_ms=llm_latency_ms)
         raise
     finally:
+        if "provider_handle" in locals():
+            from app.services.provider_admission import active_operation,finish
+            try:
+                finish(admitted_operation,known_response=provider_invocations > 0 and not locals().get("provider_failure", True))
+            finally:
+                active_operation.reset(provider_handle)
         if llm_run_id is not None:
             annotate_operation(llm_run_id,usage=usage,provider_invocation_count=provider_invocations,
                 context_latency_ms=context_ms,end_to_end_latency_ms=round((perf_counter()-request_started)*1000),

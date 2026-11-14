@@ -43,8 +43,11 @@ class ExistingIngestionJobError(RuntimeError):
         self.job_id = job_id
 
 
-def start_project_ingestion(project_id: str) -> IngestionStartResponse:
+def start_project_ingestion(project_id: str, idempotency_key: str | None = None) -> IngestionStartResponse:
     settings = get_settings()
+    if settings.application_access_mode == "authenticated":
+        from app.services.admitted_ingestion import start
+        return start(project_id,idempotency_key)
     if settings.celery_broker_url is None:
         raise IngestionQueueConfigurationError("Redis is not configured.")
 

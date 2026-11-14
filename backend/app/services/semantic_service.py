@@ -51,8 +51,10 @@ def get_semantic_analysis(project_id, slot):
     key, context, _ = semantic_identity(project_id, slot)
     row = store.read_snapshot(key)
     if row is None:
+        unavailable = not any(source['source_type']=='transcript' for source in context['sources'])
         return dict(status='unavailable', snapshot_id=None, input_revision=context['input_revision'],
-            cache_hit=False, reason='No compatible semantic snapshot. Explicit queue request required.')
+            cache_hit=False, error_code='EVIDENCE_UNAVAILABLE' if unavailable else None,
+            reason='Validated transcript evidence is unavailable; semantic assessment is not assessable.' if unavailable else 'No compatible semantic snapshot. Explicit queue request required.')
     result = row['result'] if row['status'] == 'ready' else None
     # Validate persisted evidence again; storage is not a substitute for ownership checks.
     if result:
@@ -70,6 +72,22 @@ def get_semantic_analysis(project_id, slot):
 def queue_semantic_analysis(project_id, slot, *, retry_failed=False, recover_stale=False):
     key, context, _ = semantic_identity(project_id, slot)
     row = store.read_snapshot(key)
+    if get_settings().application_access_mode == "authenticated":
+        if row and row["status"] == "ready":return get_semantic_analysis(project_id,slot)
+        if recover_stale:raise ValueError("Unknown worker outcomes require administrator reconciliation.")
+        from app.services.provider_admission import paid_configuration
+        paid_configuration(get_settings(),"semantic")
+        from app.core.access import require_principal
+        from app.core.request_limits import enforce_rate
+        from app.services.account_usage import latest_reservation
+        from app.db.session import database_session
+        principal=require_principal()
+        enforce_rate(get_settings(),principal.user_id,"semantic_submission")
+        with database_session() as session:
+            reservation=latest_reservation(session,project_id)
+            if reservation is None or reservation.user_id!=principal.user_id or reservation.state not in {"reserved","processing"}:
+                from fastapi import HTTPException
+                raise HTTPException(409,"Semantic generation requires an active analysis reservation.")
     created = False
     if row is None:
         created = store.create_pending(key=key, context=context, model_id=get_settings().llm_model,
@@ -91,7 +109,22 @@ def queue_semantic_analysis(project_id, slot, *, retry_failed=False, recover_sta
     if created or row['status'] == 'pending':
         try:
             from app.workers.semantic_tasks import extract_semantic_features
-            extract_semantic_features.apply_async(args=[key], task_id=key)
+            if get_settings().application_access_mode == "authenticated":
+                from app.db.session import database_session
+                from app.db.models.account import DispatchOutbox
+                from app.services.account_usage import latest_reservation
+                from app.workers.dispatch_outbox import dispatch
+                with database_session() as session:
+                    reservation=latest_reservation(session,project_id)
+                    if reservation is None:raise ValueError("Analysis admission required.")
+                    outbox=session.get(DispatchOutbox,key)
+                    if outbox is not None and created and outbox.state=="claimed":
+                        outbox.state="pending";outbox.attempts=0
+                    if outbox is None:
+                        session.add(DispatchOutbox(id=key,reservation_id=reservation.id,task_name="creatorlens.semantic_features",argument=key,state="pending"))
+                dispatch(only_id=key)
+            else:
+                extract_semantic_features.apply_async(args=[key], task_id=key)
         except Exception:
             store.transition(key, 'pending', 'failed', error_code='QUEUE_UNAVAILABLE')
     return get_semantic_analysis(project_id, slot)
@@ -102,6 +135,8 @@ async def _invoke(context, prompt):
     messages = [('system', prompt['system_prompt']), ('human', json.dumps({'schema': CreativeFeatures.model_json_schema(), 'input':context}, ensure_ascii=False))]
     state=_INVOCATION.get()
     if state is not None: state.update(count=1,started=perf_counter(),inference_at=datetime.now(UTC))
+    from app.services.provider_admission import check_input
+    check_input(messages + [json.dumps(CreativeFeatures.model_json_schema())])
     return await asyncio.wait_for(llm.ainvoke(messages, response_mime_type="application/json", response_schema=CreativeFeatures.model_json_schema()), timeout=65)
 
 
@@ -122,9 +157,10 @@ def process_semantic_snapshot(key):
         current_key, current_context, prompt = semantic_identity(row['project_id'], row['slot'])
         if current_key != key:
             raise ValueError('STALE_INPUT')
+        from app.services.provider_admission import active_operation
         run_id = start_llm_run(project_id=row['project_id'], llm_provider='gemini', llm_model=row['model_id'],
             prompt_name=OPERATION, prompt_version=PROMPT_VERSION,operation_type=OPERATION,execution_mode="runtime",provider_invocation_count=0,
-            telemetry={"content_id":row["content_id"],"slot":row["slot"],"snapshot_id":key,"operation_version":"1.0.0","policy_versions":{"creative":CREATIVE_POLICY,"schema":SCHEMA_VERSION,"prompt":PROMPT_VERSION}})
+            telemetry={"provider_operation_id":active_operation.get(),"content_id":row["content_id"],"slot":row["slot"],"snapshot_id":key,"operation_version":"1.0.0","policy_versions":{"creative":CREATIVE_POLICY,"schema":SCHEMA_VERSION,"prompt":PROMPT_VERSION}})
         with OptionalTrace('creatorlens.semantic_features', run_type='llm', inputs={'snapshot_id':key},
             metadata={'operation_type':OPERATION,'project_id':row['project_id'],'content_id':row['content_id'],
                       'prompt_version':PROMPT_VERSION,'model':row['model_id']}) as span:

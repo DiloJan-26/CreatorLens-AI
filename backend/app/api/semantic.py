@@ -6,6 +6,8 @@ router = APIRouter(prefix='/api/projects/{project_id}/semantic', tags=['Creator 
 def _call(operation, project_id, slot, **kwargs):
     try:
         return operation(project_id, slot, **kwargs)
+    except HTTPException:
+        raise
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from None
     except ValueError:

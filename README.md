@@ -24,16 +24,24 @@ The same workflow is observable end to end through persisted retrieval and LLM r
 
 ## Project status
 
-**The planned CreatorLens AI V2 implementation is complete and deployed.** Backend, frontend, ingestion workers, structured RAG, evaluation, LLM observability, and CI/CD reliability controls have completed local, GitHub-hosted, and deployed smoke acceptance.
+**This checkout includes the V2 intelligence engine and a local authentication/ownership integration.** The new account migration, hosted Google OAuth flow and coordinated deployment have not yet passed live acceptance. Local offline checks are distinct from production verification. Interactive access stays disabled by default; paid operations require separately approved limits and cost coverage.
 
 | Delivery area | Accepted state |
 | --- | --- |
-| Product experience | Deployed analysis, evidence, structured chat, evaluation, and LLMOps views |
+| Product experience | Implemented analysis, evidence, structured chat, evaluation, LLMOps and account views; current-checkout cloud acceptance pending |
 | Backend platform | FastAPI APIs, durable PostgreSQL state, hybrid retrieval, structured generation, and observability |
 | Async ingestion | Redis-backed Celery processing on Azure Container Apps with persisted progress and graceful partial readiness |
-| Quality engineering | 114 unit tests, eight integration tests, deterministic evaluation smoke suite, and migration validation |
+| Quality engineering | Offline backend/frontend regressions, synthetic authentication/security tests, deterministic evaluation and disposable-PostgreSQL CI gates; see current local report |
 | Delivery controls | Required backend, frontend, evaluation, and Docker checks enforced on production pull requests |
 | Protection acceptance | Successful changes are admitted; intentional backend and frontend failures are confirmed to block merging |
+
+## Authenticated application access
+
+Supabase manages Google OAuth and sessions; FastAPI verifies ES256 access JWTs against configured public JWKS. Application profiles, nullable project ownership, five lifetime analysis credits and durable operation reservations stay in PostgreSQL. Historical ownerless projects remain quarantined. No service-role key or client-supplied owner is used.
+
+Enable `APPLICATION_ACCESS_MODE=authenticated` explicitly on the API and worker only after reviewing the example configuration and additive migration `20261114_0012`. Configure both frontend access-mode settings consistently. Paid operations default to off; unknown pricing and zero rate/budget bounds fail closed. Authenticated paid extraction is additionally blocked until the existing fallback providers have reviewed, enforceable duration/retry/pricing bounds. No configuration or cloud deployment was performed by the local implementation.
+
+From `frontend/`, run `npm run test:auth` for mocked SDK/transport checks and `npm run test:ui` for presentation contracts. These do not prove live Google login or browser acceptance. The detailed local handoff is in `docs/CreatorLens-Intelligence-v2/Phase-10C-Authentication-Implementation.md`; `docs/` remains ignored unless you explicitly choose to track selected documents.
 
 ## Engineering highlights
 

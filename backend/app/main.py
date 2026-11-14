@@ -178,6 +178,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.api.account import router as account_router
+app.include_router(account_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(ingestion_router)
@@ -193,4 +195,4 @@ app.include_router(evaluations_router)
 @app.get('/api/demo/capabilities', include_in_schema=False)
 def demo_capabilities():
     from app.core.demo_access import provider_calls_enabled
-    return {'access': 'local_only', 'provider_calls_enabled': provider_calls_enabled(get_settings())}
+    return {'access': 'authenticated' if get_settings().application_access_mode == 'authenticated' else 'local_only', 'provider_calls_enabled': (get_settings().paid_operations_enabled if get_settings().application_access_mode == 'authenticated' else provider_calls_enabled(get_settings()))}

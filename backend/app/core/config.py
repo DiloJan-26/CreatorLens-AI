@@ -2,7 +2,7 @@ from typing import Literal
 from functools import lru_cache
 from app.core.model_policy import DEFAULT_GEMINI_MODEL
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,11 +11,54 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     environment: str = Field(default="local", alias="ENVIRONMENT")
     demo_access_mode: Literal["disabled", "local"] = Field(default="disabled", alias="DEMO_ACCESS_MODE")
     demo_allow_provider_calls: bool = Field(default=False, alias="DEMO_ALLOW_PROVIDER_CALLS")
+    application_access_mode: Literal["disabled", "authenticated"] = Field(default="disabled", alias="APPLICATION_ACCESS_MODE")
+    supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
+    supabase_jwt_issuer: str | None = Field(default=None, alias="SUPABASE_JWT_ISSUER")
+    supabase_jwks_url: str | None = Field(default=None, alias="SUPABASE_JWKS_URL")
+    supabase_jwt_audience: str = Field(default="authenticated", alias="SUPABASE_JWT_AUDIENCE")
+    authenticated_requests_per_minute: int = Field(default=0, alias="AUTHENTICATED_REQUESTS_PER_MINUTE", ge=0)
+    analysis_requests_per_minute: int = Field(default=0, alias="ANALYSIS_REQUESTS_PER_MINUTE", ge=0)
+    paid_requests_per_minute: int = Field(default=0, alias="PAID_REQUESTS_PER_MINUTE", ge=0)
+    provider_input_byte_limit: int = Field(default=0, alias="PROVIDER_INPUT_BYTE_LIMIT", ge=0, le=131072)
+    paid_operations_enabled: bool = Field(default=False, alias="PAID_OPERATIONS_ENABLED")
+    user_budget_usd: str = Field(default="0", alias="USER_BUDGET_USD")
+    global_budget_usd: str = Field(default="0", alias="GLOBAL_BUDGET_USD")
+    provider_operation_ceiling_usd: str = Field(default="0", alias="PROVIDER_OPERATION_CEILING_USD")
+
+    @model_validator(mode="after")
+    def validate_authenticated_configuration(self):
+        if self.application_access_mode != "authenticated":
+            return self
+        from urllib.parse import urlsplit
+        from decimal import Decimal
+        base = (self.supabase_url or "").rstrip("/")
+        parsed = urlsplit(base)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.path or parsed.query or parsed.username:
+            raise ValueError("Authenticated mode requires a trusted HTTPS Supabase origin.")
+        if self.supabase_jwt_issuer != base + "/auth/v1" or self.supabase_jwks_url != base + "/auth/v1/.well-known/jwks.json":
+            raise ValueError("Supabase issuer and JWKS must match the configured origin.")
+        if self.supabase_jwt_audience != "authenticated" or not self.database_url or not self.redis_url:
+            raise ValueError("Authenticated mode requires the authenticated audience, PostgreSQL and Redis.")
+        if not self.database_url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://")):
+            raise ValueError("Authenticated mode requires PostgreSQL persistence.")
+        if self.demo_access_mode != "disabled":
+            raise ValueError("Authenticated access cannot enable the legacy local demo bypass.")
+        for value in (self.user_budget_usd, self.global_budget_usd, self.provider_operation_ceiling_usd):
+            number = Decimal(value)
+            if not number.is_finite() or number < 0:
+                raise ValueError("Budget values must be finite and nonnegative.")
+        if self.paid_operations_enabled and (not self.paid_requests_per_minute or any(Decimal(v) <= 0 for v in (self.user_budget_usd, self.global_budget_usd, self.provider_operation_ceiling_usd))):
+            raise ValueError("Paid operations require explicit nonzero rate and budget bounds.")
+        if not self.authenticated_requests_per_minute:
+            raise ValueError("Authenticated mode requires an explicitly configured request rate.")
+        return self
+
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")

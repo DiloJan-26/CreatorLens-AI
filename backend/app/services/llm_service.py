@@ -25,7 +25,9 @@ def get_llm(
     error=model_configuration_error(settings)
     if error:raise LLMConfigurationError(error)
     from app.core.demo_access import provider_calls_enabled
-    if not provider_calls_enabled(settings):
+    from app.services.provider_admission import active_operation
+    permitted = provider_calls_enabled(settings) or (settings.application_access_mode == "authenticated" and settings.paid_operations_enabled and active_operation.get() is not None)
+    if not permitted:
         raise LLMConfigurationError('Provider inference is disabled for this restricted demo.')
     provider = settings.llm_provider.strip().lower()
 

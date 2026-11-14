@@ -23,7 +23,12 @@ def test_sse_preserves_canonical_answer_and_tracks_real_execution(monkeypatch,mo
     question='Who wins under Reach?' if mode=='deterministic' else 'Why is this hook clearer?'
     expected_context=intelligence_context.build_intelligence_context(PROJECT,question,'reach')
     expected=intelligence_context.canonical_answer(expected_context,question,'performance_reasoning' if mode=='deterministic' else 'hook_analysis')
-    counts={'invoke':0,'provider':[],'complete':[],'failed':[],'cost':[],'messages':[],'citations':[]}
+    counts={'admissions':0,'invoke':0,'provider':[],'complete':[],'failed':[],'cost':[],'messages':[],'citations':[]}
+    from app.services import provider_admission
+    def admit(*args,**kwargs):
+        counts['admissions']+=1
+        return None  # Synthetic generation only; no real quota/database admission.
+    monkeypatch.setattr(provider_admission,'admit_current',admit)
     monkeypatch.setattr(chat_service,'create_or_get_session',lambda **kwargs:ChatSession(session_id='session',project_id=PROJECT,created_at='now',updated_at='now'))
     def add(**kwargs):
         counts['messages'].append(kwargs)
@@ -65,9 +70,12 @@ def test_sse_preserves_canonical_answer_and_tracks_real_execution(monkeypatch,mo
     assert bool(counts['citations'])==(mode!='changed')
     assert 'Confidence:' not in counts['messages'][1]['content']
     if mode=='deterministic':
+        assert counts['admissions']==0
         assert counts['invoke']==0 and counts['provider'][0]['llm_provider']=='internal'
         assert counts['cost'][0]['usage'].total_tokens==0
     else:
+        assert counts['admissions']==1
+        assert 'provider_operation_id' in counts['provider'][0]['telemetry']
         assert counts['invoke']==1 and counts['provider'][0]['llm_provider']=='gemini'
         if mode=='timeout':
             assert counts['failed'][0]['error_code']=='ASSISTANT_PROVIDER_FAILURE'

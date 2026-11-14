@@ -66,10 +66,15 @@ class ContentItemRepository:
     def find_reusable_by_normalized_url(
         self, normalized_url: str
     ) -> ContentItem | None:
+        from app.core.access import current_principal
+        from app.db.models.project import Project
+        principal = current_principal.get()
+        ownership = ContentItem.project_id.in_(select(Project.id).where(Project.owner_user_id == principal.user_id)) if principal else True
         return self.session.scalar(
             select(ContentItem)
             .where(
                 ContentItem.normalized_url == normalized_url,
+                ownership,
                 ContentItem.extraction_status.in_(["ready", "partial"]),
                 ContentItem.transcript_available.is_(True),
                 ContentItem.content_hash.is_not(None),

@@ -1,5 +1,6 @@
 "use client";
 
+import { useAccount } from "./AccountProvider";
 import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -28,6 +29,7 @@ const QUALITY_METRICS = [
 ] as const;
 
 export function EvaluationDashboard() {
+  const {enabled,account}=useAccount();
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [datasets, setDatasets] = useState<EvaluationDatasetSummary[]>([]);
   const [runs, setRuns] = useState<EvaluationRunSummary[]>([]);
@@ -45,9 +47,10 @@ export function EvaluationDashboard() {
     try {
       const [datasetResponse, runResponse] = await Promise.all([
         getEvaluationDatasets(),
-        getEvaluationRuns(),
+        !enabled || account?.role==="admin" ? getEvaluationRuns() : Promise.resolve([]),
       ]);
       setDatasets(datasetResponse);
+      if(enabled && account?.role!=="admin")setError("Bundled benchmark descriptions are available. System evaluation run history is administrator-only; no private project evaluations have been created.");
       setRuns(runResponse);
       setSelectedRunId((current) =>
         runResponse.some((r) => r.id === current)
@@ -60,7 +63,7 @@ export function EvaluationDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [enabled,account]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {

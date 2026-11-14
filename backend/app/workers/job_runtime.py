@@ -69,6 +69,13 @@ def retry_or_fail_job(
 ) -> None:
     settings = get_settings()
     safe_message = safe_worker_error(exc, fallback=fallback_message)
+    if settings.application_access_mode == "authenticated":
+        from app.services.account_usage import latest_reservation,settle
+        with database_session() as session:
+            reservation=latest_reservation(session,project_id)
+            if reservation: settle(session,reservation.id,"needs_reconciliation")
+            JobRepository(session).fail(job_id,error_code="NEEDS_RECONCILIATION",error_message="Provider/worker outcome requires review; no automatic paid retry.")
+        raise WorkerTaskFailedError("Provider/worker outcome requires reconciliation.") from None
     next_retry = int(task.request.retries) + 1
 
     if int(task.request.retries) < settings.celery_max_retries:

@@ -1,3 +1,4 @@
+from app.workers.owned_execution import owned_task
 import logging
 from uuid import uuid4
 
@@ -27,6 +28,7 @@ class EmptyEvidenceError(RuntimeError):
     bind=True,
     name="creatorlens.ingest_project",
 )
+@owned_task("extraction")
 def ingest_project_task(self, job_id: str) -> dict[str, str]:
     from app.core.demo_access import require_local_worker
     require_local_worker()
@@ -71,12 +73,21 @@ def ingest_project_task(self, job_id: str) -> dict[str, str]:
 
         from app.workers.indexing_tasks import index_project_task
 
-        index_task_id = str(uuid4())
-        set_job_task_id(job_id, index_task_id)
-        index_project_task.apply_async(
-            args=[job_id],
-            task_id=index_task_id,
-        )
+        from app.core.config import get_settings
+        if get_settings().application_access_mode == "authenticated":
+            from app.db.session import database_session
+            from app.services.account_usage import latest_reservation
+            from app.workers.owned_execution import queue_index
+            with database_session() as session:
+                reservation_id=latest_reservation(session,project_id).id
+            queue_index(reservation_id,job_id)
+        else:
+            index_task_id = str(uuid4())
+            set_job_task_id(job_id, index_task_id)
+            index_project_task.apply_async(
+                args=[job_id],
+                task_id=index_task_id,
+            )
         logger.info(
             "Worker extraction completed and indexing queued job_id=%s "
             "project_id=%s total_chunks=%s",

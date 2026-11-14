@@ -3096,3 +3096,7 @@ details > summary::marker {
     display: none;
   }
 }
+
+.account-menu {display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;max-width:100%;}
+.account-menu a {font-weight:600;max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+@media(max-width:640px){.account-menu {gap:.4rem;font-size:.875rem}.account-menu>span{display:none}.account-menu .button-secondary{padding:.4rem .6rem;min-height:40px}.account-menu a{max-width:7rem}}

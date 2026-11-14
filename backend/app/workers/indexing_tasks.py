@@ -1,3 +1,4 @@
+from app.workers.owned_execution import owned_task
 import logging
 
 from app.rag.indexing_service import index_project
@@ -49,6 +50,7 @@ def completion_status_for_content(
     bind=True,
     name="creatorlens.index_project",
 )
+@owned_task("index")
 def index_project_task(self, job_id: str) -> dict[str, str]:
     from app.core.demo_access import require_local_worker
     require_local_worker()

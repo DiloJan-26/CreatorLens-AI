@@ -23,6 +23,23 @@ class DemoAccessMiddleware:
         if scope['type'] == 'http' and scope['path'] == '/health' and scope['method'] in {'GET', 'HEAD'}:
             return await JSONResponse({'status': 'ok', 'service': 'creatorlens-api'})(scope, receive, send)
         settings = get_settings()
+        if settings.application_access_mode == 'authenticated':
+            if scope['type'] != 'http':
+                return await send({'type':'websocket.close','code':1008})
+            from starlette.concurrency import run_in_threadpool
+            from fastapi import HTTPException
+            from app.core.authenticated_access import authenticate_request
+            from app.core.access import current_principal
+            try:
+                principal = await run_in_threadpool(authenticate_request,scope,settings)
+            except HTTPException as exc:
+                return await JSONResponse({'detail':exc.detail},status_code=exc.status_code,headers=exc.headers)(scope,receive,send)
+            scope['state'] = {**scope.get('state',{}),'principal':principal}
+            handle = current_principal.set(principal)
+            try:
+                return await self.app(scope,receive,send)
+            finally:
+                current_principal.reset(handle)
         host = (scope.get('client') or ('', 0))[0]
         try:
             loopback = ip_address(host).is_loopback
@@ -54,6 +71,11 @@ class DemoAccessMiddleware:
 
 def require_local_worker():
     """Never let a nonlocal demo worker execute pending jobs without a trusted boundary."""
-    if get_settings().environment not in {'local', 'test'}:
+    settings = get_settings()
+    if settings.application_access_mode == "authenticated":
+        from app.core.access import require_principal
+        require_principal()
+        return
+    if settings.environment not in {'local', 'test'}:
         from celery.exceptions import Reject
         raise Reject('Cloud demo worker is restricted; keep workers stopped until access approval.', requeue=True)

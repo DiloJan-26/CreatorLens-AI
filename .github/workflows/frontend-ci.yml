@@ -41,7 +41,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -56,6 +56,9 @@ jobs:
 
       - name: Verify intelligence presentation contracts
         run: npm run test:ui
+
+      - name: Verify authentication transport and account contracts
+        run: npm run test:auth
 
       - name: Build frontend
         run: npm run build

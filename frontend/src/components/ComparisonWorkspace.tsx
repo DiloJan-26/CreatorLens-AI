@@ -1,5 +1,7 @@
 "use client";
 
+import { useAccount } from "./AccountProvider";
+import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
 import Link from "next/link";
 import { GoalComparisonPanel } from "./GoalComparisonPanel";
 import { SemanticAnalysisPanel } from "./SemanticAnalysisPanel";
@@ -54,6 +56,7 @@ const INITIAL_PROGRESS_STEPS: AnalysisProgressStep[] = [
 ];
 
 export function ComparisonWorkspace() {
+  const {enabled,account,refresh}=useAccount();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
   useEffect(() => {
@@ -329,6 +332,8 @@ export function ComparisonWorkspace() {
   }, [resetWorkspaceState, restoreProject, startNew]);
 
   async function handleAnalyzeContent() {
+    if(enabled && account?.usage.completed===5){window.dispatchEvent(new Event("creatorlens_quota_exhausted"));return;}
+    if(enabled && account && account.usage.reserved>0){setError("One analysis is already active. Open it from Your analyses before submitting another.");return;}
     setIsSubmitting(true);
     setShowProgress(true);
     setProgressSteps(resetProgressSteps());
@@ -352,6 +357,7 @@ export function ComparisonWorkspace() {
       setProgressStatus("detect", "complete");
 
       const started = await startProjectIngestion(created.project_id);
+      await refresh();
       setActiveIngestion({
         projectId: created.project_id,
         jobId: started.job_id,
@@ -360,6 +366,7 @@ export function ComparisonWorkspace() {
       failRunningSteps();
       setError(getErrorMessage(caughtError));
       setIsSubmitting(false);
+      if(enabled)void refresh();
     }
   }
 
@@ -513,6 +520,7 @@ export function ComparisonWorkspace() {
       </div>
       {hasResults && (
         <>
+          {projectDetail && <AnalysisAllowancePanel projectId={projectDetail.project_id}/>}
           {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} />}
           <nav className="section-tabs" aria-label="Comparison sections">
             {[
