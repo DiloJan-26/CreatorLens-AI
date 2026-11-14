@@ -718,21 +718,12 @@ Cost controls before accidental scale.
 
 This repository is provided for portfolio review and technical evaluation. See [LICENSE](LICENSE) for usage terms.
 
+### Project Origin & Attribution
 
+CreatorLens AI was independently implemented as part of a technical assessment based on a project concept presented during an interview process.
 
-## Restricted demonstration and final integration
+The underlying project idea was not originated by me and may have been provided to other candidates.
 
-The local integration connects canonical Balanced, Reach, Engagement and Creative Quality decisions to the workspace and Assistant. Versioned metric/semantic scores, evidence-bound recommendations and explicit semantic status controls preserve missing-data semantics. Semantic generation never runs on page load; model/provider operations remain disabled by default.
+The implementation presented in this repository represents my own independently developed engineering work, except for clearly identified third-party components and dependencies.
 
-The server now defaults to `DEMO_ACCESS_MODE=disabled`: only minimal process health is public. Project data, transcripts, chat/history, evaluation runs, telemetry, API documentation and paid actions are denied before handlers. Explicit local mode requires a local/test environment, loopback client/Host and a permitted local Origin. This is a local demonstration boundary, not user authentication or a verified Internet gateway. Nonlocal workers reject/requeue before work and must remain stopped under this policy.
-
-**An interactive Internet demo and public multi-user inference are blocked.** No trusted gateway is configured by this repository. Google identity, project ownership, quotas, rate limits and spending enforcement remain a separately authorized future implementation. Do not put private shared access secrets or provider keys in browser JavaScript. These source safeguards have not been deployed by this change.
-
-A fully offline synthetic demonstration is available from `backend/`:
-
-```powershell
-.\.venv\Scripts\python.exe -m app.evaluations.demo_report
-.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2 --strict
-```
-
-It uses authored fixtures and mocked semantic labels; it does not demonstrate live Gemini accuracy or actual extraction. From `frontend/`, run `npm run test:ui` for synthetic server-render contracts, followed by lint, typecheck and build. Server-render assertions are not browser visual verification. Normal Python tests block external provider networking; guarded disposable PostgreSQL tests remain separate CI checks. The worker build workflow now records commit-SHA image identity and digest for coordinated release review.
+No exclusive ownership is claimed over the original project concept, assessment requirements, project name, or independently developed implementations by others.

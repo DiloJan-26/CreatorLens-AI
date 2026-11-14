@@ -1,31 +1,37 @@
+
 CreatorLens AI — Proprietary Source-Available License
 
 Copyright © 2026 Dilojan Ravindrarasa. All Rights Reserved.
 
-CreatorLens AI and its original source code, documentation, architecture, and other original materials contained in this repository are proprietary works owned by Dilojan Ravindrarasa, except for third-party components that are subject to their respective licenses.
+The original source code, documentation, visual assets, and other original copyrightable materials contained in this repository that were independently developed by and are owned by Dilojan Ravindrarasa are proprietary works protected under applicable copyright laws, except for third-party components subject to their respective licenses and ownership rights.
+
+This license applies only to original materials for which the copyright holder possesses the necessary rights. No exclusive ownership is claimed over underlying project ideas, concepts, requirements, algorithms, general system architectures, functional methods, project names, or independently developed implementations of similar concepts.
 
 This repository is made publicly accessible primarily for portfolio review, technical evaluation, educational inspection, and demonstration of the author's software engineering and AI engineering work.
 
-Permission is granted to view and inspect the contents of this repository for those purposes.
+Permission is granted to view and inspect the contents of this repository for those purposes, subject to applicable law and GitHub's Terms of Service.
 
-Except where required by applicable law or permitted by the terms of the platform hosting this repository, no additional rights are granted.
+Except where required by applicable law, permitted by the terms of the platform hosting this repository, or authorized in writing by the copyright holder, no additional rights are granted.
 
-Without prior written permission from the copyright holder, you may not:
+Without prior written permission from the copyright holder, and subject to the exceptions stated above, you may not:
 
-- reproduce or redistribute substantial portions of the original source code;
-- modify, adapt, or create derivative products based substantially on the original source code;
-- publish or redistribute copies or modified versions of the original source code;
-- use the original source code, or substantial portions of it, in a commercial product or service;
-- sell, sublicense, commercially exploit, or otherwise commercially distribute the original source code;
-- represent the original work as your own.
+- reproduce or redistribute protected original source code or other copyrighted materials;
+- modify, adapt, or create derivative works based on protected original materials;
+- publish or redistribute copies or modified versions of protected original source code;
+- incorporate protected original source code into another application, product, or service;
+- use protected original source code in an unauthorized commercial product or service;
+- sell, sublicense, commercially exploit, or otherwise commercially distribute protected original materials;
+- remove copyright notices or falsely represent the original work as your own.
+
+These restrictions do not prohibit the independent development of software implementing similar ideas, requirements, functionality, or general architectural concepts without copying protected original expression.
 
 Public availability of this repository does not constitute a grant of an open-source license.
 
-Use of GitHub functionality, including viewing and forking public repositories, remains subject to GitHub's applicable Terms of Service. No rights beyond those required by the hosting platform or expressly granted in this license are granted by the copyright holder.
+Use of GitHub functionality, including viewing and forking public repositories, remains subject to GitHub's applicable Terms of Service. No rights beyond those required by the hosting platform, applicable law, or expressly granted in this license are granted by the copyright holder.
 
-Third-party libraries, frameworks, dependencies, APIs, trademarks, and other third-party materials referenced or used by this project remain subject to their respective licenses and terms.
+Third-party libraries, frameworks, dependencies, APIs, datasets, trademarks, and other third-party materials referenced or used by this project remain subject to their respective licenses and terms. This license does not supersede third-party rights or grant any trademark rights.
 
-THE SOFTWARE AND MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+THE SOFTWARE AND MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
 
 For permission regarding reuse, licensing, commercial use, or redistribution, contact the copyright holder through the contact information provided in this repository.
 
