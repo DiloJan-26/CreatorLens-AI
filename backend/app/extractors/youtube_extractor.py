@@ -97,6 +97,8 @@ def extract_hashtags(
 
 
 def fetch_youtube_info(url: str) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -119,6 +121,8 @@ def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
     Returns a dict with the same keys normalize_metadata expects from yt-dlp,
     so the rest of the pipeline works unchanged.
     """
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     with httpx.Client(timeout=15.0) as client:
         video_resp = client.get(
             f"{_YT_API_BASE}/videos",
@@ -173,6 +177,8 @@ def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
 
 
 def _fetch_subscriber_count(channel_id: str, api_key: str) -> int | None:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     try:
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(
@@ -453,6 +459,8 @@ def _known_mismatch(result: TranscriptionResult) -> bool:
 
 
 def _select_caption_items(video_id: str, original_audio_language: str | None = None):
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     requested = get_settings().transcript_fallback_language_list or ["en", "hi", "ta"]
     preferred = [original_audio_language] if original_audio_language else requested
     provenance = {"requested_languages": requested, "original_audio_language": original_audio_language,

@@ -1,0 +1,9 @@
+{
+  "policy_version": "extraction-prepaid-1.0.0",
+  "entries": [
+    {"provider":"supadata","operation":"metadata","endpoint":"/v1/metadata","tier":"free_prepaid","billing_unit":"credit","quantity_per_request":1,"currency":"USD","subscription_usd":"0","included_credits":100,"effective_from":"2026-11-14","effective_through":"2026-11-14","verified_on":"2026-11-14","source_url":"https://supadata.ai/pricing"},
+    {"provider":"supadata","operation":"native_transcript","endpoint":"/v1/transcript","tier":"free_prepaid","billing_unit":"credit","quantity_per_request":1,"currency":"USD","subscription_usd":"0","included_credits":100,"effective_from":"2026-11-14","effective_through":"2026-11-14","verified_on":"2026-11-14","source_url":"https://supadata.ai/pricing"},
+    {"provider":"supadata","operation":"metadata","endpoint":"/v1/metadata","tier":"pro_monthly_prepaid","billing_unit":"credit","quantity_per_request":1,"currency":"USD","subscription_usd":"17","included_credits":3000,"effective_from":"2026-11-14","effective_through":"2026-11-14","verified_on":"2026-11-14","source_url":"https://supadata.ai/pricing"},
+    {"provider":"supadata","operation":"native_transcript","endpoint":"/v1/transcript","tier":"pro_monthly_prepaid","billing_unit":"credit","quantity_per_request":1,"currency":"USD","subscription_usd":"17","included_credits":3000,"effective_from":"2026-11-14","effective_through":"2026-11-14","verified_on":"2026-11-14","source_url":"https://supadata.ai/pricing"}
+  ]
+}

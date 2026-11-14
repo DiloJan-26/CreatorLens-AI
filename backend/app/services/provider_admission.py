@@ -24,10 +24,8 @@ def paid_configuration(settings,kind):
     if ceiling<=0 or Decimal(settings.user_budget_usd)<=0 or Decimal(settings.global_budget_usd)<=0:
         raise HTTPException(403,"Approved nonzero spending bounds are required.")
     if kind=="extraction":
-        # Current fallback providers can bill by media duration, actor work or credits.
-        # No verified bounded tariff exists for the complete chain. A configured
-        # dollar number alone is not cost coverage; keep this exposure closed.
-        raise HTTPException(403,"Paid extraction is disabled until provider-specific duration, retry and pricing bounds are implemented and approved.")
+        from app.extraction.policy import configuration
+        configuration(settings)
     else:
         price=resolve_price(load_pricing_registry(),settings.llm_provider,settings.llm_model,settings.llm_estimate_service_tier,datetime.now(UTC).date())
         if not price or not settings.provider_input_byte_limit:
@@ -42,6 +40,8 @@ def paid_configuration(settings,kind):
 def admit(session,principal,project_id,kind,*,slot="",snapshot_id=None,settings=None,rate=True):
     settings=settings or get_settings()
     ceiling=paid_configuration(settings,kind)
+    if kind=="extraction":
+        raise HTTPException(403,"Use provider-specific per-slot extraction admission.")
     if rate: enforce_rate(settings,principal.user_id,"paid")
     owned_project(session,project_id,principal)
     user=session.get(AppUser,principal.user_id)

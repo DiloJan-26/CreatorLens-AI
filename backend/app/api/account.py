@@ -54,4 +54,6 @@ def project_usage(project_id:str):
         owned_project(session,project_id,principal)
         reservation=latest_reservation(session,project_id)
         operations=session.scalars(select(ProviderOperation).where(ProviderOperation.project_id==project_id,ProviderOperation.user_id==principal.user_id)).all()
-        return {"analysis_state":reservation.state if reservation else "not_started","completion_mode":reservation.completion_mode if reservation else None,"assistant_remaining":max(0,3-sum(op.kind=="assistant" for op in operations if reservation and op.reservation_id==reservation.id)),"semantic_remaining":{slot:max(0,2-sum(op.kind=="semantic" and op.slot==slot for op in operations if reservation and op.reservation_id==reservation.id)) for slot in ("content_1","content_2")}}
+        from app.extraction.accounting import public_operation
+        extraction_operations=[public_operation(op) for op in operations if op.kind in {"extraction","extraction_metadata"} and op.provider_details]
+        return {"extraction_operations":extraction_operations,"analysis_state":reservation.state if reservation else "not_started","completion_mode":reservation.completion_mode if reservation else None,"assistant_remaining":max(0,3-sum(op.kind=="assistant" for op in operations if reservation and op.reservation_id==reservation.id)),"semantic_remaining":{slot:max(0,2-sum(op.kind=="semantic" and op.slot==slot for op in operations if reservation and op.reservation_id==reservation.id)) for slot in ("content_1","content_2")}}

@@ -54,13 +54,13 @@ def settle(session,reservation_id,target,*,completion_mode=None,verified_no_acti
         reservation.state=target
     elif target == "completed":
         if completion_mode not in {"semantic","metrics_only"}: raise HTTPException(409,"An explicit completion mode is required.")
-        if session.scalar(select(ProviderOperation.id).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.state.in_(["admitted","needs_reconciliation"]))):
+        if session.scalar(select(ProviderOperation.id).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.state.in_(["admitted","running","needs_reconciliation"]))):
             raise HTTPException(409,"Provider work must settle before completion.")
         entitlement.reserved-=1;entitlement.consumed+=1
         reservation.state=target;reservation.completion_mode=completion_mode
     elif target in {"failed","cancelled","expired"}:
         operations=session.scalars(select(ProviderOperation).where(ProviderOperation.reservation_id==reservation.id)).all()
-        if not verified_no_active_work or any(op.state in {"admitted","needs_reconciliation"} for op in operations):
+        if not verified_no_active_work or any(op.state in {"admitted","running","needs_reconciliation"} for op in operations):
             raise HTTPException(409,"Work/provider outcomes require reconciliation before releasing a credit.")
         entitlement.reserved-=1;reservation.state=target
     else: raise HTTPException(422,"Invalid settlement.")
@@ -73,6 +73,11 @@ def complete_owned_analysis(session,principal,project_id,metrics_only):
     project=owned_project(session,project_id,principal)
     reservation=latest_reservation(session,project_id)
     if not reservation or reservation.user_id != principal.user_id: raise HTTPException(404,"Reservation not found.")
+    if reservation.job_id:
+        from app.db.models.ingestion_job import IngestionJob
+        job=session.get(IngestionJob,reservation.job_id)
+        if not job or job.project_id!=project_id or job.status not in {"READY","PARTIAL_READY"}:
+            raise HTTPException(409,"Wait for the admitted ingestion job to finish before completing this analysis.")
     # Only terminal ingestion plus validated persisted evidence can complete.
     from app.db.models.content_item import ContentItem
     from app.db.repositories.metadata_repository import MetadataRepository
@@ -106,6 +111,6 @@ def complete_owned_analysis(session,principal,project_id,metrics_only):
     elif any(not item.transcript_available for item in items) and not all(result["status"]=="unavailable" and result.get("error_code")=="EVIDENCE_UNAVAILABLE" for result in semantic):
         raise HTTPException(409,"Validated transcript evidence is required for semantic completion.")
     operations=session.scalars(select(ProviderOperation).where(ProviderOperation.reservation_id==reservation.id)).all()
-    if any(op.state in {"admitted","needs_reconciliation"} for op in operations):
+    if any(op.state in {"admitted","running","needs_reconciliation"} for op in operations):
         raise HTTPException(409,"Provider operations must settle before analysis completion.")
     return settle(session,reservation.id,"completed",completion_mode="metrics_only" if metrics_only else "semantic")

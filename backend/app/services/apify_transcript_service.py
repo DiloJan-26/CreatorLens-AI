@@ -60,6 +60,8 @@ def _run_actor(
     input_style: str,
     timeout_seconds: int,
 ) -> list[Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     actor_id = actor.replace("/", "~")
     endpoint = f"{APIFY_API_BASE}/acts/{actor_id}/run-sync-get-dataset-items"
     payload = _actor_input(url=url, input_style=input_style)

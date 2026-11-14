@@ -14,7 +14,7 @@ from alembic.config import Config
 from fastapi import HTTPException
 
 
-def test_disposable_account_migration_and_last_credit_race():
+def test_disposable_account_migration_and_last_credit_race(monkeypatch):
     from app.core.config import get_settings
     settings=get_settings();url=settings.sqlalchemy_database_url(test=True)
     if os.environ.get("GITHUB_ACTIONS")!="true" or not url:pytest.skip("Disposable PostgreSQL ownership/concurrency gate runs in GitHub Actions; not executed locally.")
@@ -35,10 +35,12 @@ def test_disposable_account_migration_and_last_credit_race():
                 diagnostic=LlmRunRepository(legacy).start(project_id=None,llm_provider="gemini",llm_model="fixture",prompt_name="diagnostic_generation",prompt_version="1",operation_type="diagnostic_generation",execution_mode="offline_fixture",provider_invocation_count=0)
                 diagnostic_id=diagnostic.id;legacy.commit()
             connection.commit();command.upgrade(config,"head")
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar()=="20261114_0012"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar()=="20261114_0013"
             assert connection.execute(text("SELECT owner_user_id FROM projects WHERE id=:id"),{"id":historical}).scalar() is None
             assert connection.execute(text("SELECT COUNT(*) FROM llm_runs WHERE id=:id AND project_id IS NULL"),{"id":diagnostic_id}).scalar()==1
             assert inspect(connection).has_table("semantic_snapshots") and inspect(connection).has_table("cost_events")
+            columns={c["name"]:c for c in inspect(connection).get_columns("provider_operations")}
+            assert all(columns[name]["nullable"] for name in ("operation_key","billing_pool","reserved_quantity","provider_details"))
             connection.commit()
         # Independent connections, same isolated schema; SQL row locks are genuinely exercised.
         from app.core.identity import Principal
@@ -75,9 +77,67 @@ def test_disposable_account_migration_and_last_credit_race():
                 assert value.consumed==4 and value.reserved==1
                 assert len(session.scalars(select(AnalysisReservation).where(AnalysisReservation.user_id==principal.user_id)).all())==1
                 assert len(session.scalars(select(UsageEvent).where(UsageEvent.user_id==principal.user_id,UsageEvent.kind=="lifetime_grant")).all())==1
+            _verify_extraction_admission_race(scoped,principal,project,monkeypatch)
         finally:scoped.dispose()
     finally:
         # The generated schema is verified before removing only isolated test resources.
         assert schema.startswith("account_test_") and len(schema)==45
         with engine.begin() as connection:connection.execute(text("DROP SCHEMA "+schema+" CASCADE"))
         engine.dispose()
+
+
+def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
+    """Same slot delivered concurrently: one durable admission and one pool debit."""
+    from datetime import date
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from app.db.models.account import AnalysisReservation,DispatchOutbox,ProviderOperation,BudgetAccount
+    from app.db.models.project import Project
+    from app.db.repositories.job_repository import JobRepository
+    from app.extraction import accounting,policy
+    s=SimpleNamespace(extraction_enabled=True,paid_operations_enabled=True,
+        extraction_max_concurrent_operations=1,extraction_max_video_seconds=300,
+        extraction_max_url_bytes=2048,extraction_max_response_bytes=16384,
+        extraction_timeout_seconds=5,supadata_billing_tier="pro_monthly_prepaid",
+        supadata_prepaid_verified=True,supadata_auto_recharge_disabled=True,
+        supadata_api_key="offline-test-only",supadata_credit_pool="postgres-fixture-pool",
+        supadata_credit_limit=1,supadata_transcript_mode="native",paid_requests_per_minute=1,
+        provider_operation_ceiling_usd=".01",user_budget_usd="1",global_budget_usd="10")
+    monkeypatch.setattr(accounting,"configuration",lambda settings:policy.configuration(settings,at=date(2026,11,14)))
+    with Session(engine) as session,session.begin():
+        project=session.get(Project,project_id)
+        project.content_1_url="https://www.youtube.com/watch?v=bounded_one"
+        project.content_2_url="https://www.youtube.com/watch?v=bounded_two"
+        reservation=session.scalar(select(AnalysisReservation).where(AnalysisReservation.project_id==project_id))
+        job=JobRepository(session).create(project_id);reservation.job_id=job.id
+        session.add(DispatchOutbox(id=job.id,reservation_id=reservation.id,task_name="creatorlens.ingest_project",argument=job.id,state="claimed"))
+    barrier=Barrier(2)
+    def admit(_):
+        try:
+            with Session(engine) as session,session.begin():
+                barrier.wait(timeout=10)
+                return accounting.admit(session,principal,project_id,"content_1","https://www.youtube.com/watch?v=bounded_one","youtube","metadata",settings=s,rate=False)
+        except HTTPException as exc:return exc.status_code
+    with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(admit,[1,2]))
+    assert sum(isinstance(result,str) for result in results)==1 and 409 in results
+    with Session(engine) as session:
+        operations=session.scalars(select(ProviderOperation).where(ProviderOperation.project_id==project_id)).all()
+        assert len(operations)==1 and operations[0].reserved_quantity==1
+        assert operations[0].provider_details["estimated_cost_usd"]=="0.005666666667"
+        assert operations[0].provider_details["actual_billed_cost_usd"] is None
+        assert session.get(BudgetAccount,principal.user_id).reserved_usd==Decimal(".01")
+        assert session.get(BudgetAccount,"global").reserved_usd==Decimal(".01")
+        assert operations[0].operation_key is not None
+
+    # Destructive contraction refuses to discard any newly recorded provider history.
+    import importlib.util
+    from alembic.operations import Operations
+    from alembic.migration import MigrationContext
+    path=Path(__file__).parents[2]/"alembic/versions/20261114_0013_extraction_accounting.py"
+    spec=importlib.util.spec_from_file_location("extraction_revision",path)
+    revision=importlib.util.module_from_spec(spec);spec.loader.exec_module(revision)
+    with engine.connect() as connection,connection.begin():
+        with Operations.context(MigrationContext.configure(connection)):
+            with pytest.raises(RuntimeError,match="history"):
+                revision.downgrade()
+        assert connection.execute(text("SELECT COUNT(*) FROM provider_operations WHERE operation_key IS NOT NULL")).scalar()==1

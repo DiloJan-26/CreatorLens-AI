@@ -735,3 +735,10 @@ The underlying project idea was not originated by me and may have been provided 
 The implementation presented in this repository represents my own independently developed engineering work, except for clearly identified third-party components and dependencies.
 
 No exclusive ownership is claimed over the original project concept, assessment requirements, project name, or independently developed implementations by others.
+
+
+### Authenticated extraction safety
+
+Authenticated ingestion uses a separately admitted, synchronous Supadata metadata/native-caption path. Each operation reserves a provider credit and the configured USD ceiling before sending. Transcript calls require provider-verified duration; slot attempts, owner/project identity, global concurrency and a dedicated prepaid credit pool are checked durably. Unknown outcomes retain reservations and require review; task redelivery cannot replay uncertain provider work.
+
+Execution defaults to disabled. Enabling it requires approved duration/size/time/rate/budget limits, an applicable verified pricing interval, a verified prepaid account and auto-recharge disabled. Pro subscription allocation estimates are separate from actual invoices; missing billing is unavailable. Generated Supadata transcripts, translation, asynchronous polling, Apify and remote-audio Deepgram remain disabled in authenticated mode. Existing explicitly gated local provider integrations are preserved. See backend/.env.example for configuration names. No cloud configuration is changed by these defaults.

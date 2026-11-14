@@ -87,8 +87,14 @@ class ProviderOperation(Base):
     state: Mapped[str] = mapped_column(String(32), default="admitted", nullable=False)
     ceiling_usd: Mapped[Decimal] = mapped_column(Numeric(24,12), nullable=False)
     snapshot_id: Mapped[str | None] = mapped_column(String(64))
+    operation_key: Mapped[str | None] = mapped_column(String(64))
+    billing_pool: Mapped[str | None] = mapped_column(String(128), index=True)
+    reserved_quantity: Mapped[int | None] = mapped_column(Integer)
+    provider_details: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    __table_args__ = (UniqueConstraint("reservation_id", "kind", "slot", "attempt"),)
+    __table_args__ = (UniqueConstraint("reservation_id", "kind", "slot", "attempt"),
+        Index("uq_provider_operations_operation_key","operation_key",unique=True),
+        CheckConstraint("reserved_quantity IS NULL OR reserved_quantity >= 0",name="provider_quantity_nonnegative"),)
 
 
 class DispatchOutbox(Base):

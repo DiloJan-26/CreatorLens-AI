@@ -123,6 +123,8 @@ def extract_instagram_hashtags(*texts: str | None) -> list[str]:
 
 
 def fetch_instagram_info(url: str) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     options = {
         "quiet": True,
         "no_warnings": True,

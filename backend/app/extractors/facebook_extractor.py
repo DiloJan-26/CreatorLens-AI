@@ -88,6 +88,8 @@ def extract_facebook_content(
 
 
 def fetch_facebook_info(url: str) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     options = {
         "quiet": True,
         "no_warnings": True,

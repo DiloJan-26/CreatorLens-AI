@@ -73,9 +73,19 @@ def retry_or_fail_job(
         from app.services.account_usage import latest_reservation,settle
         with database_session() as session:
             reservation=latest_reservation(session,project_id)
-            if reservation: settle(session,reservation.id,"needs_reconciliation")
-            JobRepository(session).fail(job_id,error_code="NEEDS_RECONCILIATION",error_message="Provider/worker outcome requires review; no automatic paid retry.")
-        raise WorkerTaskFailedError("Provider/worker outcome requires reconciliation.") from None
+            from app.extraction.policy import ExtractionSafetyError
+            from app.db.models.account import ProviderOperation
+            from sqlalchemy import select
+            uncertain = reservation and session.scalar(select(ProviderOperation.id).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.state.in_(["admitted","running","needs_reconciliation"])))
+            if reservation and isinstance(exc,ExtractionSafetyError) and not uncertain:
+                JobRepository(session).fail(job_id,error_code="EXTRACTION_UNAVAILABLE",error_message="Bounded extraction did not provide usable evidence; no provider work remains active.")
+                ProjectRepository(session).update_status(project_id,"failed")
+                settle(session,reservation.id,"failed",verified_no_active_work=True)
+            elif reservation: settle(session,reservation.id,"needs_reconciliation")
+            if not reservation or reservation.state!="failed":
+                JobRepository(session).fail(job_id,error_code="NEEDS_RECONCILIATION",error_message="Provider/worker outcome requires review; no automatic paid retry.")
+        message="Bounded extraction unavailable; analysis credit released." if reservation and reservation.state=="failed" else "Provider/worker outcome requires reconciliation."
+        raise WorkerTaskFailedError(message) from None
     next_retry = int(task.request.retries) + 1
 
     if int(task.request.retries) < settings.celery_max_retries:

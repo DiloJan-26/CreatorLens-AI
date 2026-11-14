@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     global_budget_usd: str = Field(default="0", alias="GLOBAL_BUDGET_USD")
     provider_operation_ceiling_usd: str = Field(default="0", alias="PROVIDER_OPERATION_CEILING_USD")
 
+    extraction_enabled: bool = Field(default=False, alias="EXTRACTION_ENABLED")
+    extraction_max_concurrent_operations: int = Field(default=0, alias="EXTRACTION_MAX_CONCURRENT_OPERATIONS", ge=0, le=16)
+    extraction_max_video_seconds: int = Field(default=0, alias="EXTRACTION_MAX_VIDEO_SECONDS", ge=0, le=86400)
+    extraction_max_url_bytes: int = Field(default=0, alias="EXTRACTION_MAX_URL_BYTES", ge=0, le=8192)
+    extraction_max_response_bytes: int = Field(default=0, alias="EXTRACTION_MAX_RESPONSE_BYTES", ge=0, le=16777216)
+    extraction_timeout_seconds: int = Field(default=0, alias="EXTRACTION_TIMEOUT_SECONDS", ge=0, le=120)
+    supadata_billing_tier: str = Field(default="", alias="SUPADATA_BILLING_TIER")
+    supadata_prepaid_verified: bool = Field(default=False, alias="SUPADATA_PREPAID_VERIFIED")
+    supadata_auto_recharge_disabled: bool = Field(default=False, alias="SUPADATA_AUTO_RECHARGE_DISABLED")
+    supadata_credit_pool: str = Field(default="", alias="SUPADATA_CREDIT_POOL")
+    supadata_credit_limit: int = Field(default=0, alias="SUPADATA_CREDIT_LIMIT", ge=0, le=3000)
+
     @model_validator(mode="after")
     def validate_authenticated_configuration(self):
         if self.application_access_mode != "authenticated":
@@ -57,6 +69,12 @@ class Settings(BaseSettings):
             raise ValueError("Paid operations require explicit nonzero rate and budget bounds.")
         if not self.authenticated_requests_per_minute:
             raise ValueError("Authenticated mode requires an explicitly configured request rate.")
+        if self.extraction_enabled:
+            from app.extraction.policy import configuration
+            try:
+                configuration(self)
+            except Exception:
+                raise ValueError("Extraction requires approved provider-specific account, pricing and execution bounds.") from None
         return self
 
     cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")

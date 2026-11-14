@@ -69,6 +69,8 @@ def transcribe_video_url_with_supadata(url: str) -> TranscriptionResult:
 def _fetch_transcript_payload(
     *, url: str, api_key: str, mode: str, timeout_seconds: int
 ) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     timeout = max(timeout_seconds, 10)
     deadline = time.monotonic() + timeout
     headers = {"x-api-key": api_key}
@@ -116,6 +118,8 @@ def _poll_transcript_job(
     headers: dict[str, str],
     deadline: float,
 ) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     while time.monotonic() < deadline:
         response = client.get(
             f"{SUPADATA_API_BASE}/transcript/{job_id}", headers=headers

@@ -53,6 +53,8 @@ def transcript_segments_from_plain_text(text: str) -> list[TranscriptSegment]:
 
 
 def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     settings = get_settings()
     api_key = (settings.deepgram_api_key or "").strip()
 

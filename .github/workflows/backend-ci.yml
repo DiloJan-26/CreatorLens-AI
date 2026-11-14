@@ -72,7 +72,7 @@ jobs:
         run: python -m pytest tests/unit -q
 
       - name: Run backend integration tests
-        run: python -m pytest tests/integration -q
+        run: python -m pytest tests/integration -q -rA
 
       - name: Upgrade disposable PostgreSQL schema
         run: python -m alembic -x database=test upgrade head

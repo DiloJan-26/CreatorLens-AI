@@ -41,7 +41,17 @@ def owned_task(kind):
                 else:
                     if reservation.job_id!=identifier:raise Reject("Stale job identity.",requeue=False)
                     if str(resource.status).upper() in {"READY","PARTIAL_READY","FAILED"}:return {"status":resource.status}
-                    if kind=="extraction":operation=admit(session,principal,resource.project_id,"extraction")
+                    if kind=="extraction":
+                        outbox=session.scalar(select(DispatchOutbox).where(DispatchOutbox.id==identifier).with_for_update())
+                        if not outbox or outbox.reservation_id!=reservation.id or outbox.task_name!="creatorlens.ingest_project" or outbox.argument!=identifier:
+                            raise Reject("Missing authoritative ingestion outbox.",requeue=False)
+                        if outbox.state=="claimed":return {"status":"deduplicated"}
+                        if outbox.state not in {"pending","sent"}:return {"status":"deduplicated"}
+                        from app.services.provider_admission import paid_configuration
+                        paid_configuration(get_settings(),"extraction")
+                        outbox.state="claimed"
+                        from app.services.account_usage import event
+                        event(session,user.id,"ingestion_claimed",identifier)
                 reservation.state="processing"
                 outbox=session.get(DispatchOutbox,identifier)
                 if outbox:outbox.state="claimed"
