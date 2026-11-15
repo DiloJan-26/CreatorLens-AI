@@ -8,7 +8,7 @@ def _extraction_result() -> VideoExtractionResult:
         metadata=VideoMetadata(
             platform="youtube",
             url="https://youtu.be/AbC_123-xYz",
-            title="Cached title",
+            title="Cached title",duration_seconds=30,transcript_evidence={"provenance":{"extraction_policy":"bounded-native-1.0.0"}},
             extraction_status="ready",
             transcript_available=True,
             transcript_segment_count=1,

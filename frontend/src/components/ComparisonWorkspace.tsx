@@ -1,4 +1,5 @@
 "use client";
+import { uiConfig } from "@/lib/ui-config";
 
 import { useAccount } from "./AccountProvider";
 import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
@@ -56,7 +57,7 @@ const INITIAL_PROGRESS_STEPS: AnalysisProgressStep[] = [
 ];
 
 export function ComparisonWorkspace() {
-  const {enabled,account,refresh}=useAccount();
+  const {account,refresh}=useAccount();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
   useEffect(() => {
@@ -231,7 +232,7 @@ export function ComparisonWorkspace() {
         setProgressSteps(progressStepsForIngestion(latest.status));
 
         if (!isTerminalStatus(latest.status)) {
-          pollTimer = window.setTimeout(poll, 2000);
+          pollTimer = window.setTimeout(poll, uiConfig.pollIntervalMs);
           return;
         }
 
@@ -284,13 +285,13 @@ export function ComparisonWorkspace() {
         }
 
         consecutiveFailures += 1;
-        if (consecutiveFailures < 3) {
-          pollTimer = window.setTimeout(poll, 3000);
+        if (consecutiveFailures < uiConfig.pollFailureLimit) {
+          pollTimer = window.setTimeout(poll, uiConfig.pollIntervalMs);
           return;
         }
 
         setError(
-          `${getErrorMessage(caughtError)} Automatic status checks stopped after three attempts. Refresh the page to resume.`,
+          `${getErrorMessage(caughtError)} Automatic status checks stopped after ${uiConfig.pollFailureLimit} attempts. Refresh the page to resume.`,
         );
         setIsSubmitting(false);
         setActiveIngestion(null);
@@ -332,8 +333,7 @@ export function ComparisonWorkspace() {
   }, [resetWorkspaceState, restoreProject, startNew]);
 
   async function handleAnalyzeContent() {
-    if(enabled && account?.usage.completed===5){window.dispatchEvent(new Event("creatorlens_quota_exhausted"));return;}
-    if(enabled && account && account.usage.reserved>0){setError("One analysis is already active. Open it from Your analyses before submitting another.");return;}
+    if(account && account.usage.available<=0){window.dispatchEvent(new Event("creatorlens_quota_exhausted"));return;}
     setIsSubmitting(true);
     setShowProgress(true);
     setProgressSteps(resetProgressSteps());
@@ -366,7 +366,7 @@ export function ComparisonWorkspace() {
       failRunningSteps();
       setError(getErrorMessage(caughtError));
       setIsSubmitting(false);
-      if(enabled)void refresh();
+      void refresh();
     }
   }
 

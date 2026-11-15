@@ -27,8 +27,9 @@ def test_sse_preserves_canonical_answer_and_tracks_real_execution(monkeypatch,mo
     from app.services import provider_admission
     def admit(*args,**kwargs):
         counts['admissions']+=1
-        return None  # Synthetic generation only; no real quota/database admission.
+        return "mocked-stream-admission"  # Explicit synthetic admission; no provider/database call.
     monkeypatch.setattr(provider_admission,'admit_current',admit)
+    monkeypatch.setattr(provider_admission,'finish',lambda *args,**kwargs:None)
     monkeypatch.setattr(chat_service,'create_or_get_session',lambda **kwargs:ChatSession(session_id='session',project_id=PROJECT,created_at='now',updated_at='now'))
     def add(**kwargs):
         counts['messages'].append(kwargs)

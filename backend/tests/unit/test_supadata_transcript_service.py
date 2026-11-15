@@ -120,3 +120,10 @@ def test_supadata_sends_api_key_in_header_not_request_url(monkeypatch) -> None:
     assert len(requests) == 1
     assert api_key not in str(requests[0].url)
     assert requests[0].headers["x-api-key"] == api_key
+
+
+@pytest.fixture(autouse=True)
+def isolated_legacy_transport_fixture(monkeypatch):
+    # These tests already fake transports/captions and prohibit external sockets.
+    # Production legacy-entry rejection is covered by bounded extraction tests.
+    monkeypatch.setattr("app.extraction.policy.block_legacy_provider",lambda:None)

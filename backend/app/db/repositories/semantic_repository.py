@@ -65,8 +65,10 @@ def transition(key, expected, target, *, attempt=None, **values):
 
 
 def claim_snapshot(key):
+    from app.core.config import get_settings
+    maximum=get_settings().semantic_attempts_per_slot
     with semantic_session(create=True) as session:
         changed = session.execute(update(SemanticSnapshot).where(SemanticSnapshot.id == key,
-            SemanticSnapshot.status == 'pending', SemanticSnapshot.attempts < 2)
+            SemanticSnapshot.status == 'pending', SemanticSnapshot.attempts < maximum)
             .values(status='running', attempts=SemanticSnapshot.attempts + 1, updated_at=datetime.now(UTC))).rowcount
         return bool(changed)

@@ -149,6 +149,7 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    get_settings().require_service_configuration()
     init_db()
     yield
 
@@ -167,8 +168,8 @@ app = FastAPI(
 )
 
 # All routers remain gated; outer CORS makes denial responses readable to configured frontends.
-from app.core.demo_access import DemoAccessMiddleware
-app.add_middleware(DemoAccessMiddleware)
+from app.core.authentication_middleware import AuthenticationMiddleware
+app.add_middleware(AuthenticationMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -192,7 +193,15 @@ app.include_router(evaluations_router)
 
 
 
-@app.get('/api/demo/capabilities', include_in_schema=False)
-def demo_capabilities():
-    from app.core.demo_access import provider_calls_enabled
-    return {'access': 'authenticated' if get_settings().application_access_mode == 'authenticated' else 'local_only', 'provider_calls_enabled': (get_settings().paid_operations_enabled if get_settings().application_access_mode == 'authenticated' else provider_calls_enabled(get_settings()))}
+@app.get("/api/providers/status",include_in_schema=False)
+def provider_status():
+    from app.core.access import require_principal
+    from app.services.provider_admission import paid_configuration
+    from fastapi import HTTPException
+    require_principal()
+    settings=get_settings()
+    available={}
+    for name,kind in (("provider_calls_enabled","semantic"),("extraction_available","extraction")):
+        try:paid_configuration(settings,kind);available[name]=True
+        except (HTTPException,ValueError):available[name]=False
+    return {"provider_emergency_stop":settings.provider_emergency_stop,**available}

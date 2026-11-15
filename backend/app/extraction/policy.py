@@ -3,6 +3,7 @@
 USD values are allocated subscription estimates, not marginal tariffs or invoices.
 A verified, dedicated account with auto-recharge OFF is a prerequisite.
 """
+from app.core.config import setting_value
 from datetime import date, datetime, UTC
 from decimal import Decimal, ROUND_UP
 from hashlib import sha256
@@ -21,7 +22,17 @@ class ExtractionSafetyError(RuntimeError):
 
 
 def registry(path=None):
+    if path is None:
+        from app.core.config import get_settings
+        from app.core.active_pricing import active_registry
+        value = getattr(get_settings(), "extraction_active_pricing_json", None)
+        if value is not None:
+            return active_registry(value, "extraction")
     data = json.loads(Path(path or Path(__file__).with_name("pricing_registry.json")).read_text(encoding="utf-8"))
+    return validate_registry(data)
+
+
+def validate_registry(data):
     periods = {}
     for entry in data["entries"]:
         start, end = date.fromisoformat(entry["effective_from"]), date.fromisoformat(entry["effective_through"])
@@ -50,7 +61,7 @@ def price_for(operation, tier, *, provider="supadata", at=None, data=None):
 def configuration(settings, *, at=None):
     def deny():
         raise HTTPException(403, "Approved provider-specific prepaid pricing, account verification, credit pool, duration, size and time bounds are required for extraction.")
-    if not getattr(settings, "extraction_enabled", False) or not settings.paid_operations_enabled:
+    if getattr(settings,"provider_emergency_stop",True):
         deny()
     if not getattr(settings, "supadata_prepaid_verified", False) or not getattr(settings, "supadata_auto_recharge_disabled", False) or not getattr(settings, "supadata_api_key", None):
         deny()
@@ -64,8 +75,15 @@ def configuration(settings, *, at=None):
     bounds = [Decimal(getattr(settings, name, "0")) for name in ("provider_operation_ceiling_usd", "user_budget_usd", "global_budget_usd")]
     if any(not n.is_finite() or n <= 0 for n in bounds):
         deny()
-    prices = [price_for(op, settings.supadata_billing_tier, at=at) for op in ("metadata", "native_transcript")]
-    if settings.supadata_credit_limit > min(p["included_credits"] for p in prices) or bounds[0] < max(Decimal(p["allocated_unit_usd"]) for p in prices):
+    from app.core.active_pricing import active_registry
+    active = getattr(settings, "extraction_active_pricing_json", None)
+    data = active_registry(active, "extraction") if active is not None else registry(Path(__file__).with_name("pricing_registry.json"))
+    prices = [price_for(op, settings.supadata_billing_tier, at=at, data=data) for op in ("metadata", "native_transcript")]
+    if settings.supadata_credit_limit > min(setting_value(settings,'supadata_credit_pool_cap'),*(p["included_credits"] for p in prices)) or bounds[0] < max(Decimal(p["allocated_unit_usd"]) for p in prices):
+        deny()
+    from decimal import ROUND_CEILING
+    minimum = int((Decimal(1000)/min(Decimal(p["max_requests_per_second"]) for p in prices)).to_integral_value(rounding=ROUND_CEILING)) if active is not None else {"free_prepaid":1000,"pro_monthly_prepaid":100}.get(settings.supadata_billing_tier,60001)
+    if setting_value(settings,'supadata_request_interval_ms') < minimum:
         deny()
     return prices
 
@@ -110,6 +128,4 @@ def source_key(user_id, url):
 
 
 def block_legacy_provider():
-    from app.core.config import get_settings
-    if get_settings().application_access_mode == "authenticated":
-        raise ExtractionSafetyError("Unbounded legacy provider execution is disabled in authenticated mode.")
+    raise ExtractionSafetyError("Legacy/unbounded provider execution is unavailable; use admitted bounded extraction.")

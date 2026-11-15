@@ -1,12 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 export async function proxy(request: NextRequest) {
-  const serverEnabled=process.env.APPLICATION_ACCESS_MODE==="authenticated";
-  const publicEnabled=process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE==="authenticated";
-  if(serverEnabled!==publicEnabled)return new NextResponse("Authentication configuration is incomplete.",{status:503});
-  if(!serverEnabled)return NextResponse.next();
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key || process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE!=="authenticated") return new NextResponse("Authentication configuration is incomplete.",{status:503});
+  if (!url || !key) return new NextResponse("Authentication configuration is incomplete.",{status:503});
   let origin:string;
   try {
     const configured=process.env.NEXT_PUBLIC_SITE_URL;
@@ -16,6 +12,7 @@ export async function proxy(request: NextRequest) {
     origin=parsed.origin;
   } catch {return new NextResponse("The trusted site origin is not configured.",{status:503});}
   let response=NextResponse.next({request});
+  try {
   const supabase=createServerClient(url,key,{cookies:{getAll:()=>request.cookies.getAll(),setAll(values){
     for (const {name,value} of values) request.cookies.set(name,value);
     response=NextResponse.next({request});
@@ -30,5 +27,8 @@ export async function proxy(request: NextRequest) {
   }
   response.headers.set("Cache-Control","private, no-store");
   return response;
+  } catch {
+    return new NextResponse("Authentication verification is temporarily unavailable.",{status:503,headers:{"Cache-Control":"private, no-store"}});
+  }
 }
 export const config={matcher:["/analyze/:path*","/chat/:path*","/dashboard/:path*","/evaluations/:path*","/workspace/:path*"]};

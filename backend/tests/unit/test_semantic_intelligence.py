@@ -129,17 +129,44 @@ def runtime(monkeypatch,content):
     folder = TemporaryDirectory(prefix="semantic-test-", dir=Path.cwd())
     tmp_path = Path(folder.name)
     engine=create_engine('sqlite+pysqlite:///'+str(tmp_path/'semantic.db'),connect_args={'check_same_thread':False})
-    SemanticSnapshot.__table__.create(engine)
+    from app.db.base import Base
+    import app.db.models
+    Base.metadata.create_all(engine)
     @contextmanager
     def session(**kwargs):
         with Session(engine,expire_on_commit=False) as s:
             with s.begin():yield s
     monkeypatch.setattr(store,'semantic_session',session)
+    from app.core.config import Settings
+    from app.core.identity import Principal
+    from app.core.access import provision,current_principal
+    from app.db.models.content_item import ContentItem
+    from app.db.repositories.project_repository import ProjectRepository
+    from app.db.repositories._utils import utc_now
+    from app.services.account_usage import reserve
+    from app.services.provider_admission import active_operation
+    from uuid import uuid4
+    principal=Principal(str(uuid4()),str(uuid4()),1)
+    principal_token=current_principal.set(principal)
+    operation_token=active_operation.set("mocked-semantic-admission")
+    config=Settings(_env_file=None,PROVIDER_EMERGENCY_STOP=False,GEMINI_API_KEY="offline-mocked-provider")
+    monkeypatch.setattr(service,"get_settings",lambda:config)
+    class FixtureRedis:
+        count=0
+        def eval(self,*args):self.count+=1;return self.count,60
+    redis=FixtureRedis()
+    monkeypatch.setattr("app.core.request_limits.client",lambda _:redis)
+    monkeypatch.setattr("app.db.session.database_session",session)
+    with session() as database:
+        provision(database,principal)
+        ProjectRepository(database).create(project_id="project-a",content_1_url="one",content_2_url="two",content_1_platform="youtube",content_2_platform="youtube",status="created")
+        reserve(database,principal,"project-a","semantic-unit-admission")
+        database.add(ContentItem(id="video-a",project_id="project-a",slot="content_1",platform="youtube",url="one",created_at=utc_now(),updated_at=utc_now()))
     monkeypatch.setattr(service,'get_project_detail_record',lambda _:dict(content_items=[content[0]]))
     monkeypatch.setattr(service,'get_transcript_segments',lambda **_:content[1])
     from app.workers.semantic_tasks import extract_semantic_features
     dispatched=[]
-    monkeypatch.setattr(extract_semantic_features,'apply_async',lambda **kw:dispatched.append(kw))
+    monkeypatch.setattr("app.workers.dispatch_outbox.dispatch",lambda **kw:dispatched.append(kw))
     for name in ('start_llm_run','complete_llm_run','fail_llm_run','record_cost_event'):
         monkeypatch.setattr(service,name,lambda *args,**kwargs:None)
     calls=[]
@@ -148,6 +175,8 @@ def runtime(monkeypatch,content):
         return SimpleNamespace(content=json.dumps(answer(ctx)),usage_metadata={'input_tokens':100,'output_tokens':200,'total_tokens':300})
     monkeypatch.setattr(service,'_invoke',invoke)
     yield calls,dispatched
+    active_operation.reset(operation_token)
+    current_principal.reset(principal_token)
     engine.dispose()
     folder.cleanup()
 
@@ -204,7 +233,7 @@ def test_stale_queued_input_never_invokes_gemini(runtime,content):
 def test_queue_failures_and_missing_evidence_are_explicit(runtime,content,monkeypatch):
     from app.workers.semantic_tasks import extract_semantic_features
     def fail(**kwargs):raise RuntimeError('broker unavailable')
-    monkeypatch.setattr(extract_semantic_features,'apply_async',fail)
+    monkeypatch.setattr("app.workers.dispatch_outbox.dispatch",fail)
     assert service.queue_semantic_analysis('project-a','content_1')['error_code']=='QUEUE_UNAVAILABLE'
     content[1].clear()
     assert service.queue_semantic_analysis('project-a','content_1')['status']=='unavailable'
@@ -278,7 +307,9 @@ def test_sdk_generation_limits_reuse_existing_client(monkeypatch,content):
     monkeypatch.setattr(service,'get_llm',lambda **kwargs:(options.append(kwargs) or Fake()))
     import asyncio
     ctx=context(content)
-    asyncio.run(service._invoke(ctx,{'system_prompt':'test'}))
+    from app.services.provider_admission import operation_scope
+    with operation_scope("mocked-semantic-admission"):
+        asyncio.run(service._invoke(ctx,{"system_prompt":"test"}))
     assert options[0]['max_retries']==0 and options[0]['timeout']==60
     assert options[0]['temperature']==0 and options[0]['max_output_tokens']==4096
     assert calls[0]['response_mime_type']=='application/json'

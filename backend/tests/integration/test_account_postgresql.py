@@ -34,8 +34,13 @@ def test_disposable_account_migration_and_last_credit_race(monkeypatch):
             with Session(connection) as legacy:
                 diagnostic=LlmRunRepository(legacy).start(project_id=None,llm_provider="gemini",llm_model="fixture",prompt_name="diagnostic_generation",prompt_version="1",operation_type="diagnostic_generation",execution_mode="offline_fixture",provider_invocation_count=0)
                 diagnostic_id=diagnostic.id;legacy.commit()
+            connection.commit();command.upgrade(config,"20261114_0013")
+            legacy_user=str(uuid4())
+            connection.execute(text("INSERT INTO app_users (id,status,role,created_at,updated_at) VALUES (:id,'active','user',now(),now())"),{"id":legacy_user})
+            connection.execute(text("INSERT INTO user_entitlements (user_id,granted,consumed,reserved) VALUES (:id,5,2,0)"),{"id":legacy_user})
             connection.commit();command.upgrade(config,"head")
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar()=="20261114_0013"
+            assert tuple(connection.execute(text("SELECT granted,consumed,reserved FROM user_entitlements WHERE user_id=:id"),{"id":legacy_user}).one())==(5,2,0)
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar()=="20261115_0014"
             assert connection.execute(text("SELECT owner_user_id FROM projects WHERE id=:id"),{"id":historical}).scalar() is None
             assert connection.execute(text("SELECT COUNT(*) FROM llm_runs WHERE id=:id AND project_id IS NULL"),{"id":diagnostic_id}).scalar()==1
             assert inspect(connection).has_table("semantic_snapshots") and inspect(connection).has_table("cost_events")
@@ -78,6 +83,7 @@ def test_disposable_account_migration_and_last_credit_race(monkeypatch):
                 assert len(session.scalars(select(AnalysisReservation).where(AnalysisReservation.user_id==principal.user_id)).all())==1
                 assert len(session.scalars(select(UsageEvent).where(UsageEvent.user_id==principal.user_id,UsageEvent.kind=="lifetime_grant")).all())==1
             _verify_extraction_admission_race(scoped,principal,project,monkeypatch)
+            _verify_configured_grants_and_parallel_admission(scoped,monkeypatch)
         finally:scoped.dispose()
     finally:
         # The generated schema is verified before removing only isolated test resources.
@@ -95,7 +101,7 @@ def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
     from app.db.models.project import Project
     from app.db.repositories.job_repository import JobRepository
     from app.extraction import accounting,policy
-    s=SimpleNamespace(extraction_enabled=True,paid_operations_enabled=True,
+    s=SimpleNamespace(provider_emergency_stop=False,
         extraction_max_concurrent_operations=1,extraction_max_video_seconds=300,
         extraction_max_url_bytes=2048,extraction_max_response_bytes=16384,
         extraction_timeout_seconds=5,supadata_billing_tier="pro_monthly_prepaid",
@@ -141,3 +147,48 @@ def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
             with pytest.raises(RuntimeError,match="history"):
                 revision.downgrade()
         assert connection.execute(text("SELECT COUNT(*) FROM provider_operations WHERE operation_key IS NOT NULL")).scalar()==1
+
+
+def _verify_configured_grants_and_parallel_admission(engine,monkeypatch):
+    """Real PostgreSQL row locks permit the configured count without changing grants."""
+    from app.core import config as settings_module
+    from app.core.identity import Principal
+    from app.core.access import provision,current_principal
+    from app.db.models.account import UserEntitlement,UsageEvent
+    from app.db.repositories.project_repository import ProjectRepository
+    from app.services.account_usage import reserve
+    with monkeypatch.context() as patch:
+        configured=settings_module.Settings(_env_file=None,INITIAL_FREE_ANALYSES=7,CONCURRENT_ANALYSES_PER_USER=2)
+        patch.setattr(settings_module,"get_settings",lambda:configured)
+        principal=Principal(str(uuid4()),str(uuid4()),1)
+        with Session(engine) as session,session.begin():
+            provision(session,principal)
+            handle=current_principal.set(principal)
+            try:
+                projects=[ProjectRepository(session).create(project_id=str(uuid4()),content_1_url="one",content_2_url="two",content_1_platform="youtube",content_2_platform="youtube",status="created")["project_id"] for _ in range(3)]
+            finally:current_principal.reset(handle)
+        barrier=Barrier(2)
+        def attempt(index):
+            with Session(engine) as session,session.begin():
+                barrier.wait(timeout=10)
+                return reserve(session,principal,projects[index],"parallel-"+str(index))[0].id
+        with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(attempt,[0,1]))
+        assert len(set(results))==2
+        with Session(engine) as session,session.begin():
+            assert session.get(UserEntitlement,principal.user_id).granted==7
+            assert session.get(UserEntitlement,principal.user_id).reserved==2
+            with pytest.raises(HTTPException):reserve(session,principal,projects[2],"parallel-third")
+            provision(session,principal)
+            events=session.scalars(select(UsageEvent).where(UsageEvent.user_id==principal.user_id,UsageEvent.kind=="lifetime_grant")).all()
+            assert len(events)==1 and events[0].details["credits"]==7
+
+    # Contraction cannot erase or misrepresent newly provisioned grants.
+    from importlib.util import spec_from_file_location,module_from_spec
+    from alembic.operations import Operations
+    from alembic.migration import MigrationContext
+    path=Path(__file__).parents[2]/"alembic/versions/20261115_0014_configurable_allowances.py"
+    spec=spec_from_file_location("allowances_revision",path);revision=module_from_spec(spec);spec.loader.exec_module(revision)
+    with engine.connect() as connection,connection.begin():
+        with Operations.context(MigrationContext.configure(connection)):
+            with pytest.raises(RuntimeError,match="Configured allowances"):
+                revision.downgrade()

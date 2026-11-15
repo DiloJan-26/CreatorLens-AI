@@ -1,6 +1,6 @@
 import { authorizedHeaders,ApiError,sessionExpired } from "./auth-transport";
 import { getComparisonObjective } from "./app-session";
-import type { ComparisonObjective, SemanticAnalysis, DemoCapabilities } from "@/types/project";
+import type { ComparisonObjective, SemanticAnalysis, ProviderStatus } from "@/types/project";
 import type {
   ChatCitation,
   ChatHistoryResponse,
@@ -35,7 +35,15 @@ import type {
 import type { CostMetricsResponse } from "@/types/cost";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
+
+if (API_BASE_URL) {
+  const url = new URL(API_BASE_URL);
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/" ||
+      url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
+    throw new Error("Authenticated clients require an exact trusted API origin.");
+  }
+}
 
 export async function checkBackend(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
@@ -562,8 +570,8 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 
-export function getDemoCapabilities() {
-  return request<DemoCapabilities>("/api/demo/capabilities");
+export function getProviderStatus() {
+  return request<ProviderStatus>("/api/providers/status");
 }
 export function getSemanticAnalysis(projectId: string, slot: ContentSlot, signal?: AbortSignal) {
   return request<SemanticAnalysis>(`/api/projects/${encodeURIComponent(projectId)}/semantic/${slot}`, { signal });

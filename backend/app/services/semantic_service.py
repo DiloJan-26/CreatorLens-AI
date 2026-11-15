@@ -1,4 +1,5 @@
-﻿"""Explicit queued semantic extraction; GET paths only read compatible snapshots."""
+"""Explicit queued semantic extraction; GET paths only read compatible snapshots."""
+from app.core.config import setting_value
 import asyncio
 from contextvars import ContextVar
 from app.services.llm_observability_service import annotate_operation
@@ -72,22 +73,21 @@ def get_semantic_analysis(project_id, slot):
 def queue_semantic_analysis(project_id, slot, *, retry_failed=False, recover_stale=False):
     key, context, _ = semantic_identity(project_id, slot)
     row = store.read_snapshot(key)
-    if get_settings().application_access_mode == "authenticated":
-        if row and row["status"] == "ready":return get_semantic_analysis(project_id,slot)
-        if recover_stale:raise ValueError("Unknown worker outcomes require administrator reconciliation.")
-        from app.services.provider_admission import paid_configuration
-        paid_configuration(get_settings(),"semantic")
-        from app.core.access import require_principal
-        from app.core.request_limits import enforce_rate
-        from app.services.account_usage import latest_reservation
-        from app.db.session import database_session
-        principal=require_principal()
-        enforce_rate(get_settings(),principal.user_id,"semantic_submission")
-        with database_session() as session:
-            reservation=latest_reservation(session,project_id)
-            if reservation is None or reservation.user_id!=principal.user_id or reservation.state not in {"reserved","processing"}:
-                from fastapi import HTTPException
-                raise HTTPException(409,"Semantic generation requires an active analysis reservation.")
+    if row and row["status"] == "ready":return get_semantic_analysis(project_id,slot)
+    if recover_stale:raise ValueError("Unknown worker outcomes require administrator reconciliation.")
+    from app.services.provider_admission import paid_configuration
+    paid_configuration(get_settings(),"semantic")
+    from app.core.access import require_principal
+    from app.core.request_limits import enforce_rate
+    from app.services.account_usage import latest_reservation
+    from app.db.session import database_session
+    principal=require_principal()
+    enforce_rate(get_settings(),principal.user_id,"semantic_submission")
+    with database_session() as session:
+        reservation=latest_reservation(session,project_id)
+        if reservation is None or reservation.user_id!=principal.user_id or reservation.state not in {"reserved","processing"}:
+            from fastapi import HTTPException
+            raise HTTPException(409,"Semantic generation requires an active analysis reservation.")
     created = False
     if row is None:
         created = store.create_pending(key=key, context=context, model_id=get_settings().llm_model,
@@ -100,44 +100,44 @@ def queue_semantic_analysis(project_id, slot, *, retry_failed=False, recover_sta
         timestamp = row['updated_at']
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=UTC)
-        if (datetime.now(UTC)-timestamp).total_seconds() >= 300:
+        if (datetime.now(UTC)-timestamp).total_seconds() >= get_settings().reconciliation_after_seconds:
             store.transition(key, 'running', 'failed', error_code='WORKER_INTERRUPTED')
             row = store.read_snapshot(key)
-    if retry_failed and row['status'] == 'failed' and row['attempts'] < 2:
+    if retry_failed and row['status'] == 'failed' and row['attempts'] < setting_value(get_settings(),'semantic_attempts_per_slot'):
         created = store.transition(key, 'failed', 'pending', error_code=None)
     # pending requests may safely republish lost messages: atomic worker claim deduplicates.
     if created or row['status'] == 'pending':
         try:
             from app.workers.semantic_tasks import extract_semantic_features
-            if get_settings().application_access_mode == "authenticated":
-                from app.db.session import database_session
-                from app.db.models.account import DispatchOutbox
-                from app.services.account_usage import latest_reservation
-                from app.workers.dispatch_outbox import dispatch
-                with database_session() as session:
-                    reservation=latest_reservation(session,project_id)
-                    if reservation is None:raise ValueError("Analysis admission required.")
-                    outbox=session.get(DispatchOutbox,key)
-                    if outbox is not None and created and outbox.state=="claimed":
-                        outbox.state="pending";outbox.attempts=0
-                    if outbox is None:
-                        session.add(DispatchOutbox(id=key,reservation_id=reservation.id,task_name="creatorlens.semantic_features",argument=key,state="pending"))
-                dispatch(only_id=key)
-            else:
-                extract_semantic_features.apply_async(args=[key], task_id=key)
+            from app.db.session import database_session
+            from app.db.models.account import DispatchOutbox
+            from app.services.account_usage import latest_reservation
+            from app.workers.dispatch_outbox import dispatch
+            with database_session() as session:
+                reservation=latest_reservation(session,project_id)
+                if reservation is None:raise ValueError("Analysis admission required.")
+                outbox=session.get(DispatchOutbox,key)
+                if outbox is not None and created and outbox.state=="claimed":
+                    outbox.state="pending";outbox.attempts=0
+                if outbox is None:
+                    session.add(DispatchOutbox(id=key,reservation_id=reservation.id,task_name="creatorlens.semantic_features",argument=key,state="pending"))
+            dispatch(only_id=key)
         except Exception:
             store.transition(key, 'pending', 'failed', error_code='QUEUE_UNAVAILABLE')
     return get_semantic_analysis(project_id, slot)
 
 
 async def _invoke(context, prompt):
-    llm = get_llm(streaming=False, temperature=0, max_output_tokens=4096, max_retries=0, timeout=60)
+    settings = get_settings()
+    llm = get_llm(streaming=False, temperature=0, max_output_tokens=setting_value(settings,'semantic_max_output_tokens'), max_retries=0, timeout=setting_value(settings,'semantic_timeout_seconds'))
     messages = [('system', prompt['system_prompt']), ('human', json.dumps({'schema': CreativeFeatures.model_json_schema(), 'input':context}, ensure_ascii=False))]
     state=_INVOCATION.get()
     if state is not None: state.update(count=1,started=perf_counter(),inference_at=datetime.now(UTC))
     from app.services.provider_admission import check_input
     check_input(messages + [json.dumps(CreativeFeatures.model_json_schema())])
-    return await asyncio.wait_for(llm.ainvoke(messages, response_mime_type="application/json", response_schema=CreativeFeatures.model_json_schema()), timeout=65)
+    from langsmith import tracing_context
+    with tracing_context(enabled=False):
+        return await asyncio.wait_for(llm.ainvoke(messages, response_mime_type="application/json", response_schema=CreativeFeatures.model_json_schema()), timeout=setting_value(settings,'semantic_timeout_seconds')+setting_value(settings,'inference_deadline_grace_seconds'))
 
 
 def process_semantic_snapshot(key):

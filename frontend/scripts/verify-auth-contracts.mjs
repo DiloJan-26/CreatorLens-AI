@@ -7,7 +7,7 @@ import ts from "typescript";
 import React from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 const root=path.resolve("src");
-let enabled=true,token="synthetic-access-token",callbackError=null,callbackThrows=false,proxyClaims=null;
+let proxyThrows=false,token="synthetic-access-token",callbackError=null,callbackThrows=false,proxyClaims=null;
 const cookieJar=()=>{const rows=[];return {set(...args){rows.push(args.length===1?args[0]:{name:args[0],value:args[1],...args[2]});},getAll:()=>rows};};
 const calls=[],events=[];
 const storage=()=>{const data=new Map();return {get length(){return data.size;},key:i=>[...data.keys()][i],getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};};
@@ -20,9 +20,9 @@ function load(file){
   if(cache.has(file))return cache.get(file).exports;
   const compiledModule=new Module(file);cache.set(file,compiledModule);compiledModule.filename=file;compiledModule.paths=Module._nodeModulePaths(path.dirname(file));
   compiledModule.require=name=>{
-    if(name.endsWith("supabase/browser"))return {authEnabled:()=>enabled,browserAuth:()=>sdk};
+    if(name.endsWith("supabase/browser"))return {browserAuth:()=>sdk};
     if(name==="@/lib/supabase/server")return {siteOrigin:()=>"http://localhost:3000",serverAuth:async()=>({auth:{exchangeCodeForSession:async code=>{calls.push({code});if(callbackThrows)throw Error("Synthetic SDK failure");return {error:callbackError};}}})};
-    if(name==="@supabase/ssr")return {createServerClient:(url,key,options)=>({auth:{getClaims:async()=>{options.cookies.setAll([{name:"sb-fixture",value:"synthetic-cookie",options:{path:"/"}}]);return {data:proxyClaims?{claims:proxyClaims}:null,error:null};}}})};
+    if(name==="@supabase/ssr")return {createServerClient:(url,key,options)=>({auth:{getClaims:async()=>{if(proxyThrows)throw Error("Synthetic verification outage");options.cookies.setAll([{name:"sb-fixture",value:"synthetic-cookie",options:{path:"/"}}]);return {data:proxyClaims?{claims:proxyClaims}:null,error:null};}}})};
     if(name==="next/server")return {NextResponse:class {constructor(body,init){this.body=body;this.status=init?.status;}static next(){return {headers:new Headers(),cookies:cookieJar()};}static redirect(location,init){return {location:String(location),headers:init?.headers??new Headers(),cookies:cookieJar()};}}};
     if(name==="next/navigation")return {usePathname:()=>"/login"};
     if(name==="next/link")return function MockLink({children,...props}){return React.createElement("a",props,children);};
@@ -41,7 +41,7 @@ const transport=load(path.join(root,"lib/auth-transport.ts"));
 assert.equal((await transport.authorizedHeaders({"Content-Type":"application/json"})).get("Authorization"),"Bearer synthetic-access-token");
 assert.equal((await transport.authorizedHeaders({"Content-Type":"application/json"})).get("Content-Type"),"application/json");
 token=null;await assert.rejects(()=>transport.authorizedHeaders(),error=>error.status===401);token="synthetic-access-token";
-enabled=false;assert.equal((await transport.authorizedHeaders()).get("Authorization"),null);enabled=true;
+process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="disabled";assert.equal((await transport.authorizedHeaders()).get("Authorization"),"Bearer synthetic-access-token");
 const session=load(path.join(root,"lib/app-session.ts"));
 session.setActiveProjectId("owned-project");session.setChatSessionId("owned-project","owned-session");session.setChatDraft("owned-project","private draft");session.setComparisonObjective("owned-project","engagement");
 window.localStorage.setItem("unrelated","preserved");session.clearAccountWorkspace();
@@ -60,20 +60,21 @@ const callback=load(path.join(root,"app/auth/callback/route.ts"));let response=a
 callbackError=new Error("synthetic failure");response=await callback.GET({nextUrl:new URL("http://localhost:3000/auth/callback?code=invalid")});assert.equal(response.location,"http://localhost:3000/login?error=oauth");
 console.log("Auth contracts passed: Bearer transport, authenticated SSE, session/cache clearing, 401/403/429, Google-only UI, quota dialog and fixed PKCE callback destination. SDK mocked; not live OAuth/browser acceptance.");
 
-process.env.APPLICATION_ACCESS_MODE="authenticated";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="authenticated";
+process.env.APPLICATION_ACCESS_MODE="disabled";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="disabled";
 process.env.NEXT_PUBLIC_SUPABASE_URL="https://auth.example";process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="synthetic-publishable-key";process.env.NEXT_PUBLIC_SITE_URL="https://creatorlens.example";
 const {proxy}=load(path.join(root,"proxy.ts"));
 const request={nextUrl:new URL("https://untrusted.invalid/analyze?next=https://attacker.invalid"),cookies:{getAll:()=>[],set:()=>{}}};
 response=await proxy(request);assert.equal(response.location,"https://creatorlens.example/login");assert.equal(response.headers.get("Cache-Control"),"private, no-store");assert.equal(response.cookies.getAll()[0].name,"sb-fixture");
 proxyClaims={sub:"synthetic-user"};response=await proxy(request);assert.equal(response.location,undefined);assert.equal(response.headers.get("Cache-Control"),"private, no-store");
 process.env.NEXT_PUBLIC_SITE_URL="";response=await proxy(request);assert.equal(response.status,503);
+proxyThrows=true;response=await proxy(request);assert.equal(response.status,503);proxyThrows=false;
 console.log("Proxy contracts passed: verified-claim gating, refresh-cookie propagation, trusted-origin redirect and missing-configuration denial. SDK mocked.");
 
 callbackThrows=true;response=await callback.GET({nextUrl:new URL("http://localhost:3000/auth/callback?code=private-fixture-code")});assert.equal(response.location,"http://localhost:3000/login?error=oauth");callbackThrows=false;
 process.env.NEXT_PUBLIC_SITE_URL="https://creatorlens.example";
-process.env.APPLICATION_ACCESS_MODE="disabled";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="authenticated";response=await proxy(request);assert.equal(response.status,503);
-process.env.APPLICATION_ACCESS_MODE="authenticated";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="disabled";response=await proxy(request);assert.equal(response.status,503);
-console.log("Acceptance regressions passed: thrown callback exchange and both access-mode mismatch directions fail closed.");
+process.env.APPLICATION_ACCESS_MODE="disabled";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="authenticated";response=await proxy(request);assert.equal(response.headers.get("Cache-Control"),"private, no-store");
+process.env.APPLICATION_ACCESS_MODE="authenticated";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="disabled";response=await proxy(request);assert.equal(response.headers.get("Cache-Control"),"private, no-store");
+console.log("Acceptance regressions passed: callback failures fail closed; obsolete mode variables cannot disable authentication.");
 
 const nextConfigSource=fs.readFileSync(path.resolve("next.config.ts"),"utf8");
 const nextConfigCode=ts.transpileModule(nextConfigSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
@@ -82,3 +83,29 @@ const ignored=configModule.exports.default.logging.incomingRequests.ignore;
 assert(ignored.some(pattern=>pattern.test("/auth/callback?code=synthetic-sensitive-code")));
 assert(!ignored.some(pattern=>pattern.test("/workspace")));
 console.log("OAuth callback development request logs suppressed without hiding normal workspace requests.");
+
+// Public build-time configuration never becomes an authorization or quota authority.
+{
+  const keys=["NODE_ENV","NEXT_PUBLIC_API_BASE_URL","NEXT_PUBLIC_APPLICATION_ACCESS_MODE","NEXT_PUBLIC_STATUS_POLL_INTERVAL_MS"];
+  const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
+  const apiFile=path.join(root,"lib/api.ts"),uiFile=path.join(root,"lib/ui-config.ts");
+  try {
+    process.env.NODE_ENV="production";
+    process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="authenticated";
+    process.env.NEXT_PUBLIC_API_BASE_URL="http://insecure.invalid";
+    cache.delete(apiFile);assert.throws(()=>load(apiFile),/trusted API origin/);
+    process.env.NEXT_PUBLIC_API_BASE_URL="https://api.fixture.invalid";
+    cache.delete(apiFile);assert.equal(typeof load(apiFile).checkBackend,"function");
+    process.env.NEXT_PUBLIC_STATUS_POLL_INTERVAL_MS="1500";
+    cache.delete(uiFile);assert.equal(load(uiFile).uiConfig.pollIntervalMs,1500);
+    process.env.NEXT_PUBLIC_STATUS_POLL_INTERVAL_MS="0";
+    cache.delete(uiFile);assert.throws(()=>load(uiFile),/Invalid public polling/);
+    for (const component of ["GoogleSignIn.tsx","AccountProvider.tsx"]) {
+      assert(!fs.readFileSync(path.join(root,"components",component),"utf8").includes("five free comparisons"));
+    }
+  } finally {
+    for (const key of keys) { if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key]; }
+    cache.delete(apiFile);cache.delete(uiFile);
+  }
+  console.log("Configuration contracts passed: trusted deployed API origins, bounded environment-driven polling and no fixed client credit promise.");
+}

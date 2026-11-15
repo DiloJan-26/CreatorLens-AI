@@ -14,13 +14,6 @@ def model_configuration_error(settings: Any) -> str | None:
         return 'Only the Gemini Developer API provider is supported.'
     if settings.llm_model not in SUPPORTED_GEMINI_MODELS:
         return 'LLM_MODEL must be an exact approved Gemini model ID.'
-    environment = getattr(settings, 'environment', 'local').strip().lower()
-    fields = getattr(settings, 'model_fields_set', set())
-    if environment not in {'local', 'test'} and 'llm_model' not in fields:
-        return 'LLM_MODEL must be explicitly configured for the deployed API and worker.'
-    fallback = getattr(settings, 'llm_fallback_model', None)
-    if fallback and fallback != settings.llm_model:
-        return 'Automatic model fallback is disabled; configure only LLM_MODEL.'
     return None
 
 

@@ -141,7 +141,7 @@ async def _stream_llm_generation_test(prompt: str) -> AsyncIterator[str]:
         llm = get_llm(
             streaming=True,
             temperature=0.2,
-            max_output_tokens=80,
+            max_output_tokens=get_settings().diagnostic_max_output_tokens,
         )
 
         yield _sse_event(

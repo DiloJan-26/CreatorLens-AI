@@ -15,7 +15,7 @@ from app.services.provider_admission import admit,paid_configuration
 
 
 def setup(session,monkeypatch):
-    settings=SimpleNamespace(paid_operations_enabled=True,provider_operation_ceiling_usd=".1",user_budget_usd="1",global_budget_usd="10",extraction_operation_bound_usd=".1",provider_input_byte_limit=8192,llm_provider="gemini",llm_model="gemini-3.5-flash-lite",llm_estimate_service_tier="standard",application_access_mode="authenticated")
+    settings=SimpleNamespace(gemini_api_key="offline-test-only",llm_cache_billing_mode="implicit",provider_emergency_stop=False,provider_operation_ceiling_usd=".1",user_budget_usd="1",global_budget_usd="10",extraction_operation_bound_usd=".1",provider_input_byte_limit=8192,llm_provider="gemini",llm_model="gemini-3.5-flash-lite",llm_estimate_service_tier="standard")
     import app.services.provider_admission as module
     monkeypatch.setattr(module,"enforce_rate",lambda *args:None)
     monkeypatch.setattr(module,"get_settings",lambda:settings)
@@ -49,7 +49,7 @@ def test_semantic_safe_retry_and_slot_bound(db_session,monkeypatch):
     assert admit(db_session,a,p,"semantic",slot="content_2",settings=s)
 
 
-@pytest.mark.parametrize("change",[{"paid_operations_enabled":False},{"user_budget_usd":"0"},{"provider_operation_ceiling_usd":".000001"},{"provider_input_byte_limit":0}])
+@pytest.mark.parametrize("change",[{"provider_emergency_stop":True},{"user_budget_usd":"0"},{"provider_operation_ceiling_usd":".000001"},{"provider_input_byte_limit":0}])
 def test_budget_kill_switch_and_unknown_configuration(db_session,monkeypatch,change):
     a,p,r,s=setup(db_session,monkeypatch)
     for key,value in change.items():setattr(s,key,value)
@@ -131,7 +131,7 @@ def test_worker_reloads_owner_account_and_reservation(db_session,monkeypatch):
 
 def test_input_budget_and_no_unadmitted_client_creation(monkeypatch):
     import app.services.provider_admission as admission
-    settings=SimpleNamespace(application_access_mode="authenticated",provider_input_byte_limit=10)
+    settings=SimpleNamespace(provider_input_byte_limit=10)
     monkeypatch.setattr(admission,"get_settings",lambda:settings)
     with pytest.raises(HTTPException):admission.check_input(["short"])
     with admission.operation_scope("durable-operation"):

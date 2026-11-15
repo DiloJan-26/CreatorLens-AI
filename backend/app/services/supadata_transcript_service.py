@@ -76,7 +76,7 @@ def _fetch_transcript_payload(
     headers = {"x-api-key": api_key}
 
     try:
-        client_timeout = httpx.Timeout(float(timeout), connect=10.0)
+        client_timeout = httpx.Timeout(float(timeout), connect=min(timeout,get_settings().http_connect_timeout_seconds))
         with httpx.Client(timeout=client_timeout) as client:
             response = client.get(
                 f"{SUPADATA_API_BASE}/transcript",
@@ -143,7 +143,7 @@ def _poll_transcript_job(
         if "content" in payload:
             return payload
 
-        time.sleep(1.0)
+        time.sleep(get_settings().supadata_poll_interval_seconds)
 
     raise SupadataTranscriptUnavailableError("Supadata transcript request timed out.")
 

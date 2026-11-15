@@ -1,6 +1,6 @@
 """Reserve credit, job and outbox atomically before any broker publication."""
 from uuid import uuid4
-from app.core.access import require_principal
+from app.core.access import require_principal,owned_project
 from app.core.config import get_settings
 from app.core.request_limits import enforce_rate
 from app.db.session import database_session
@@ -16,6 +16,10 @@ def start(project_id,key):
     paid_configuration(settings,"extraction")
     enforce_rate(settings,principal.user_id,"analysis")
     with database_session() as session:
+        project=owned_project(session,project_id,principal)
+        if project.content_1_platform!="youtube" or project.content_2_platform!="youtube":
+            from fastapi import HTTPException
+            raise HTTPException(403,"Only bounded YouTube extraction is approved for production.")
         reservation,created=reserve(session,principal,project_id,key)
         if created:
             job=JobRepository(session).create(project_id)

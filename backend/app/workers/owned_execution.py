@@ -18,7 +18,6 @@ def owned_task(kind):
     def decorate(function):
         @wraps(function)
         def execute(*args,**kwargs):
-            if get_settings().application_access_mode!="authenticated":return function(*args,**kwargs)
             identifier=kwargs.get("snapshot_id" if kind=="semantic" else "job_id") or args[-1]
             operation=None
             with database_session() as session:

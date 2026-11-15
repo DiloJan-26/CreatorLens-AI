@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.core.config import setting_value
 
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -59,9 +60,9 @@ class TraceSpan:
         if self.run is None:
             return
         try:
-            self.run.end(outputs=outputs)
+            self.run.end(outputs={"payload_redacted": True})
         except Exception:
-            logger.warning("LangSmith trace output update failed.", exc_info=True)
+            logger.warning("LangSmith trace output update failed.", exc_info=False)
 
 
 class OptionalTrace(AbstractContextManager[TraceSpan]):
@@ -87,6 +88,11 @@ class OptionalTrace(AbstractContextManager[TraceSpan]):
     def __enter__(self) -> TraceSpan:
         if not self.settings.langsmith_tracing_configured:
             return self._span
+        from hashlib import sha256
+        # Stable sampling keeps every span in a project together; no text is sampled.
+        sample=int(sha256(str(self.metadata.get("project_id",self.name)).encode()).hexdigest()[:8],16)/2**32
+        if sample >= setting_value(self.settings,'langsmith_sample_rate'):
+            return self._span
         try:
             from langsmith.run_helpers import trace
 
@@ -98,7 +104,7 @@ class OptionalTrace(AbstractContextManager[TraceSpan]):
             self._context = trace(
                 self.name,
                 run_type=self.run_type,
-                inputs=self.inputs,
+                inputs={"payload_redacted": True},
                 metadata=self.metadata,
                 project_name=self.settings.langsmith_project,
                 client=client,
@@ -110,7 +116,7 @@ class OptionalTrace(AbstractContextManager[TraceSpan]):
             logger.warning(
                 "LangSmith trace start failed trace_name=%s",
                 self.name,
-                exc_info=True,
+                exc_info=False,
             )
         return self._span
 
@@ -123,12 +129,15 @@ class OptionalTrace(AbstractContextManager[TraceSpan]):
         if self._context is None:
             return False
         try:
-            self._context.__exit__(exc_type, exc_value, traceback)
+            if exc_type is not None:
+                self._context.__exit__(RuntimeError,RuntimeError("Operation failed; private error details omitted."),None)
+            else:
+                self._context.__exit__(None,None,None)
         except Exception:
             logger.warning(
                 "LangSmith trace finish failed trace_name=%s",
                 self.name,
-                exc_info=True,
+                exc_info=False,
             )
         return False
 
@@ -160,4 +169,5 @@ def _langsmith_client(
         api_url=api_url,
         api_key=api_key,
         workspace_id=workspace_id,
+        hide_inputs=True, hide_outputs=True,
     )

@@ -135,9 +135,19 @@ def record_cost_event(
             settings=get_settings()
             usage=usage or TokenUsage()
             model=usage.model_id or llm_model
+            admitted_registry=None
+            from app.services.provider_admission import active_operation
+            operation_id=active_operation.get()
+            if operation_id:
+                from app.db.models.account import ProviderOperation
+                with database_session() as admission_session:
+                    operation=admission_session.get(ProviderOperation,operation_id)
+                    quote=(operation.provider_details or {}).get("pricing") if operation and operation.project_id==project_id else None
+                    if quote:
+                        admitted_registry={"version":quote["policy_version"],"entries":[quote]}
             details=estimate_model_cost(usage,provider=llm_provider,model=model,
                 service_tier=usage.service_tier or settings.llm_estimate_service_tier,
-                caching_mode=settings.llm_cache_billing_mode,deterministic=provider_invocation_count==0,at=inference_at)
+                caching_mode=settings.llm_cache_billing_mode,deterministic=provider_invocation_count==0,at=inference_at,pricing_registry=admitted_registry)
             if provider_invocation_count and (inference_at is None or getattr(inference_at,'tzinfo',None) is None):
                 details.update(status='pricing_unavailable',estimated_cost_usd=None,priced_subtotal_usd=None,components={},
                     reason='Actual timezone-aware inference timestamp unavailable; no current-date repricing.')

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getDemoCapabilities, checkLlmHealth, testLlmGeneration } from "@/lib/api";
+import { getProviderStatus, checkLlmHealth, testLlmGeneration } from "@/lib/api";
 
 type ReasoningState = "untested" | "active" | "unavailable";
 
@@ -17,7 +17,7 @@ export function AiReasoningStatus() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    getDemoCapabilities().then(value => setProviderAllowed(value.provider_calls_enabled)).catch(() => {});
+    getProviderStatus().then(value => setProviderAllowed(value.provider_calls_enabled)).catch(() => {});
 
     checkLlmHealth()
       .then((res) => {

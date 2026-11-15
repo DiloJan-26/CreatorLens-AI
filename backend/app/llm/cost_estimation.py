@@ -38,7 +38,7 @@ def estimate_cost_usd(
 # Runtime estimation uses an exact, reviewed registry, never the global legacy rates.
 
 
-def estimate_model_cost(usage, *, provider, model, service_tier=None, at=None, caching_mode='unknown', deterministic=False, api_backend='gemini_developer_api'):
+def estimate_model_cost(usage, *, provider, model, service_tier=None, at=None, caching_mode='unknown', deterministic=False, api_backend='gemini_developer_api', pricing_registry=None):
     result=dict(status='pricing_unavailable',estimated_cost_usd=None,priced_subtotal_usd=None,
         actual_billed_cost_usd=None,mode='paid_tier_equivalent_not_invoice',reason=None,
         provider=provider,model=model,service_tier=service_tier,caching_mode=caching_mode,policy_version=None,components={})
@@ -46,7 +46,7 @@ def estimate_model_cost(usage, *, provider, model, service_tier=None, at=None, c
         return {**result,'status':'known_zero','estimated_cost_usd':'0','priced_subtotal_usd':'0','mode':'no_provider_call','reason':'No model invocation.'}
     from app.llm.pricing_policy import load_pricing_registry,pricing_date,resolve_price
     try:
-        registry=load_pricing_registry();day=pricing_date(at)
+        registry=load_pricing_registry() if pricing_registry is None else pricing_registry;day=pricing_date(at)
         rate=resolve_price(registry,provider,model,service_tier,day,api_backend)
     except (OSError,ValueError,KeyError,TypeError,ArithmeticError):
         result['reason']='Invalid, ambiguous or unsupported pricing configuration/date.';return result

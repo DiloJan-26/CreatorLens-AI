@@ -1,3 +1,4 @@
+import pytest
 import logging
 
 import httpx
@@ -83,3 +84,10 @@ def test_youtube_api_key_is_sent_in_header_not_request_url(monkeypatch) -> None:
         assert api_key not in str(request.url)
         assert "key" not in request.url.params
         assert request.headers["X-Goog-Api-Key"] == api_key
+
+
+@pytest.fixture(autouse=True)
+def isolated_legacy_transport_fixture(monkeypatch):
+    # These tests already fake transports/captions and prohibit external sockets.
+    # Production legacy-entry rejection is covered by bounded extraction tests.
+    monkeypatch.setattr("app.extraction.policy.block_legacy_provider",lambda:None)

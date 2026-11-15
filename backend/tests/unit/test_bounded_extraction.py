@@ -22,8 +22,8 @@ OTHER = "https://www.youtube.com/watch?v=bounded_two"
 
 
 def settings(**changes):
-    values=dict(application_access_mode="authenticated", extraction_enabled=True,
-        paid_operations_enabled=True, extraction_max_concurrent_operations=2,
+    values=dict(
+        provider_emergency_stop=False, extraction_max_concurrent_operations=2,
         extraction_max_video_seconds=300, extraction_max_url_bytes=2048,
         extraction_max_response_bytes=16384, extraction_timeout_seconds=5,
         supadata_billing_tier="pro_monthly_prepaid", supadata_prepaid_verified=True,
@@ -99,7 +99,7 @@ def test_overlapping_registry_periods_rejected(tmp_path):
     with pytest.raises(ValueError,match="Overlapping"):policy.registry(p)
 
 
-@pytest.mark.parametrize("field,value",[("extraction_enabled",False),("paid_operations_enabled",False),("supadata_prepaid_verified",False),("supadata_auto_recharge_disabled",False),("supadata_api_key",None),("supadata_credit_limit",0),("supadata_credit_limit",3001),("supadata_credit_pool",""),("extraction_max_video_seconds",0),("extraction_max_response_bytes",0),("extraction_max_concurrent_operations",0),("extraction_timeout_seconds",0),("provider_operation_ceiling_usd",".00001"),("user_budget_usd","0"),("global_budget_usd","0"),("supadata_transcript_mode","auto")])
+@pytest.mark.parametrize("field,value",[("provider_emergency_stop",True),("supadata_billing_tier","unverified_tier"),("supadata_prepaid_verified",False),("supadata_auto_recharge_disabled",False),("supadata_api_key",None),("supadata_credit_limit",0),("supadata_credit_limit",3001),("supadata_credit_pool",""),("extraction_max_video_seconds",0),("extraction_max_response_bytes",0),("extraction_max_concurrent_operations",0),("extraction_timeout_seconds",0),("provider_operation_ceiling_usd",".00001"),("user_budget_usd","0"),("global_budget_usd","0"),("supadata_transcript_mode","auto")])
 def test_missing_approval_or_bound_is_fail_closed(field,value):
     with pytest.raises(HTTPException):policy.configuration(settings(**{field:value}),at=date(2026,11,14))
 
@@ -305,7 +305,7 @@ def test_provider_pacing_is_shared_by_account_pool(tier,interval):
     calls=[]
     class Redis:
         def set(self,key,value,**kwargs):calls.append((key,kwargs));return True
-    enforce_provider_rate(settings(supadata_billing_tier=tier),connection=Redis())
+    enforce_provider_rate(settings(supadata_billing_tier=tier,supadata_request_interval_ms=interval),connection=Redis())
     assert calls[0][1]=={"nx":True,"px":interval}
     assert "offline-fixture-pool" not in calls[0][0]
 
@@ -348,7 +348,7 @@ def test_metadata_duration_rejection_never_starts_transcription(db_session,owned
 
 
 def test_provider_kill_switch_checked_before_any_transport_or_new_attempt(db_session,owned,monkeypatch):
-    owned[-1].paid_operations_enabled=False
+    owned[-1].provider_emergency_stop=True
     monkeypatch.setattr(provider.httpx,"Client",lambda **kwargs:pytest.fail("Transport must not be constructed."))
     with pytest.raises(HTTPException):provider.request(owned[1],"content_1",URL,"youtube","metadata")
     assert db_session.scalar(select(func.count()).select_from(ProviderOperation))==0
@@ -392,7 +392,7 @@ def test_additive_migration_renders_postgresql_sql_and_one_head():
     from alembic.operations import Operations
     root=Path(__file__).parents[2]
     config=Config(str(root/"alembic.ini"));config.set_main_option("script_location",str(root/"alembic"))
-    assert ScriptDirectory.from_config(config).get_heads()==["20261114_0013"]
+    assert ScriptDirectory.from_config(config).get_heads()==["20261115_0014"]
     spec=importlib.util.spec_from_file_location("extraction_revision",root/"alembic/versions/20261114_0013_extraction_accounting.py")
     revision=importlib.util.module_from_spec(spec);spec.loader.exec_module(revision)
     output=StringIO()

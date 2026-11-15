@@ -1,3 +1,6 @@
+"""Pipeline-stage tests; signed route-to-owned-worker acceptance is tested separately."""
+import pytest
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 from app.schemas.ingestion import IngestionJobStatus
@@ -32,7 +35,7 @@ def test_worker_pipeline_reaches_ready_without_runtime_services(monkeypatch) -> 
     )
     monkeypatch.setattr(ingestion_tasks, "set_job_task_id", lambda *_: None)
 
-    extraction_result = ingestion_tasks.ingest_project_task.run("job-1")
+    extraction_result = ingestion_tasks.ingest_project_task.run.__wrapped__(ingestion_tasks.ingest_project_task,"job-1")
 
     assert extraction_result["status"] == IngestionJobStatus.CHUNKING.value
     assert transitions == [
@@ -75,7 +78,7 @@ def test_worker_pipeline_reaches_ready_without_runtime_services(monkeypatch) -> 
         lambda _job_id, state: transitions.append(state),
     )
 
-    indexing_result = indexing_tasks.index_project_task.run("job-1")
+    indexing_result = indexing_tasks.index_project_task.run.__wrapped__(indexing_tasks.index_project_task,"job-1")
 
     assert indexing_result["status"] == IngestionJobStatus.READY.value
     assert transitions == [
@@ -92,9 +95,23 @@ def test_duplicate_ingestion_delivery_does_not_restart_indexing(monkeypatch) -> 
         lambda _job_id: ("project-1", IngestionJobStatus.EMBEDDING),
     )
 
-    result = ingestion_tasks.ingest_project_task.run("job-1")
+    result = ingestion_tasks.ingest_project_task.run.__wrapped__(ingestion_tasks.ingest_project_task,"job-1")
 
     assert result == {
         "job_id": "job-1",
         "status": IngestionJobStatus.EMBEDDING.value,
     }
+
+
+@pytest.fixture(autouse=True)
+def authorized_pipeline_stage_fixture(monkeypatch):
+    from app.core.access import current_principal
+    from app.core.identity import Principal
+    principal=current_principal.set(Principal("offline-pipeline-user","offline-session",1))
+    @contextmanager
+    def database():yield SimpleNamespace()
+    monkeypatch.setattr("app.db.session.database_session",database)
+    monkeypatch.setattr("app.services.account_usage.latest_reservation",lambda *args:SimpleNamespace(id="offline-reservation"))
+    monkeypatch.setattr("app.workers.owned_execution.queue_index",lambda *args:None)
+    try:yield
+    finally:current_principal.reset(principal)

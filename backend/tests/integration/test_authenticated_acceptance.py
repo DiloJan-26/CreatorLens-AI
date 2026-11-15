@@ -14,7 +14,7 @@ from sqlalchemy import select
 from app.core.config import Settings
 from app.core.identity import JwksVerifier
 from app.core.access import current_principal
-from app.core.demo_access import DemoAccessMiddleware
+from app.core.authentication_middleware import AuthenticationMiddleware
 from app.db.models.account import AnalysisReservation,ProviderOperation,UserEntitlement,DispatchOutbox
 from app.db.repositories import storage_repository as storage
 from app.db.repositories.job_repository import JobRepository
@@ -28,7 +28,7 @@ from tests.unit.test_bounded_extraction import settings as bounded_settings
 @pytest.mark.parametrize("captions",[True,False])
 def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
     import app.core.authenticated_access as boundary
-    import app.core.demo_access as gate
+    import app.core.authentication_middleware as gate
     import app.insights.insight_service as insight_service
     from app.rag import intelligence_context
     config=vars(bounded_settings()).copy();config.pop("transcript_fallback_language_list")
@@ -62,7 +62,7 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
     ids=[str(uuid4()),str(uuid4())];sessions=[str(uuid4()),str(uuid4())]
     def token(i,expired=False):return jwt.encode(dict(sub=ids[i],session_id=sessions[i],iat=int(time())-60,exp=int(time())-1 if expired else int(time())+300,iss=settings.supabase_jwt_issuer,aud="authenticated",role="authenticated",app_metadata={"provider":"google","providers":["google"]},amr=[{"method":"oauth"}]),key,algorithm="ES256",headers={"kid":"acceptance"})
     headers=[{"Authorization":"Bearer "+token(i)} for i in range(2)]
-    app=FastAPI();app.add_middleware(DemoAccessMiddleware)
+    app=FastAPI();app.add_middleware(AuthenticationMiddleware)
     for module in (projects,account,ingestion,insights,chat):app.include_router(module.router)
     client=TestClient(app)
     provider_calls=[]

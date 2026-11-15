@@ -49,10 +49,11 @@ def test_rotation_and_refresh_throttle():
     v.verify(token("other"),settings); assert len(calls)==2
 
 
-def test_authentication_never_implicitly_enables():
-    s=Settings(_env_file=None,SUPABASE_URL="https://auth.example")
-    assert s.application_access_mode=="disabled"
-    with pytest.raises(ValueError): Settings(_env_file=None,APPLICATION_ACCESS_MODE="authenticated")
+def test_authentication_is_mandatory_and_missing_configuration_fails_closed():
+    s=Settings(_env_file=None)
+    assert not hasattr(s,"application_access_mode")
+    with pytest.raises(ValueError):s.require_service_configuration()
+    with pytest.raises(ValueError):Settings(_env_file=None,SUPABASE_URL="https://auth.example")
 
 
 def test_invalid_configuration_does_not_display_private_values():

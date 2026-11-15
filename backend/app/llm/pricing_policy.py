@@ -8,7 +8,17 @@ REGISTRY_PATH = Path(__file__).with_name('pricing_registry.json')
 
 
 def load_pricing_registry(path: Path | None = None) -> dict:
+    if path is None:
+        from app.core.config import get_settings
+        from app.core.active_pricing import active_registry
+        value = getattr(get_settings(), "llm_active_pricing_json", None)
+        if value is not None:
+            return active_registry(value, 'llm')
     registry = json.loads((path or REGISTRY_PATH).read_text(encoding='utf-8'))
+    return validate_registry(registry)
+
+
+def validate_registry(registry: dict) -> dict:
     if not isinstance(registry.get('version'), str) or not isinstance(registry.get('entries'), list):
         raise ValueError('Invalid pricing registry.')
     periods: dict[tuple, list[tuple[date, date]]] = {}

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
+from app.core.config import get_settings
 from app.core.access import require_principal,owned_project,insert_once
 from app.db.models.account import AppUser,UsageEvent,RevokedSession,AnalysisReservation,ProviderOperation
 from app.db.session import database_session
@@ -56,4 +57,4 @@ def project_usage(project_id:str):
         operations=session.scalars(select(ProviderOperation).where(ProviderOperation.project_id==project_id,ProviderOperation.user_id==principal.user_id)).all()
         from app.extraction.accounting import public_operation
         extraction_operations=[public_operation(op) for op in operations if op.kind in {"extraction","extraction_metadata"} and op.provider_details]
-        return {"extraction_operations":extraction_operations,"analysis_state":reservation.state if reservation else "not_started","completion_mode":reservation.completion_mode if reservation else None,"assistant_remaining":max(0,3-sum(op.kind=="assistant" for op in operations if reservation and op.reservation_id==reservation.id)),"semantic_remaining":{slot:max(0,2-sum(op.kind=="semantic" and op.slot==slot for op in operations if reservation and op.reservation_id==reservation.id)) for slot in ("content_1","content_2")}}
+        return {"extraction_operations":extraction_operations,"analysis_state":reservation.state if reservation else "not_started","completion_mode":reservation.completion_mode if reservation else None,"assistant_remaining":max(0,get_settings().assistant_admissions_per_analysis-sum(op.kind=="assistant" for op in operations if reservation and op.reservation_id==reservation.id)),"semantic_remaining":{slot:max(0,get_settings().semantic_attempts_per_slot-sum(op.kind=="semantic" and op.slot==slot for op in operations if reservation and op.reservation_id==reservation.id)) for slot in ("content_1","content_2")}}

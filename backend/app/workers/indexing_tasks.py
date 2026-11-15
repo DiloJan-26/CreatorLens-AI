@@ -52,8 +52,8 @@ def completion_status_for_content(
 )
 @owned_task("index")
 def index_project_task(self, job_id: str) -> dict[str, str]:
-    from app.core.demo_access import require_local_worker
-    require_local_worker()
+    from app.core.access import require_principal
+    require_principal()
     project_id, current = job_context(job_id)
     if current in {
         IngestionJobStatus.READY,

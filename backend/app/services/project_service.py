@@ -303,7 +303,7 @@ def _extract_and_store_platform(
 ) -> str:
     normalized_url = _normalized_cache_url(url)
     extraction_result = None if refresh_evidence else _cached_extraction_result(normalized_url)
-    if get_settings().application_access_mode == "authenticated" and extraction_result is not None:
+    if extraction_result is not None:
         from app.extraction.bounded_provider import compatible_cache
         if not compatible_cache(extraction_result, get_settings()):
             extraction_result = None
@@ -333,8 +333,7 @@ def _extract_and_store_platform(
                 url=url,
             )
         except Exception:
-            if get_settings().application_access_mode == "authenticated":
-                raise
+            raise
             extraction_result = VideoExtractionResult(
                 metadata=_failed_video_metadata(
                     slot=slot,
@@ -399,7 +398,7 @@ def _extract_and_store_platform(
 
 def _normalized_cache_url(url: str) -> str | None:
     try:
-        if get_settings().application_access_mode == "authenticated" and urlparse(url).hostname in {"facebook.com","www.facebook.com","m.facebook.com"}:
+        if urlparse(url).hostname in {"facebook.com","www.facebook.com","m.facebook.com"}:
             from app.extraction.policy import input_url
             return input_url(url,"facebook",get_settings())
         return normalize_content_url(url)
@@ -644,19 +643,8 @@ def _extract_url(
     platform: str,
     url: str,
 ) -> VideoExtractionResult:
-    if get_settings().application_access_mode == "authenticated":
-        from app.extraction.bounded_provider import extract
-        return extract(project_id, slot, platform, url)
-    if platform == "youtube":
-        return extract_youtube_video(url)
-
-    if platform == "instagram":
-        return extract_instagram_video(url)
-
-    if platform == "facebook":
-        return extract_facebook_content(url=url, project_id=project_id, slot=slot)
-
-    raise ValueError("Unsupported platform.")
+    from app.extraction.bounded_provider import extract
+    return extract(project_id, slot, platform, url)
 
 
 def _failed_video_metadata(

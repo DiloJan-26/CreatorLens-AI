@@ -5,9 +5,13 @@ from app.db.models.account import ProviderOperation,AnalysisReservation
 from app.services.account_usage import event
 
 
-def mark_uncertain_operations(session,*,now=None,after_seconds=600,limit=100):
+def mark_uncertain_operations(session,*,now=None,after_seconds=None,limit=None):
+    from app.core.config import get_settings
+    settings=get_settings()
+    after_seconds=settings.reconciliation_after_seconds if after_seconds is None else max(settings.reconciliation_after_seconds,after_seconds)
+    limit=settings.reconciliation_batch_size if limit is None else max(1,min(limit,settings.reconciliation_batch_size))
     now=now or datetime.now(UTC)
-    rows=session.scalars(select(ProviderOperation).where(ProviderOperation.state.in_(["admitted","running"]),ProviderOperation.created_at<now-timedelta(seconds=max(600,after_seconds))).limit(min(100,limit)).with_for_update(skip_locked=True)).all()
+    rows=session.scalars(select(ProviderOperation).where(ProviderOperation.state.in_(["admitted","running"]),ProviderOperation.created_at<now-timedelta(seconds=max(600,after_seconds))).limit(limit).with_for_update(skip_locked=True)).all()
     for operation in rows:
         operation.state="needs_reconciliation"
         if operation.provider_details:
@@ -21,7 +25,7 @@ def mark_uncertain_operations(session,*,now=None,after_seconds=600,limit=100):
     # A crash after the worker claim but before the first provider admission also
     # needs durable review; duplicate outbox delivery must never replay that work.
     from app.db.models.account import DispatchOutbox,UsageEvent
-    claims=session.scalars(select(UsageEvent).where(UsageEvent.kind=="ingestion_claimed",UsageEvent.created_at<now-timedelta(seconds=max(600,after_seconds))).limit(min(100,limit))).all()
+    claims=session.scalars(select(UsageEvent).where(UsageEvent.kind=="ingestion_claimed",UsageEvent.created_at<now-timedelta(seconds=max(600,after_seconds))).limit(limit)).all()
     for claim in claims:
         outbox=session.get(DispatchOutbox,claim.reference_id)
         reservation=session.get(AnalysisReservation,outbox.reservation_id) if outbox else None

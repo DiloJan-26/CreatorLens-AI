@@ -71,7 +71,7 @@ def _run_actor(
             endpoint,
             params={"token": token, "timeout": max(timeout_seconds, 30)},
             json=payload,
-            timeout=httpx.Timeout(float(max(timeout_seconds, 30)) + 15, connect=10.0),
+            timeout=httpx.Timeout(float(max(timeout_seconds, 30)) + get_settings().apify_transport_grace_seconds, connect=get_settings().http_connect_timeout_seconds),
         )
         response.raise_for_status()
         data = response.json()

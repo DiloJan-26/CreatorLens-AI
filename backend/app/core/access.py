@@ -32,10 +32,12 @@ def provision(session, principal):
     user = session.scalar(select(AppUser).where(AppUser.id==principal.user_id).with_for_update())
     if user.status != "active" or session.get(RevokedSession, principal.session_id):
         raise HTTPException(403, "This account or session is unavailable.")
-    insert_once(session, UserEntitlement, dict(user_id=user.id,granted=5,consumed=0,reserved=0), "user_id")
+    from app.core.config import get_settings
+    insert_once(session, UserEntitlement, dict(user_id=user.id,granted=get_settings().initial_free_analyses,consumed=0,reserved=0), "user_id")
+    grant = session.get(UserEntitlement, user.id).granted
     insert_once(session, BudgetAccount, dict(id=user.id,reserved_usd=0), "id")
     insert_once(session, BudgetAccount, dict(id="global",reserved_usd=0), "id")
-    insert_once(session, UsageEvent, dict(id=str(uuid4()),user_id=user.id,event_key="grant:"+user.id,kind="lifetime_grant",reference_id=user.id,details={"credits":5},created_at=now), "event_key")
+    insert_once(session, UsageEvent, dict(id=str(uuid4()),user_id=user.id,event_key="grant:"+user.id,kind="lifetime_grant",reference_id=user.id,details={"credits":grant},created_at=now), "event_key")
     # Profile attributes have no authorization semantics.
     user.email, user.display_name, user.avatar_url, user.updated_at = principal.email, principal.display_name, principal.avatar_url, now
     return user

@@ -165,3 +165,10 @@ def test_caption_is_not_substituted_for_unassessable_verbal_hook():
     hook = analyze_hook({"description": "A persuasive written caption"}, [])
     assert hook.hook_type == "unavailable"
     assert hook.hook_text is None
+
+
+@pytest.fixture(autouse=True)
+def isolated_legacy_transport_fixture(monkeypatch):
+    # These tests already fake transports/captions and prohibit external sockets.
+    # Production legacy-entry rejection is covered by bounded extraction tests.
+    monkeypatch.setattr("app.extraction.policy.block_legacy_provider",lambda:None)

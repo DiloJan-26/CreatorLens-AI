@@ -1,3 +1,4 @@
+from app.core.config import setting_value
 import uuid
 from typing import Any
 
@@ -39,6 +40,7 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=qdrant_url,
         api_key=(settings.qdrant_api_key or None),
+        timeout=setting_value(settings,'qdrant_timeout_seconds'),
     )
 
 

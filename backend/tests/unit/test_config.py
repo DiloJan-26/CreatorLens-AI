@@ -113,11 +113,10 @@ def test_langsmith_tracing_requires_enabled_flag_and_key(monkeypatch) -> None:
     assert settings.langsmith_project == "creatorlens-test"
 
 
-def test_llm_pricing_is_optional_and_configurable(monkeypatch) -> None:
-    monkeypatch.setenv("LLM_INPUT_COST_PER_MILLION_USD", "0.10")
-    monkeypatch.setenv("LLM_OUTPUT_COST_PER_MILLION_USD", "0.40")
-
-    settings = Settings(_env_file=None)
-
-    assert settings.llm_input_cost_per_million_usd == 0.10
-    assert settings.llm_output_cost_per_million_usd == 0.40
+def test_legacy_flat_rates_cannot_replace_versioned_pricing(monkeypatch):
+    monkeypatch.setenv("LLM_INPUT_COST_PER_MILLION_USD","0")
+    monkeypatch.setenv("LLM_OUTPUT_COST_PER_MILLION_USD","0")
+    settings=Settings(_env_file=None)
+    assert not hasattr(settings,"llm_input_cost_per_million_usd")
+    assert not hasattr(settings,"llm_output_cost_per_million_usd")
+    assert settings.llm_active_pricing_json is None

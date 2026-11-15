@@ -28,7 +28,11 @@ jobs:
     timeout-minutes: 15
     env:
       CI: "true"
-      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+      # Public synthetic build configuration only; no live OAuth/provider credentials.
+      NEXT_PUBLIC_API_BASE_URL: https://api.fixture.invalid
+      NEXT_PUBLIC_SITE_URL: https://creator.fixture.invalid
+      NEXT_PUBLIC_SUPABASE_URL: https://fixture.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_offline_fixture
 
     defaults:
       run:

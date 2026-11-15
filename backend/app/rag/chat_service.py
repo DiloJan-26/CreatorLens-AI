@@ -1,3 +1,4 @@
+from app.core.config import setting_value
 from fastapi import HTTPException
 from datetime import datetime, UTC
 import json
@@ -346,7 +347,7 @@ async def stream_chat_answer(
             retrieved_chunk_count=rag_context.retrieved_chunk_count,
             source_balance=rag_context.source_balance,
         )
-        llm = get_llm(streaming=False, max_retries=0, timeout=30, max_output_tokens=2400)
+        llm = get_llm(streaming=False, max_retries=0, timeout=setting_value(settings,'llm_timeout_seconds'), max_output_tokens=setting_value(settings,'assistant_max_output_tokens'))
         provider_failure = False
         messages = [
             SystemMessage(
@@ -428,7 +429,9 @@ async def stream_chat_answer(
                 llm_started_at = perf_counter()
                 from app.services.provider_admission import check_input
                 check_input(messages)
-                response = await asyncio.wait_for(llm.ainvoke(messages), timeout=35)
+                from langsmith import tracing_context
+                with tracing_context(enabled=False):
+                    response = await asyncio.wait_for(llm.ainvoke(messages), timeout=setting_value(settings,'llm_timeout_seconds')+setting_value(settings,'inference_deadline_grace_seconds'))
             except Exception:
                 if rag_context.intelligence is None:
                     raise

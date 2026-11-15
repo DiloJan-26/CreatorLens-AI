@@ -29,10 +29,10 @@ class RevokedSession(Base):
 class UserEntitlement(Base):
     __tablename__ = "user_entitlements"
     user_id: Mapped[str] = mapped_column(ForeignKey("app_users.id"), primary_key=True)
-    granted: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    granted: Mapped[int] = mapped_column(Integer, nullable=False)
     consumed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     reserved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    __table_args__ = (CheckConstraint("granted = 5 AND consumed >= 0 AND reserved >= 0 AND consumed + reserved <= granted", name="credit_bounds"),)
+    __table_args__ = (CheckConstraint("granted >= 0 AND consumed >= 0 AND reserved >= 0 AND consumed + reserved <= granted", name="credit_bounds"),)
 
 
 ACTIVE_STATES = ("reserved", "processing", "needs_reconciliation")
@@ -52,7 +52,7 @@ class AnalysisReservation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     __table_args__ = (UniqueConstraint("user_id", "idempotency_key"),
-        Index("uq_active_analysis_per_user", "user_id", unique=True,
+        Index("uq_active_analysis_per_project", "project_id", unique=True,
               postgresql_where=text("state IN ('reserved','processing','needs_reconciliation')"),
               sqlite_where=text("state IN ('reserved','processing','needs_reconciliation')")),)
 

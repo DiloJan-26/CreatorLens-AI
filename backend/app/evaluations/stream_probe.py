@@ -25,6 +25,8 @@ def evaluate_stream(mode):
         replacements=dict(create_or_get_session=lambda **kwargs:ChatSession(session_id='synthetic-session',project_id=PROJECT,created_at='2026-01-01',updated_at='2026-01-01'),add_message=add,get_recent_messages=lambda **kwargs:[],build_rag_context=lambda **kwargs:RagContext(project_id=PROJECT,intent='hook_analysis' if mode=='timeout' else 'metrics',intelligence=context,structured_context='Synthetic canonical context',retrieved_context='',citations=citations),get_llm=get_llm,get_project_runtime_signals=lambda project:SimpleNamespace(cache_hit=None,cache_miss=None,transcript_provider=None,transcript_fallback_used=None,embedding_reused=None),start_llm_run=lambda **kwargs:None,complete_llm_run=lambda *args,**kwargs:False,fail_llm_run=lambda *args,**kwargs:failures.append(kwargs),record_cost_event=lambda **kwargs:cost.append(kwargs),save_chat_citations=lambda **kwargs:None)
         for name,value in replacements.items():stack.enter_context(patch.object(chat_service,name,value))
         stack.enter_context(patch('app.rag.intelligence_context.context_is_current',return_value=True))
+        stack.enter_context(patch('app.services.provider_admission.admit_current',return_value='offline-probe-admission'))
+        stack.enter_context(patch('app.services.provider_admission.finish',return_value=None))
         async def collect():return [event async for event in chat_service.stream_chat_answer(PROJECT,ChatStreamRequest(message=question))]
         for event in asyncio.run(collect()):
             lines=event.strip().splitlines();events.append((lines[0].removeprefix('event: ').strip(),json.loads(lines[1].removeprefix('data: '))))

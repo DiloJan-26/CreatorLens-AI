@@ -3,6 +3,7 @@
 The global budget row serializes credit-pool and per-slot admissions on PostgreSQL.
 Neither a failed HTTP call nor a timeout releases estimated exposure automatically.
 """
+from app.core.config import setting_value
 from datetime import datetime, UTC
 from decimal import Decimal
 from hashlib import sha256
@@ -19,6 +20,8 @@ from app.extraction.policy import configuration, input_url, source_key, SLOTS, P
 
 
 def admit(session, principal, project_id, slot, url, platform, operation, *, settings=None, rate=True):
+    if platform != "youtube":
+        raise HTTPException(403,"Only bounded YouTube extraction is approved for production.")
     settings = settings or get_settings()
     prices = configuration(settings)
     if slot not in SLOTS or operation not in {"metadata", "native_transcript"}:
@@ -42,7 +45,7 @@ def admit(session, principal, project_id, slot, url, platform, operation, *, set
         raise HTTPException(409, "Only authoritative claimed ingestion work can invoke extraction.")
     kind = "extraction_metadata" if operation == "metadata" else "extraction"
     previous = session.scalars(select(ProviderOperation).where(ProviderOperation.reservation_id == reservation.id, ProviderOperation.kind == kind, ProviderOperation.slot == slot).order_by(ProviderOperation.attempt)).all()
-    maximum = 1 if operation == "metadata" else 2
+    maximum = setting_value(settings,'extraction_metadata_attempts_per_slot') if operation == "metadata" else setting_value(settings,'extraction_transcript_attempts_per_slot')
     if len(previous) >= maximum or previous and previous[-1].state != "safe_failure":
         raise HTTPException(409, "Slot attempt bound reached or prior outcome is not safely retryable.")
     if operation == "native_transcript":

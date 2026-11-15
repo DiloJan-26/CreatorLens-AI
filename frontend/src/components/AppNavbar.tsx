@@ -35,7 +35,7 @@ function Brand() {
 }
 export function AppNavbar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { enabled,account } = useAccount();
+  const { account } = useAccount();
   const [drawer, setDrawer] = useState(false);
   const [auth, setAuth] = useState(false);
   const [section, setSection] = useState("");
@@ -73,7 +73,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   );
   const navigation = (
     <nav aria-label="Workspace navigation">
-      {enabled&&<Link href="/workspace" className="rail-link">Your analyses</Link>}
+      <Link href="/workspace" className="rail-link">Your analyses</Link>
       <p className="nav-group-label">Workspace</p>
       {creatorLinks.map((l) => (
         <Link
@@ -219,7 +219,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
                 className="button-primary"
                 onClick={() => setDrawer(false)}
               >
-                {enabled ? "Open workspace" : "Explore demo"}
+                Open workspace
               </Link>
             </div>
           )}
@@ -229,22 +229,9 @@ export function AppNavbar({ children }: { children: ReactNode }) {
       <Dialog
         open={auth}
         onClose={() => setAuth(false)}
-        title={enabled ? "Sign in to CreatorLens" : "Restricted demonstration"}
+        title="Sign in to CreatorLens"
       >
-        {enabled ? (account ? <AccountMenu/> : <GoogleSignIn/>) : <>
-        <p className="muted">
-          CreatorLens is currently a restricted demonstration. No account is
-          required for the isolated local experience. Public project access and
-          provider generation are disabled by default.
-        </p>
-        <Link
-          href="/analyze"
-          className="button-primary mt-6"
-          onClick={() => setAuth(false)}
-        >
-          Continue to demo <Icon name="arrow" size={16} />
-        </Link>
-        </>}
+        {account ? <AccountMenu/> : <GoogleSignIn/>}
       </Dialog>
     </>
   );

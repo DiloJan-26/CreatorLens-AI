@@ -6,14 +6,14 @@ from fastapi.testclient import TestClient
 import pytest
 from app.core.identity import Principal
 from app.core.access import provision,current_principal
-from app.core.demo_access import DemoAccessMiddleware
+from app.core.authentication_middleware import AuthenticationMiddleware
 from app.db.repositories.project_repository import ProjectRepository
 from app.db.models.account import AppUser
 
 
 @pytest.fixture
 def boundary(db_session,monkeypatch):
-    import app.core.demo_access as gate
+    import app.core.authentication_middleware as gate
     import app.core.authenticated_access as access
     a=Principal(str(uuid4()),str(uuid4()),1);b=Principal(str(uuid4()),str(uuid4()),1)
     provision(db_session,a);provision(db_session,b)
@@ -24,12 +24,12 @@ def boundary(db_session,monkeypatch):
     def database():
         yield db_session
         db_session.flush()
-    settings=SimpleNamespace(application_access_mode="authenticated",environment="test")
+    settings=SimpleNamespace(environment="test",supabase_url="https://auth.example",supabase_jwt_issuer="https://auth.example/auth/v1",supabase_jwks_url="https://auth.example/auth/v1/.well-known/jwks.json",supabase_jwt_audience="authenticated")
     monkeypatch.setattr(gate,"get_settings",lambda:settings)
     monkeypatch.setattr(access,"database_session",database)
     monkeypatch.setattr(access,"enforce_rate",lambda *args:None)
     monkeypatch.setattr(access.verifier,"verify",lambda token,settings:a if token=="user-a" else b)
-    app=FastAPI();app.add_middleware(DemoAccessMiddleware)
+    app=FastAPI();app.add_middleware(AuthenticationMiddleware)
     @app.api_route("/{path:path}",methods=["GET","POST","DELETE"])
     def reached(path):return {"reached":True}
     return TestClient(app),p,a,b,db_session
@@ -53,3 +53,10 @@ def test_anonymous_global_analytics_diagnostics_and_ownerless(boundary):
     assert client.get("/api/evaluations/runs",headers={"Authorization":"Bearer user-b"}).status_code==200
     assert client.post("/health/llm/test",headers={"Authorization":"Bearer user-b"}).status_code==403
     assert client.get("/health").json()=={"status":"ok","service":"creatorlens-api"}
+
+
+def test_retired_demo_endpoint_is_not_an_authenticated_alias(boundary):
+    client,_,a,*_=boundary
+    headers={"Authorization":"Bearer user-a"}
+    assert client.get("/api/demo/capabilities",headers=headers).status_code==404
+    assert client.get("/api/providers/status",headers=headers).status_code==200

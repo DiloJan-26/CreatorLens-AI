@@ -60,5 +60,5 @@ for (const outcome of ["tie", "insufficient_evidence", "incomparable"]) {
   assert(html.includes(outcome.replaceAll("_", " ")) && !html.includes("leads under"));
 }
 const semantic = render(SemanticAnalysisPanel, { projectId: "synthetic-ui", slot: "content_1", onReady: () => {} });
-assert(semantic.includes("disabled") && semantic.includes("Provider generation is disabled"));
+assert(semantic.includes("disabled") && semantic.includes("Provider generation is suspended"));
 console.log("UI server-render contracts passed: null/zero, canonical outcome, four objectives, abstention states and disabled semantic generation. Not browser verification.");

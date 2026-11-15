@@ -6,7 +6,7 @@
 
 ### Evidence-grounded, multi-cloud RAG intelligence for short-form content
 
-CreatorLens AI compares two public YouTube, Instagram, or Facebook videos and turns their confirmed metadata, transcripts, creative structure, and engagement signals into defensible creator insights. It combines deterministic analytics with hybrid retrieval and structured LLM reasoning so every factual conclusion remains traceable to source evidence.
+CreatorLens AI analyzes stored YouTube, Instagram, or Facebook content comparisons; new admitted extraction currently supports bounded public YouTube videos. The engine turns confirmed metadata, transcripts, creative structure, and engagement signals into defensible creator insights. It combines deterministic analytics with hybrid retrieval and structured LLM reasoning so every factual conclusion remains traceable to source evidence.
 
 > Built as a production-style AI engineering case study: asynchronous ingestion, vector retrieval, constrained generation, evaluation, LLM observability, and a cost-controlled multi-cloud deployment.
 
@@ -24,7 +24,7 @@ The same workflow is observable end to end through persisted retrieval and LLM r
 
 ## Project status
 
-**This checkout includes the V2 intelligence engine and a local authentication/ownership integration.** The new account migration, hosted Google OAuth flow and coordinated deployment have not yet passed live acceptance. Local offline checks are distinct from production verification. Interactive access stays disabled by default; paid operations require separately approved limits and cost coverage.
+**This checkout includes the V2 intelligence engine and a local authentication/ownership integration.** The new account migration, hosted Google OAuth flow and coordinated deployment have not yet passed live acceptance. Local offline checks are distinct from production verification. Private API access always requires Google/Supabase authentication and ownership. External providers stay suspended by the default-on emergency stop until separately approved account, pricing and budget acceptance.
 
 | Delivery area | Accepted state |
 | --- | --- |
@@ -39,7 +39,9 @@ The same workflow is observable end to end through persisted retrieval and LLM r
 
 Supabase manages Google OAuth and sessions; FastAPI verifies ES256 access JWTs against configured public JWKS. Application profiles, nullable project ownership, five lifetime analysis credits and durable operation reservations stay in PostgreSQL. Historical ownerless projects remain quarantined. No service-role key or client-supplied owner is used.
 
-Enable `APPLICATION_ACCESS_MODE=authenticated` explicitly on the API and worker only after reviewing the example configuration and additive migration `20261114_0012`. Configure both frontend access-mode settings consistently. Paid operations default to off; unknown pricing and zero rate/budget bounds fail closed. Authenticated paid extraction is additionally blocked until the existing fallback providers have reviewed, enforceable duration/retry/pricing bounds. No configuration or cloud deployment was performed by the local implementation.
+Google/Supabase authentication is mandatory in every API environment. Configure the trusted Supabase URL, issuer and JWKS; missing verification fails closed. There are no demo/access-mode or authentication enable switches. `PROVIDER_EMERGENCY_STOP=true` suspends billable execution without hiding owned existing results. Releasing it still requires durable quotas, supported exact providers/prices, bounded requests and user/global budgets. Only bounded YouTube/Supadata extraction is approved for new provider work; legacy Apify/Deepgram and new Instagram/Facebook extraction remain blocked.
+
+The recommended initial deployment needs **10 Render values, 7 Azure worker values and 4 public Vercel values**, including the explicit default-on provider stop on both servers. Approved product limits are central defaults, not required dashboard overrides. See `docs/CreatorLens-Intelligence-v2/Deployment-Environment-Matrix.md` and `Production-Configuration-Simplification.md`. Source migration head remains `20261115_0014`; final-source PostgreSQL CI and real OAuth acceptance remain required. No cloud deployment or actual environment-file modification was performed.
 
 From `frontend/`, run `npm run test:auth` for mocked SDK/transport checks and `npm run test:ui` for presentation contracts. These do not prove live Google login or browser acceptance. The detailed local handoff is in `docs/CreatorLens-Intelligence-v2/Phase-10C-Authentication-Implementation.md`; `docs/` remains ignored unless you explicitly choose to track selected documents.
 
@@ -747,3 +749,12 @@ Execution defaults to disabled. Enabling it requires approved duration/size/time
 ### Local authenticated acceptance
 
 The local acceptance suite exercises synthetic ES256 identities, owner-scoped API and worker execution, quota settlement and bounded mocked extraction without cloud access. Optional real-Chromium component checks use `frontend/scripts/verify-browser-acceptance.mjs` with an existing Playwright installation; their SDK/API fixtures do not prove real OAuth or Next.js proxy acceptance. The user-run `backend/scripts/local_auth_acceptance.py` launcher rejects remote database/broker targets and keeps provider credentials and paid execution disabled. Real OAuth, individual PostgreSQL CI gates and coordinated cloud release still require explicit acceptance. See the local acceptance documents for pending configuration approvals.
+
+
+### Configuration and coordinated release preparation
+
+Operational limits, new-account grants, generation caps, queues and approved active-pricing JSON are centralized in backend Settings. Start with [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example); never overwrite actual environment files or expose server credentials in NEXT_PUBLIC variables. Existing entitlements and pricing history are preserved; paid execution stays off.
+
+The release source head is now `20261115_0014` (configurable allowances). Quiesce old API/workers before migration and require the disposable PostgreSQL CI gate. A no-network configuration check is available from backend/: `python -m app.core.configuration_preflight --release`. It prints validation status and a shared-policy fingerprint, never secret values. Cloud deployment remains separately authorized.
+
+Local release documents: docs/CreatorLens-Intelligence-v2/Deployment-Preflight-Audit.md, Deployment-Environment-Matrix.md, Deployment-Configuration-Externalization.md, Deployment-Manual-Execution-Guide.md and Deployment-Post-Release-Acceptance.md. The docs directory remains Git-ignored; these local documents need an explicit user-chosen tracking/backup decision.

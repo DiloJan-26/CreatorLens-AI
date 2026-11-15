@@ -187,7 +187,9 @@ def test_operation_observability_semantic_actual_call_failure_and_cache_boundari
             return SimpleNamespace(content='not json' if damage=='malformed' else json.dumps(payload),usage_metadata={
                 'input_tokens':10,'output_tokens':2,'total_tokens':12,'input_token_details':{'cache_read':0}})
     monkeypatch.setattr(service,'get_llm',lambda **kw:Model())
-    result=service.process_semantic_snapshot('synthetic-snapshot')
+    from app.services.provider_admission import operation_scope
+    with operation_scope("mocked-telemetry-admission"):
+        result=service.process_semantic_snapshot("synthetic-snapshot")
     if damage=='deduplicated':
         assert not calls and not events and not annotations
     else:

@@ -4,15 +4,18 @@ from app.db.session import database_session
 from app.db.models.account import DispatchOutbox,AnalysisReservation,AppUser
 
 
-def dispatch(only_id=None,limit=20):
+def dispatch(only_id=None,limit=None):
+    from app.core.config import get_settings
+    settings=get_settings()
+    limit=settings.outbox_batch_size if limit is None else max(1,min(limit,settings.outbox_batch_size))
     from app.workers.celery_app import celery_app
     published=0
     with database_session() as session:
         from app.services.usage_reconciliation import mark_uncertain_operations
         mark_uncertain_operations(session)
-        query=select(DispatchOutbox).where(DispatchOutbox.state.in_(["pending","sent"]),DispatchOutbox.attempts<5)
+        query=select(DispatchOutbox).where(DispatchOutbox.state.in_(["pending","sent"]),DispatchOutbox.attempts<settings.outbox_max_attempts)
         if only_id:query=query.where(DispatchOutbox.id==only_id)
-        rows=session.scalars(query.order_by(DispatchOutbox.created_at).limit(min(limit,100)).with_for_update(skip_locked=True)).all()
+        rows=session.scalars(query.order_by(DispatchOutbox.created_at).limit(limit).with_for_update(skip_locked=True)).all()
         for row in rows:
             reservation=session.get(AnalysisReservation,row.reservation_id)
             user=session.get(AppUser,reservation.user_id) if reservation else None

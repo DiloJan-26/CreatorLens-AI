@@ -29,9 +29,11 @@ def reserve(session,principal,project_id,idempotency_key):
     if existing:
         if existing.fingerprint != fingerprint: raise HTTPException(409,"Idempotency key belongs to a different analysis.")
         return existing,False
-    if session.scalar(select(AnalysisReservation.id).where(AnalysisReservation.user_id==principal.user_id,AnalysisReservation.state.in_(ACTIVE_STATES))):
-        raise HTTPException(409,"One analysis is already active. Reopen it or reconcile its status.")
-    if entitlement.consumed+entitlement.reserved >= 5:
+    from app.core.config import get_settings
+    active = session.scalars(select(AnalysisReservation).where(AnalysisReservation.user_id==principal.user_id,AnalysisReservation.state.in_(ACTIVE_STATES))).all()
+    if any(value.project_id == project_id for value in active) or len(active) >= get_settings().concurrent_analyses_per_user:
+        raise HTTPException(409,"An analysis is already active or the configured concurrent allowance is exhausted. Reopen it or reconcile its status.")
+    if entitlement.consumed+entitlement.reserved >= entitlement.granted:
         raise HTTPException(403,{"code":"analysis_limit_reached","message":"Free analysis limit reached"})
     entitlement.reserved+=1
     reservation=AnalysisReservation(id=str(uuid4()),user_id=principal.user_id,project_id=project_id,idempotency_key=idempotency_key,fingerprint=fingerprint,state="reserved")

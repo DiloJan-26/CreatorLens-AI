@@ -31,7 +31,8 @@ class JwksVerifier:
 
     @staticmethod
     def _fetch(url):
-        with httpx.Client(timeout=3, follow_redirects=False, trust_env=False) as client:
+        from app.core.config import get_settings
+        with httpx.Client(timeout=get_settings().jwks_timeout_seconds, follow_redirects=False, trust_env=False) as client:
             with client.stream("GET", url) as response:
                 response.raise_for_status()
                 chunks=[];size=0

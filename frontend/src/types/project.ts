@@ -632,4 +632,4 @@ export type SemanticAnalysis = {
   limitations?: string[]; attempts?: number;
   assessments?: { feature: string; value: string; status: string; explanation: string }[];
 };
-export type DemoCapabilities = { access: string; provider_calls_enabled: boolean };
+export type ProviderStatus = { provider_emergency_stop: boolean; provider_calls_enabled: boolean; extraction_available: boolean };

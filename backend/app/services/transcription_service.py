@@ -87,7 +87,7 @@ def transcribe_audio_url_with_deepgram(audio_url: str) -> TranscriptionResult:
             params=params,
             headers=headers,
             json=payload,
-            timeout=httpx.Timeout(45.0, connect=10.0),
+            timeout=httpx.Timeout(get_settings().deepgram_timeout_seconds, connect=min(get_settings().http_connect_timeout_seconds,get_settings().deepgram_timeout_seconds)),
         )
         response.raise_for_status()
         response_json = response.json()

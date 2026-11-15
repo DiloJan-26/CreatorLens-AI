@@ -1,4 +1,5 @@
 """Synchronous native captions only: no media download, AI fallback or job polling."""
+from app.core.config import setting_value
 import json
 import math
 import time
@@ -77,20 +78,25 @@ def request(project_id, slot, url, platform, operation):
 
 
 def extract(project_id, slot, platform, url):
+    if platform != "youtube":
+        raise ExtractionSafetyError("Only bounded YouTube extraction is approved for production.")
     settings = get_settings()
     configuration(settings)
     canonical = input_url(url, platform, settings)
-    payload = request(project_id, slot, canonical, platform, "metadata")
+    def safe_request(operation, maximum):
+        for attempt in range(maximum):
+            try:
+                return request(project_id, slot, canonical, platform, operation)
+            except SafePreSendFailure:
+                if attempt + 1 >= maximum:
+                    raise
+    payload = safe_request("metadata",setting_value(settings,'extraction_metadata_attempts_per_slot'))
     if payload is None:
         raise ExtractionSafetyError("Provider metadata is unavailable; no transcript request was made.")
     if payload.get("platform") != platform or payload.get("type") != "video" or input_url(payload.get("url"), platform, settings) != canonical:
         raise ExtractionSafetyError("Provider metadata identity does not match the requested video.")
     duration = checked_duration((payload.get("media") or {}).get("duration"), settings)
-    # One initial transcript attempt + one confirmed pre-send retry, shared by slot.
-    try:
-        transcript = request(project_id, slot, canonical, platform, "native_transcript")
-    except SafePreSendFailure:
-        transcript = request(project_id, slot, canonical, platform, "native_transcript")
+    transcript = safe_request("native_transcript",setting_value(settings,'extraction_transcript_attempts_per_slot'))
     transcript = transcript or {}
     segments = _segments_from_payload(transcript)
     stats = payload.get("stats") or {}

@@ -40,13 +40,13 @@ def main():
     for name in list(os.environ):
         if name in aliases or name.startswith(("GOOGLE_","OPENAI_","LANGCHAIN_","LANGSMITH_","OTEL_")):os.environ.pop(name,None)
     os.environ.update(public_auth)
-    os.environ.update(ENVIRONMENT="test",APPLICATION_ACCESS_MODE="authenticated",DEMO_ACCESS_MODE="disabled",DATABASE_URL=database,TEST_DATABASE_URL=database,REDIS_URL=redis,PAID_OPERATIONS_ENABLED="false",EXTRACTION_ENABLED="false",AUTHENTICATED_REQUESTS_PER_MINUTE="60",ANALYSIS_REQUESTS_PER_MINUTE="0",PAID_REQUESTS_PER_MINUTE="0",LLM_MODEL="gemini-3.5-flash-lite",LANGSMITH_TRACING="false",CORS_ORIGINS="http://localhost:3000")
+    os.environ.update(ENVIRONMENT="test",DATABASE_URL=database,TEST_DATABASE_URL=database,REDIS_URL=redis,PROVIDER_EMERGENCY_STOP="true",AUTHENTICATED_REQUESTS_PER_MINUTE="60",ANALYSIS_REQUESTS_PER_MINUTE="0",PAID_REQUESTS_PER_MINUTE="0",LLM_MODEL="gemini-3.5-flash-lite",LANGSMITH_TRACING="false",CORS_ORIGINS="http://localhost:3000")
     sys.path.insert(0,str(BACKEND))
     with tempfile.TemporaryDirectory(prefix="creatorlens-local-auth-") as temp, chdir(temp):
         # Prevent BaseSettings from reloading the real backend .env; restore cwd before cleanup.
         from app.core.config import get_settings
         get_settings.cache_clear();settings=get_settings()
-        assert not settings.paid_operations_enabled and not settings.extraction_enabled
+        assert settings.provider_emergency_stop
         assert not any((settings.gemini_api_key,settings.supadata_api_key,settings.apify_api_token,settings.deepgram_api_key,settings.qdrant_url))
         from app.core import paths
         paths.STORAGE_DIR=Path(temp)/"storage";paths.SQLITE_DB_PATH=paths.STORAGE_DIR/"creatorlens.db"

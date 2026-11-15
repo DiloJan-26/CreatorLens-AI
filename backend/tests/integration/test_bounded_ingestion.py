@@ -23,7 +23,7 @@ def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_sessio
     principal=Principal(str(uuid4()),str(uuid4()),1);provision(db_session,principal)
     handle=current_principal.set(principal)
     urls=["https://www.youtube.com/watch?v=bounded_first","https://www.youtube.com/watch?v=bounded_second"]
-    s=SimpleNamespace(application_access_mode="authenticated",paid_operations_enabled=True,extraction_enabled=True,
+    s=SimpleNamespace(provider_emergency_stop=False,
         extraction_max_concurrent_operations=1,extraction_max_video_seconds=300,extraction_max_url_bytes=2048,
         extraction_max_response_bytes=16384,extraction_timeout_seconds=5,supadata_billing_tier="pro_monthly_prepaid",
         supadata_prepaid_verified=True,supadata_auto_recharge_disabled=True,supadata_api_key="offline-fixture",

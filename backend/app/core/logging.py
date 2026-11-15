@@ -74,12 +74,10 @@ def _configured_secret_values(settings: Settings) -> tuple[str, ...]:
         settings.celery_broker_url_override,
         settings.celery_result_backend_override,
         settings.gemini_api_key,
-        settings.groq_api_key,
         settings.qdrant_api_key,
         settings.youtube_api_key,
         settings.supadata_api_key,
         settings.apify_api_token,
         settings.deepgram_api_key,
-        settings.assemblyai_api_key,
     )
     return tuple(value for value in values if value)

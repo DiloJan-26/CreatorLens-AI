@@ -1,3 +1,4 @@
+from app.core.config import setting_value
 from functools import lru_cache
 from app.core.model_policy import model_configuration_error, require_supported_model
 
@@ -24,11 +25,14 @@ def get_llm(
     settings = get_settings()
     error=model_configuration_error(settings)
     if error:raise LLMConfigurationError(error)
-    from app.core.demo_access import provider_calls_enabled
     from app.services.provider_admission import active_operation
-    permitted = provider_calls_enabled(settings) or (settings.application_access_mode == "authenticated" and settings.paid_operations_enabled and active_operation.get() is not None)
-    if not permitted:
-        raise LLMConfigurationError('Provider inference is disabled for this restricted demo.')
+    if getattr(settings,"provider_emergency_stop",True) or active_operation.get() is None:
+        raise LLMConfigurationError("Provider execution requires emergency-stop clearance and durable authorized admission.")
+    from app.core.access import require_principal
+    from fastapi import HTTPException
+    try:require_principal()
+    except HTTPException:
+        raise LLMConfigurationError("Provider execution requires a verified user context.") from None
     provider = settings.llm_provider.strip().lower()
 
     if provider != SUPPORTED_PROVIDER:
@@ -53,7 +57,7 @@ def get_llm(
         ),
         google_api_key=settings.gemini_api_key,
         streaming=streaming,
-        max_retries=0, timeout=30 if timeout is None else timeout,
+        max_retries=0, timeout=setting_value(settings,'llm_timeout_seconds') if timeout is None else timeout,
     )
 
 
@@ -79,25 +83,11 @@ def check_llm_configured() -> LLMHealthResponse:
             message="GEMINI_API_KEY is missing.",
         )
 
-    try:
-        get_llm(streaming=False)
-    except LLMConfigurationError as exc:
-        return LLMHealthResponse(
-            status="not_configured",
-            provider=provider,
-            model=settings.llm_model,
-            configured=False,
-            message=str(exc),
-        )
-    except Exception:
-        return LLMHealthResponse(
-            status="error",
-            provider=provider,
-            model=settings.llm_model,
-            configured=False,
-            message="Could not initialize LLM client.",
-        )
-
+    error=model_configuration_error(settings)
+    if error or getattr(settings,"provider_emergency_stop",True):
+        return LLMHealthResponse(status="not_configured",provider=provider,model=settings.llm_model,configured=False,
+            message=error or "External provider execution is suspended; existing results remain available.")
+    # Configuration-only GET: no client initialization, model call or admission.
     return LLMHealthResponse(
         status="ok",
         provider=provider,
@@ -117,7 +107,7 @@ async def run_llm_generation_test(prompt: str) -> LLMGenerationTestResponse:
         llm = get_llm(
             streaming=False,
             temperature=0.2,
-            max_output_tokens=80, max_retries=0, timeout=30,
+            max_output_tokens=setting_value(settings,'diagnostic_max_output_tokens'), max_retries=0, timeout=setting_value(settings,'llm_timeout_seconds'),
         )
         response = await _tracked_diagnostic_invoke(llm,safe_prompt,settings.llm_model)
         generated_text = _message_text(response).strip()
@@ -203,7 +193,9 @@ async def _tracked_diagnostic_invoke(llm, prompt, model):
             inference_at=datetime.now(UTC)
             invocation_started=perf_counter()
             try:
-                response=await llm.ainvoke(prompt)
+                from langsmith import tracing_context
+                with tracing_context(enabled=False):
+                    response=await llm.ainvoke(prompt)
             finally:
                 latency=round((perf_counter()-invocation_started)*1000)
         usage=parse_token_usage(response)

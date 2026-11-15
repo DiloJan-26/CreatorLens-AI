@@ -10,6 +10,8 @@ from app.core.logging import configure_secret_safe_worker_logging
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+if settings.environment not in {"local", "test"} and (not settings.celery_broker_url or not settings.celery_result_backend):
+    raise ValueError("Deployed workers require explicit durable broker and result backends.")
 
 
 def _secure_redis_url(url: str | None, *, fallback: str) -> str:
@@ -59,17 +61,17 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    task_default_queue="creatorlens",
+    task_default_queue=settings.celery_queue,
     task_track_started=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,
+    worker_prefetch_multiplier=settings.celery_prefetch_multiplier,
     broker_connection_retry_on_startup=True,
     broker_connection_timeout=settings.celery_broker_connection_timeout_seconds,
-    broker_pool_limit=2,
+    broker_pool_limit=settings.celery_broker_pool_limit,
     task_publish_retry=True,
     task_publish_retry_policy={
-        "max_retries": 2,
+        "max_retries": settings.celery_publish_max_retries,
         "interval_start": 0,
         "interval_step": 1,
         "interval_max": 1,

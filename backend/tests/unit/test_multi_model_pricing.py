@@ -102,17 +102,18 @@ def test_multi_model_cache_and_thinking_counted_once(model):
 
 
 @pytest.mark.parametrize('model', sorted(SUPPORTED_GEMINI_MODELS))
-def test_multi_model_api_worker_share_exact_configuration(model, monkeypatch):
+def test_multi_model_api_worker_share_exact_configuration(model, monkeypatch,verified_provider_scope):
     from app.services import llm_service
-    settings = Settings(_env_file=None, ENVIRONMENT='production', LLM_MODEL=model,
+    settings = Settings(_env_file=None, ENVIRONMENT='test', LLM_MODEL=model,PROVIDER_EMERGENCY_STOP=False,
         GEMINI_API_KEY='offline-test-value')
     assert model_configuration_error(settings) is None
-    # Production model policy remains checked above; mocked client runs in explicitly local demo mode.
-    settings = settings.model_copy(update={'environment': 'test', 'demo_access_mode': 'local', 'demo_allow_provider_calls': True})
+    # Mocked SDK construction still requires a verified principal and admitted scope.
     monkeypatch.setattr(llm_service, 'get_settings', lambda: settings)
     options = []
     monkeypatch.setattr(llm_service, '_get_gemini_llm', lambda **kwargs: options.append(kwargs))
-    llm_service.get_llm()
+    from app.services.provider_admission import operation_scope
+    with operation_scope("synthetic-unit-admission"):
+        llm_service.get_llm()
     assert options[0]['model'] == model
     assert options[0]['max_retries'] == 0 and options[0]['timeout'] == 30
 
@@ -122,20 +123,19 @@ def test_multi_model_invalid_configuration_rejected(model):
     assert model_configuration_error(Settings(_env_file=None, LLM_MODEL=model))
 
 
-def test_multi_model_missing_production_setting_does_not_silently_fallback(monkeypatch):
-    monkeypatch.delenv('LLM_MODEL', raising=False)
-    settings = Settings(_env_file=None, ENVIRONMENT='production')
-    assert settings.llm_model == DEFAULT_GEMINI_MODEL
-    assert 'explicitly configured' in model_configuration_error(settings)
-    assert model_configuration_error(Settings(_env_file=None, ENVIRONMENT='test')) is None
-    assert model_configuration_error(Settings(_env_file=None, LLM_FALLBACK_MODEL='gemini-3.8-flash'))
+def test_multi_model_default_is_intended_model_without_alternate_fallback(monkeypatch):
+    monkeypatch.delenv("LLM_MODEL",raising=False)
+    settings=Settings(_env_file=None,LLM_FALLBACK_MODEL="gemini-3.8-flash")
+    assert settings.llm_model==DEFAULT_GEMINI_MODEL
+    assert model_configuration_error(settings) is None
+    assert not hasattr(settings,"llm_fallback_model")
 
 
 @pytest.mark.parametrize('options', [{'max_output_tokens': 0}, {'max_output_tokens': 8193},
     {'max_retries': 1}, {'timeout': 0}, {'timeout': 66}])
-def test_multi_model_inference_bounds_fail_before_client_creation(monkeypatch, options):
+def test_multi_model_inference_bounds_fail_before_client_creation(monkeypatch, options,verified_provider_scope):
     from app.services import llm_service
-    monkeypatch.setattr(llm_service, 'get_settings', lambda: Settings(_env_file=None, GEMINI_API_KEY='offline-test-value', DEMO_ACCESS_MODE='local', DEMO_ALLOW_PROVIDER_CALLS=True))
+    monkeypatch.setattr(llm_service, 'get_settings', lambda: Settings(_env_file=None, GEMINI_API_KEY='offline-test-value', PROVIDER_EMERGENCY_STOP=False))
     monkeypatch.setattr(llm_service, '_get_gemini_llm', lambda **_: pytest.fail('Client must not be created'))
     with pytest.raises(llm_service.LLMConfigurationError):
         llm_service.get_llm(**options)
@@ -228,3 +228,15 @@ def test_multi_model_missing_registry_fails_closed(tmp_path, monkeypatch):
     from app.llm import pricing_policy
     monkeypatch.setattr(pricing_policy, 'REGISTRY_PATH', tmp_path / 'absent.json')
     assert price()['status'] == 'pricing_unavailable'
+
+
+@pytest.fixture
+def verified_provider_scope():
+    from uuid import uuid4
+    from app.core.access import current_principal
+    from app.core.identity import Principal
+    from app.services.provider_admission import operation_scope
+    token=current_principal.set(Principal(str(uuid4()),str(uuid4()),1))
+    try:
+        with operation_scope("mocked-verified-admission"):yield
+    finally:current_principal.reset(token)

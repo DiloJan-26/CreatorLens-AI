@@ -39,7 +39,7 @@ export default function Home() {
                       : "Facebook"}
                 </span>
               ))}
-              <span>Restricted demo / no public inference</span>
+              <span>Google sign-in / private workspace</span>
             </div>
           </div>
           <LandingComparisonPreview />

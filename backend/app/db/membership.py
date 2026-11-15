@@ -25,10 +25,7 @@ def validate_membership(session,flush_context,instances):
             if session.get_bind().dialect.name == "sqlite":
                 from sqlalchemy import inspect
                 if not inspect(session.connection()).has_table("content_items"):
-                    from app.core.config import get_settings
-                    if get_settings().application_access_mode == "authenticated":
-                        raise ValueError("Authenticated snapshots require the full application database.")
-                    continue  # Preserve the explicitly unauthenticated V1 SQLite semantic sidecar.
+                    raise ValueError("Authenticated snapshots require the full application database.")
             checks.append((ContentItem,value.content_id))
         content_id=getattr(value,"content_item_id",None)
         if content_id:checks.append((ContentItem,content_id))

@@ -17,6 +17,9 @@ def authenticate_request(scope, settings):
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(401,"Sign in with Google to continue.",headers={"WWW-Authenticate":"Bearer"})
+    from app.core.config import validate_verification_configuration
+    try:validate_verification_configuration(settings)
+    except ValueError:raise HTTPException(503,"Authentication verification is not configured.") from None
     principal=verifier.verify(token,settings)
     path = request.url.path.rstrip("/")
     enforce_rate(settings,principal.user_id)
@@ -45,6 +48,6 @@ def authenticate_request(scope, settings):
             require_admin(session,principal)
             if request.method != "GET" or settings.environment not in {"local","test"} and path in {"/docs","/redoc","/openapi.json"}:
                 raise HTTPException(403,"Interactive diagnostics are disabled.")
-        elif path not in {"/api/projects","/api/demo/capabilities","/api/account","/api/account/usage","/api/account/logout"}:
+        elif path not in {"/api/projects","/api/providers/status","/api/account","/api/account/usage","/api/account/logout"}:
             raise HTTPException(404,"Not found.")
     return principal

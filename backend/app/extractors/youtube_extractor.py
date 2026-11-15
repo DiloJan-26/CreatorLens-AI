@@ -123,7 +123,7 @@ def fetch_youtube_info_from_api(video_id: str, api_key: str) -> dict[str, Any]:
     """
     from app.extraction.policy import block_legacy_provider
     block_legacy_provider()
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=get_settings().youtube_metadata_timeout_seconds) as client:
         video_resp = client.get(
             f"{_YT_API_BASE}/videos",
             params={
@@ -180,7 +180,7 @@ def _fetch_subscriber_count(channel_id: str, api_key: str) -> int | None:
     from app.extraction.policy import block_legacy_provider
     block_legacy_provider()
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=get_settings().youtube_channel_timeout_seconds) as client:
             resp = client.get(
                 f"{_YT_API_BASE}/channels",
                 params={"id": channel_id, "part": "statistics"},
