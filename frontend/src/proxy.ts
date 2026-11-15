@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 export async function proxy(request: NextRequest) {
-  if (process.env.APPLICATION_ACCESS_MODE!=="authenticated") return NextResponse.next();
+  const serverEnabled=process.env.APPLICATION_ACCESS_MODE==="authenticated";
+  const publicEnabled=process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE==="authenticated";
+  if(serverEnabled!==publicEnabled)return new NextResponse("Authentication configuration is incomplete.",{status:503});
+  if(!serverEnabled)return NextResponse.next();
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key || process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE!=="authenticated") return new NextResponse("Authentication configuration is incomplete.",{status:503});
   let origin:string;

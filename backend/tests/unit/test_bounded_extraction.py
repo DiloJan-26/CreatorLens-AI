@@ -88,7 +88,7 @@ def test_verified_subscription_allocation_is_not_an_invoice(tier,cost,credits):
     assert price["estimate_basis"]=="allocated_prepaid_subscription"
 
 
-@pytest.mark.parametrize("op,tier,provider_name,at",[("generate","free_prepaid","supadata",date(2026,11,14)),("metadata","other","supadata",date(2026,11,14)),("metadata","free_prepaid","deepgram",date(2026,11,14)),("metadata","free_prepaid","supadata",date(2026,11,15)),("metadata","free_prepaid","supadata",date(2026,11,13))])
+@pytest.mark.parametrize("op,tier,provider_name,at",[("generate","free_prepaid","supadata",date(2026,11,14)),("metadata","other","supadata",date(2026,11,14)),("metadata","free_prepaid","deepgram",date(2026,11,14)),("metadata","free_prepaid","supadata",date(2026,11,16)),("metadata","free_prepaid","supadata",date(2026,11,13))])
 def test_unknown_operation_tier_provider_or_date_has_no_zero_price(op,tier,provider_name,at):
     with pytest.raises(HTTPException):policy.price_for(op,tier,provider=provider_name,at=at)
 
@@ -422,3 +422,12 @@ def test_worker_failure_preserves_unknowns_and_releases_only_known_inactive_work
     assert owned[2].state==("needs_reconciliation" if unknown else "failed")
     assert balance(db_session,owned[0].user_id)["reserved"]==(1 if unknown else 0)
     assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==Decimal(".01")
+
+
+def test_pricing_review_adds_a_bounded_day_without_relabeling_history():
+    old=policy.price_for("native_transcript","pro_monthly_prepaid",at=date(2026,11,14))
+    current=policy.price_for("native_transcript","pro_monthly_prepaid",at=date(2026,11,15))
+    assert old["pricing_policy"]=="extraction-prepaid-1.0.0"
+    assert current["pricing_policy"]=="extraction-prepaid-1.0.1"
+    assert current["allocated_unit_usd"]==old["allocated_unit_usd"]=="0.005666666667"
+    with pytest.raises(HTTPException):policy.price_for("native_transcript","pro_monthly_prepaid",at=date(2026,11,16))

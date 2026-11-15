@@ -19,7 +19,8 @@ export function AccountProvider({children}:{children:ReactNode}){
     const version=++revision.current;
     try {
       const {data,error}=await browserAuth().auth.getClaims();
-      if(error || !data?.claims){setAccount(null);return;}
+      if(version!==revision.current)return;
+      if(error || !data?.claims){clearAccountWorkspace();setAccount(null);return;}
       const id=String(data.claims.sub);
       if(sessionStorage.getItem("creatorlens_account")!==id){clearAccountWorkspace();sessionStorage.setItem("creatorlens_account",id);}
       const value=await getAccount();
@@ -50,9 +51,11 @@ export function AccountProvider({children}:{children:ReactNode}){
     // backend revocation failure is shown rather than claiming immediate remote invalidation.
     let revoked=false;
     try{await revokeApplicationSession();revoked=true;}catch{setError("Server session revocation could not be confirmed.");}
-    const {error}=await browserAuth().auth.signOut();
-    clearAccountWorkspace();setAccount(null);
-    if(error || !revoked){setError("Signed out locally; server revocation requires verification.");return;}
+    let signedOut=false;
+    try{const {error}=await browserAuth().auth.signOut();signedOut=!error;}
+    catch{signedOut=false;}
+    finally{revision.current++;clearAccountWorkspace();setAccount(null);setLoading(false);setExhausted(false);}
+    if(!signedOut || !revoked){setError("Workspace cleared; sign-out could not be fully confirmed. Please retry.");return;}
     router.replace("/");router.refresh();
   }
   const isPublic=pathname==="/" || pathname.startsWith("/auth/") || pathname==="/login";

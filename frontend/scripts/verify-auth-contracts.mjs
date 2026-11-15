@@ -7,7 +7,7 @@ import ts from "typescript";
 import React from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 const root=path.resolve("src");
-let enabled=true,token="synthetic-access-token",callbackError=null,proxyClaims=null;
+let enabled=true,token="synthetic-access-token",callbackError=null,callbackThrows=false,proxyClaims=null;
 const cookieJar=()=>{const rows=[];return {set(...args){rows.push(args.length===1?args[0]:{name:args[0],value:args[1],...args[2]});},getAll:()=>rows};};
 const calls=[],events=[];
 const storage=()=>{const data=new Map();return {get length(){return data.size;},key:i=>[...data.keys()][i],getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};};
@@ -21,7 +21,7 @@ function load(file){
   const compiledModule=new Module(file);cache.set(file,compiledModule);compiledModule.filename=file;compiledModule.paths=Module._nodeModulePaths(path.dirname(file));
   compiledModule.require=name=>{
     if(name.endsWith("supabase/browser"))return {authEnabled:()=>enabled,browserAuth:()=>sdk};
-    if(name==="@/lib/supabase/server")return {siteOrigin:()=>"http://localhost:3000",serverAuth:async()=>({auth:{exchangeCodeForSession:async code=>{calls.push({code});return {error:callbackError};}}})};
+    if(name==="@/lib/supabase/server")return {siteOrigin:()=>"http://localhost:3000",serverAuth:async()=>({auth:{exchangeCodeForSession:async code=>{calls.push({code});if(callbackThrows)throw Error("Synthetic SDK failure");return {error:callbackError};}}})};
     if(name==="@supabase/ssr")return {createServerClient:(url,key,options)=>({auth:{getClaims:async()=>{options.cookies.setAll([{name:"sb-fixture",value:"synthetic-cookie",options:{path:"/"}}]);return {data:proxyClaims?{claims:proxyClaims}:null,error:null};}}})};
     if(name==="next/server")return {NextResponse:class {constructor(body,init){this.body=body;this.status=init?.status;}static next(){return {headers:new Headers(),cookies:cookieJar()};}static redirect(location,init){return {location:String(location),headers:init?.headers??new Headers(),cookies:cookieJar()};}}};
     if(name==="next/navigation")return {usePathname:()=>"/login"};
@@ -68,3 +68,17 @@ response=await proxy(request);assert.equal(response.location,"https://creatorlen
 proxyClaims={sub:"synthetic-user"};response=await proxy(request);assert.equal(response.location,undefined);assert.equal(response.headers.get("Cache-Control"),"private, no-store");
 process.env.NEXT_PUBLIC_SITE_URL="";response=await proxy(request);assert.equal(response.status,503);
 console.log("Proxy contracts passed: verified-claim gating, refresh-cookie propagation, trusted-origin redirect and missing-configuration denial. SDK mocked.");
+
+callbackThrows=true;response=await callback.GET({nextUrl:new URL("http://localhost:3000/auth/callback?code=private-fixture-code")});assert.equal(response.location,"http://localhost:3000/login?error=oauth");callbackThrows=false;
+process.env.NEXT_PUBLIC_SITE_URL="https://creatorlens.example";
+process.env.APPLICATION_ACCESS_MODE="disabled";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="authenticated";response=await proxy(request);assert.equal(response.status,503);
+process.env.APPLICATION_ACCESS_MODE="authenticated";process.env.NEXT_PUBLIC_APPLICATION_ACCESS_MODE="disabled";response=await proxy(request);assert.equal(response.status,503);
+console.log("Acceptance regressions passed: thrown callback exchange and both access-mode mismatch directions fail closed.");
+
+const nextConfigSource=fs.readFileSync(path.resolve("next.config.ts"),"utf8");
+const nextConfigCode=ts.transpileModule(nextConfigSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const configModule=new Module(path.resolve("next.config.ts"));configModule._compile(nextConfigCode,"next.config.ts");
+const ignored=configModule.exports.default.logging.incomingRequests.ignore;
+assert(ignored.some(pattern=>pattern.test("/auth/callback?code=synthetic-sensitive-code")));
+assert(!ignored.some(pattern=>pattern.test("/workspace")));
+console.log("OAuth callback development request logs suppressed without hiding normal workspace requests.");

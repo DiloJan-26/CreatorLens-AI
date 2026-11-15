@@ -15,7 +15,7 @@ export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId:
   useEffect(() => {
     const controller = new AbortController();
     getDemoCapabilities().then(v => { if (!controller.signal.aborted) setAllowed(v.provider_calls_enabled); }).catch(() => {});
-    getSemanticAnalysis(projectId, slot, controller.signal).then(setAnalysis).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Semantic status unavailable."); });
+    getSemanticAnalysis(projectId, slot, controller.signal).then(value => { if (!controller.signal.aborted) setAnalysis(value); }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Semantic status unavailable."); });
     return () => controller.abort();
   }, [projectId, slot]);
   useEffect(() => {
@@ -47,7 +47,9 @@ export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId:
     catch (e) { setError(e instanceof Error ? e.message : "Semantic request failed."); }
     finally { submitting.current = false; setBusy(false); }
   }
-  const state = analysis?.status === "unavailable" && !analysis.snapshot_id ? "Not analyzed / no compatible snapshot" : analysis?.status ?? "Loading";
+  const state = analysis?.status === "unavailable" && !analysis.snapshot_id
+    ? analysis.error_code === "EVIDENCE_UNAVAILABLE" ? "Unavailable / insufficient transcript evidence" : "Not analyzed / no compatible snapshot"
+    : analysis?.status ?? "Loading";
   return <section className="ui-panel p-4" aria-label={`${slot} semantic analysis`}>
     <h3 className="font-semibold">{slot === "content_1" ? "Content 1" : "Content 2"} / Semantic creative analysis</h3>
     <p className="mt-2" role="status">{state}</p>

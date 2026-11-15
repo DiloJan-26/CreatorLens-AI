@@ -41,7 +41,7 @@ def price_for(operation, tier, *, provider="supadata", at=None, data=None):
     entry = next((e for e in data["entries"] if e["provider"] == provider and e["operation"] == operation and e["tier"] == tier and date.fromisoformat(e["effective_from"]) <= at <= date.fromisoformat(e["effective_through"])), None)
     if entry is None:
         raise HTTPException(403, "Verified provider-specific operation/tier/date pricing is unavailable.")
-    result = dict(entry, pricing_policy=data["policy_version"])
+    result = dict(entry, pricing_policy=entry.get("pricing_policy", data["policy_version"]))
     result["allocated_unit_usd"] = str((Decimal(entry["subscription_usd"]) / entry["included_credits"]).quantize(Decimal(".000000000001"), rounding=ROUND_UP))
     result["estimate_basis"] = "allocated_prepaid_subscription"
     return result

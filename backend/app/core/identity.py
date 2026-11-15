@@ -4,6 +4,7 @@ from threading import RLock
 from time import monotonic
 from uuid import UUID
 import httpx
+import json
 import jwt
 from fastapi import HTTPException
 
@@ -31,11 +32,15 @@ class JwksVerifier:
     @staticmethod
     def _fetch(url):
         with httpx.Client(timeout=3, follow_redirects=False, trust_env=False) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            if len(response.content) > 65536:
-                raise ValueError("Oversized JWKS")
-            return response.json()
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                chunks=[];size=0
+                for chunk in response.iter_bytes():
+                    size+=len(chunk)
+                    if size>65536:
+                        raise ValueError("Oversized JWKS")
+                    chunks.append(chunk)
+                return json.loads(b"".join(chunks))
 
     def verify(self, token, settings):
         try:

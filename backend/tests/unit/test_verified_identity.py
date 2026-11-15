@@ -60,3 +60,19 @@ def test_invalid_configuration_does_not_display_private_values():
         Settings(_env_file=None,APPLICATION_ACCESS_MODE="authenticated",SUPABASE_URL="invalid",GEMINI_API_KEY="synthetic-private-value",DATABASE_URL="synthetic-private-database")
     assert "synthetic-private-value" not in str(error.value)
     assert "synthetic-private-database" not in str(error.value)
+
+
+@pytest.mark.parametrize("oversized",[False,True])
+def test_jwks_transport_enforces_body_bound_during_read(monkeypatch,oversized):
+    import httpx
+    import app.core.identity as identity
+    original=httpx.Client
+    body=b" "*65537 if oversized else b'{"keys":[]}'
+    def client(**kwargs):
+        assert kwargs["follow_redirects"] is False and kwargs["trust_env"] is False
+        kwargs["transport"]=httpx.MockTransport(lambda request:httpx.Response(200,stream=httpx.ByteStream(body)))
+        return original(**kwargs)
+    monkeypatch.setattr(identity.httpx,"Client",client)
+    if oversized:
+        with pytest.raises(ValueError,match="Oversized"):JwksVerifier._fetch("https://auth.example/jwks")
+    else:assert JwksVerifier._fetch("https://auth.example/jwks")=={"keys":[]}
