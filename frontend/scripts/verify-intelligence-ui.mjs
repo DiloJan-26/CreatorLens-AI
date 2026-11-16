@@ -50,7 +50,9 @@ const render = (component, props) => renderToStaticMarkup(React.createElement(co
 const panel = render(GoalComparisonPanel, { summary });
 assert(panel.includes("Unavailable"));
 assert(panel.includes("0"));
-assert(panel.includes("Creative Quality") && panel.includes("Engagement"));
+assert(panel.includes("Creative quality") && panel.includes("Engagement") && panel.includes("Reach"));
+assert(!panel.includes("<select") && !panel.includes("<details") && !panel.includes(">Balanced<"));
+assert(panel.includes('aria-pressed="true"'));
 assert(render(ExecutiveInsightSnapshot, { summary }).includes("Content 2 leads under reach"));
 const unavailable = { ...summary, goal_comparison: null };
 assert(!render(ExecutiveInsightSnapshot, { summary: unavailable }).includes("Content 1"));
@@ -61,17 +63,13 @@ for (const outcome of ["tie", "insufficient_evidence", "incomparable"]) {
   assert(html.includes(labels[outcome]) && !html.includes("leads under"));
 }
 const semantic = render(SemanticAnalysisPanel, { projectId: "synthetic-ui", slot: "content_1", onReady: () => {} });
-assert(semantic.includes("disabled") && semantic.includes("Creative review is not available right now"));
-console.log("UI server-render contracts passed: null/zero, canonical outcome, four objectives, abstention states and disabled semantic generation. Not browser verification.");
-
+assert(semantic.includes("Creative review") && !semantic.includes("<details") && !semantic.includes("Review this video"));
 const {IngestionProgressPanel}=load(path.join(sourceRoot,"components/IngestionProgressPanel.tsx"));
 const status={job_id:"synthetic-job",status:"PARTIAL_READY",progress_percent:100,retry_count:0};
-const collapsed=render(IngestionProgressPanel,{status,isPolling:false});
-assert(collapsed.includes("Analysis progress") && !collapsed.includes('open=""'));
-assert(!collapsed.includes("BACKGROUND INGESTION"));
+assert.equal(render(IngestionProgressPanel,{status,isPolling:false}),"");
 const active=render(IngestionProgressPanel,{status:{...status,status:"INDEXING",progress_percent:80},isPolling:true});
-assert(active.includes('open=""') && active.includes('aria-valuenow="80"'));
-const action=render(GoalComparisonPanel,{summary:{...summary,goal_comparison:{...summary.goal_comparison,selected_objective:"balanced",outcome:"insufficient_evidence",winner_slot:null,missing_evidence:["semantic features"]}},onCreativeReview:()=>{}});
-assert(action.includes("Run creative review") && action.includes("provider costs"));
-assert(!panel.includes("points_out_of_10"));
-console.log("Creator presentation contracts passed: collapsible progress, truthful outcome labels, explicit creative action and friendly units.");
+assert(active.includes('aria-valuenow="80"') && !active.includes("<details"));
+const chatSource=fs.readFileSync(path.join(sourceRoot,"components/CreatorChatPanel.tsx"),"utf8");
+assert(/message: question,\s*objective,/.test(chatSource),'Selected objective must be sent to the existing stream API');
+assert(chatSource.includes('!message.structuredAnswer'),'Structured answers must not duplicate retrieved source lists');
+console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach default, three objective buttons, no analytical dropdowns, completed-progress removal and chat objective transport.");

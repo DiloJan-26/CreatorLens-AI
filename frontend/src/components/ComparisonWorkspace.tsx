@@ -13,15 +13,13 @@ import {
   type AnalysisProgressStep,
   type ProgressStatus,
 } from "@/components/AnalysisProgress";
-import { AiReasoningStatus } from "./AiReasoningStatus";
+
 import { ContentCard } from "@/components/ContentCard";
 import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
-import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
-import {
-  ComparisonHighlights,
-} from "@/components/ExecutiveInsightSnapshot";
+
+
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
-import { MetadataAvailabilityPanel } from "@/components/MetadataAvailabilityPanel";
+
 import { PageHeading, Notice, Icon, EmptyState } from "./ui";
 import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
@@ -65,7 +63,8 @@ export function ComparisonWorkspace() {
   const [activeTab, setActiveTab] = useState("overview");
   useEffect(() => {
     const sync = () => {
-      const hash = window.location.hash.slice(1);
+      const raw = window.location.hash.slice(1);
+      const hash = raw === "transcript" ? "evidence" : raw;
       setActiveTab(
         ["overview", "insights", "evidence", "transcript", "chat"].includes(
           hash,
@@ -172,7 +171,7 @@ export function ComparisonWorkspace() {
     try {
       const [detail, summary, latestIngestion] = await Promise.all([
         getProject(activeProjectId),
-        getCreatorInsightSummary(activeProjectId,getComparisonObjective(activeProjectId)).catch(() => null),
+        getCreatorInsightSummary(activeProjectId,"engagement").catch(() => null),
         getProjectIngestionStatus(activeProjectId).catch(() => null),
       ]);
 
@@ -267,7 +266,7 @@ export function ComparisonWorkspace() {
 
         const [detail, summary] = await Promise.all([
           getProject(ingestion.projectId),
-          getCreatorInsightSummary(ingestion.projectId,getComparisonObjective(ingestion.projectId)).catch(() => null),
+          getCreatorInsightSummary(ingestion.projectId,"engagement").catch(() => null),
         ]);
 
         if (controller.signal.aborted) {
@@ -508,11 +507,7 @@ export function ComparisonWorkspace() {
             onSubmit={handleAnalyzeContent}
             isSubmitting={isSubmitting}
           />
-          <p className="muted text-sm mt-5 max-w-3xl">
-            Extraction is best-effort. Missing public metrics are never
-            estimated. Comparing different platforms or audiences provides
-            context, not proof of what caused performance.
-          </p>
+
         </>
       )}
       <div className="analysis-state-region">
@@ -526,15 +521,13 @@ export function ComparisonWorkspace() {
       </div>
       {hasResults && (
         <>
-          {projectDetail && <AnalysisAllowancePanel projectId={projectDetail.project_id}/>}
-          {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} onCreativeReview={()=>void runCreativeReview()} creativeBusy={creativeBusyFor===projectDetail?.project_id}/>}
+
+
           <nav className="section-tabs" aria-label="Comparison sections">
             {[
               ["overview", "Overview"],
               ["insights", "Insights"],
               ["evidence", "Evidence"],
-              ["transcript", "Transcript"],
-              ["chat", "Ask AI"],
             ].map(([id, label]) => (
               <a
                 key={id}
@@ -556,6 +549,7 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "overview"}
             className="section-panel"
           >
+            {insightSummary&&<GoalComparisonPanel summary={insightSummary} onChange={activeTab==="overview"?setInsightSummary:undefined} objective="reach"/>}
             <div className="content-pair">
               <ContentCard
                 label="Content 1"
@@ -570,54 +564,28 @@ export function ComparisonWorkspace() {
                 isPending={isSubmitting}
               />
             </div>
-            <ComparisonHighlights summary={insightSummary} />
           </section>
           <section
             id="insights"
             hidden={activeTab !== "insights"}
             className="section-panel"
           >
-            <div className="grid gap-4 lg:grid-cols-2 mb-5">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id,getComparisonObjective(projectDetail!.project_id)).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
+            <div className="insights-heading"><h2><Icon name="bulb" size={21}/> Creative insights</h2><button type="button" className="button-primary" disabled={creativeBusyFor===projectDetail?.project_id} onClick={()=>void runCreativeReview()}>{creativeBusyFor===projectDetail?.project_id?"Starting review...":"Review both videos"}</button></div><p className="muted text-xs mb-3">Uses your AI analysis allowance.</p>
+            <div className="grid gap-4 lg:grid-cols-2 my-4">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id,getComparisonObjective(projectDetail!.project_id)).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
             <CreatorInsightSummaryPanel
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}
               initialSummary={insightSummary}
               onSummaryLoaded={setInsightSummary}
             />
-            <details className="technical-details">
-              <summary>AI connection diagnostic</summary>
-              <p className="muted text-xs mb-3">
-                The Check action sends a model test request. It may consume
-                provider quota.
-              </p>
-              <AiReasoningStatus />
-            </details>
+            {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail.project_id}/>}
           </section>
           <section
             id="evidence"
             hidden={activeTab !== "evidence"}
             className="section-panel grid gap-5"
           >
-            <EvidenceSystemDetails
-              projectId={projectDetail?.project_id ?? null}
-              indexResult={indexResult}
-              indexReady={indexReady}
-              onIndexed={setIndexResult}
-            />
-            <MetadataAvailabilityPanel
-              projectId={projectDetail?.project_id ?? null}
-            />
-          </section>
-          <section
-            id="transcript"
-            hidden={activeTab !== "transcript"}
-            className="section-panel"
-          >
-            <h2 className="text-xl mb-2">Read the original evidence</h2>
-            <p className="muted mb-5">
-              Captions and transcriptions may contain errors. Review language,
-              source and timestamps before interpreting a passage.
-            </p>
+            <h2 className="text-xl">Source captions</h2>
             <div className="grid gap-5 xl:grid-cols-2">
               <TranscriptPreviewPanel
                 projectId={projectDetail?.project_id ?? null}
