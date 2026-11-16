@@ -2,6 +2,8 @@
 from app.core.config import setting_value
 import json
 import math
+import re
+from decimal import Decimal, InvalidOperation
 import time
 import httpx
 from app.core.config import get_settings
@@ -14,6 +16,20 @@ from app.services.evidence_quality import validate_extraction
 from app.services.supadata_transcript_service import _segments_from_payload
 
 BASE_URL = "https://api.supadata.ai/v1/"
+METADATA_MAPPING_VERSION = "supadata-metadata-2"
+
+
+def public_count(value):
+    """Exact whole public counts only; absent, rounded and invalid values stay unknown."""
+    if value is None or isinstance(value,bool) or not isinstance(value,(int,float,str)):
+        return None
+    if isinstance(value,str) and not re.fullmatch(r"[0-9]+(?:\.0+)?",value.strip()):
+        return None
+    try:
+        number=Decimal(str(value).strip())
+        return int(number) if number.is_finite() and 0<=number<=2**53-1 and number==number.to_integral_value() else None
+    except (ValueError,InvalidOperation):
+        return None
 
 
 class SafePreSendFailure(ExtractionSafetyError):
@@ -99,17 +115,19 @@ def extract(project_id, slot, platform, url):
     transcript = safe_request("native_transcript",setting_value(settings,'extraction_transcript_attempts_per_slot'))
     transcript = transcript or {}
     segments = _segments_from_payload(transcript)
-    stats = payload.get("stats") or {}
-    def count(name):
-        value = stats.get(name)
-        return value if type(value) is int and value >= 0 else None
-    author = payload.get("author") or {}
+    stats = payload.get("stats") if isinstance(payload.get("stats"),dict) else {}
+    def count(name):return public_count(stats.get(name))
+    author = payload.get("author") if isinstance(payload.get("author"),dict) else {}
+    extra = payload.get("additionalData") if isinstance(payload.get("additionalData"),dict) else {}
     info = {"title": payload.get("title"), "description": payload.get("description"),
             "uploader": author.get("displayName"), "uploader_id": author.get("username"),
             "view_count": count("views"), "like_count": count("likes"),
             "comment_count": count("comments"), "reaction_count": count("reactions"),
             "share_count": count("shares"), "duration": math.ceil(duration),
-            "thumbnail": (payload.get("media") or {}).get("thumbnailUrl"), "tags": payload.get("tags")}
+            "thumbnail": (payload.get("media") or {}).get("thumbnailUrl"), "tags": payload.get("tags"),
+            "upload_date": payload.get("createdAt"),
+            "subscriber_count": public_count(extra.get("subscriberCount",author.get("subscriberCount")))}
+
     metadata = normalize_metadata(platform=platform, url=url, slot=slot, info=info,
                                   transcript_available=bool(segments), transcript_segment_count=len(segments),
                                   transcript_language=transcript.get("lang"), transcript_source="supadata_platform_captions" if segments else "unavailable",
@@ -120,7 +138,8 @@ def extract(project_id, slot, platform, url):
         "requested_languages": [settings.transcript_language] if settings.transcript_language != "multi" else settings.transcript_fallback_language_list[:1],
         "caption_kind": "translated" if transcript.get("isTranslated") is True else "unknown",
         "audio_language_verified": False, "selection_reason": "bounded_native_preferred_language_with_provider_fallback",
-        "extraction_policy": POLICY_VERSION, "source_url_fingerprint": accounting.source_key("source", canonical)}}
+        "extraction_policy": POLICY_VERSION, "metadata_mapping_version": METADATA_MAPPING_VERSION,
+        "metric_availability": {name: "available" if count(name) is not None else "unavailable" if stats.get(name) is None else "invalid" for name in ("views", "likes", "comments", "shares")}, "source_url_fingerprint": accounting.source_key("source", canonical)}}
     result = validate_extraction(VideoExtractionResult(metadata=metadata, transcript_segments=segments))
     return result
 

@@ -19,6 +19,13 @@ export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId:
     getSemanticAnalysis(projectId, slot, controller.signal).then(value => { if (!controller.signal.aborted) setAnalysis(value); }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "Semantic status unavailable."); });
     return () => controller.abort();
   }, [projectId, slot]);
+  useEffect(()=>{
+    const controller=new AbortController();
+    const queued=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail.projectId!==projectId||detail.slot!==slot)return;
+      polls.current=0;getSemanticAnalysis(projectId,slot,controller.signal).then(value=>{if(!controller.signal.aborted){setAnalysis(value);if(value.status==="ready")readyCallback.current();}}).catch(()=>{if(!controller.signal.aborted)setError("Could not refresh creative review status.");});};
+    window.addEventListener("creatorlens_semantic_queued",queued);
+    return ()=>{controller.abort();window.removeEventListener("creatorlens_semantic_queued",queued);};
+  },[projectId,slot]);
   useEffect(() => {
     if (analysis?.status !== "pending") return;
     if (polls.current >= uiConfig.semanticPollLimit) return;
@@ -44,23 +51,22 @@ export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId:
   async function generate() {
     if (!allowed || submitting.current || analysis?.status === "pending" || analysis?.status === "ready") return;
     submitting.current = true; setBusy(true); setError(null); polls.current = 0;
-    try { setAnalysis(await requestSemanticAnalysis(projectId, slot, analysis?.status === "failed")); }
+    try { const value=await requestSemanticAnalysis(projectId, slot, analysis?.status === "failed"); setAnalysis(value); if(value.status==="ready")readyCallback.current(); }
     catch (e) { setError(e instanceof Error ? e.message : "Semantic request failed."); }
     finally { submitting.current = false; setBusy(false); }
   }
-  const state = analysis?.status === "unavailable" && !analysis.snapshot_id
-    ? analysis.error_code === "EVIDENCE_UNAVAILABLE" ? "Unavailable / insufficient transcript evidence" : "Not analyzed / no compatible snapshot"
-    : analysis?.status ?? "Loading";
+  const state = analysis?.error_code === "EVIDENCE_UNAVAILABLE" ? "More caption evidence needed"
+    : analysis?.error_code === "STALE_INPUT" ? "Evidence changed"
+    : analysis?.status === "unavailable" && !analysis.snapshot_id ? "Ready for creative review"
+    : analysis ? {pending:"Review in progress",ready:"Creative review ready",failed:"Review needs attention",unavailable:"Review unavailable"}[analysis.status] : "Loading review status";
   return <section className="ui-panel p-4" aria-label={`${slot} semantic analysis`}>
-    <h3 className="font-semibold">{slot === "content_1" ? "Content 1" : "Content 2"} / Semantic creative analysis</h3>
-    <p className="mt-2" role="status">{state}</p>
-    <p className="mt-2 text-sm muted">{analysis?.model_id ? `Model: ${analysis.model_id} / ` : ""}{analysis?.cache_hit ? "Cached validated snapshot." : analysis?.reason ?? "Only compatible evidence can support creative scoring."}</p>
-    {analysis?.error_code && <p className="mt-2 text-amber-900">{analysis.error_code === "STALE_INPUT" ? "Evidence changed; the old job cannot supply current features." : analysis.error_code}</p>}
+    <h3 className="font-semibold">{slot === "content_1" ? "Content 1" : "Content 2"} / Creative review</h3>
+    <p className="mt-2 font-medium" role="status">{state}</p>
     {error && <p role="alert" className="mt-2 text-rose-800">{error}</p>}
-    <p className="mt-3 text-sm muted">Provider: Gemini Developer API. Generation may incur provider charges. Page loads and status checks never generate features.</p>
-    {!allowed && <p className="mt-2 text-sm">Provider generation is suspended or its verified account, pricing and quota prerequisites are unavailable. Existing results remain accessible.</p>}
-    <div className="mt-3 flex flex-wrap gap-3"><button className="button-secondary" disabled={busy} onClick={() => void refresh()}>Refresh status</button><button className="button-primary" disabled={!allowed || busy || analysis?.status === "pending" || analysis?.status === "ready"} onClick={() => void generate()}>{analysis?.status === "failed" ? "Retry semantic analysis" : "Generate semantic features"}</button></div>
+    <p className="mt-3 text-sm muted">Uses your AI analysis allowance. Existing results are reused when the evidence is unchanged.</p>
+    {!allowed && <p className="mt-2 text-sm">Creative review is not available right now. Your existing results remain accessible.</p>}
+    <div className="mt-3 flex flex-wrap gap-3"><button className="button-secondary" disabled={busy} onClick={() => void refresh()}>Refresh status</button><button className="button-primary" disabled={!allowed || busy || analysis?.status === "pending" || analysis?.status === "ready"} onClick={() => void generate()}>{analysis?.status === "failed" ? "Retry creative review" : "Review this video"}</button></div>
     {analysis?.assessments?.length ? <details className="detail-disclosure mt-3"><summary>Validated model-derived features</summary><dl className="mt-3 grid gap-2">{analysis.assessments.map(feature => <div key={feature.feature}><dt className="font-medium capitalize">{feature.feature.replaceAll("_", " ")}</dt><dd>{feature.value} / {feature.status}</dd></div>)}</dl></details> : null}
-    {analysis?.limitations?.length ? <p className="mt-3 text-sm muted">{analysis.limitations.join(" ")}</p> : null}
+    {analysis && <details className="detail-disclosure mt-3"><summary>Source quality and review details</summary><p className="mt-3 text-sm muted">Model: {analysis.model_id ?? "Not recorded"}. {analysis.cache_hit ? "Reused validated assessment." : ""}</p><p className="mt-2 text-sm muted">{analysis.reason}</p>{analysis.error_code && <p className="mt-2 text-sm muted">Review status: {analysis.error_code}</p>}<p className="mt-2 text-sm muted">{analysis.limitations?.join(" ")}</p></details>}
   </section>;
 }

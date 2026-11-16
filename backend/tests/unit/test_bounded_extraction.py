@@ -518,3 +518,29 @@ def test_existing_credit_and_price_history_is_not_rewritten(db_session,owned,mon
     assert accounting.public_operation(old)["reserved_credits"]==1
     assert db_session.get(ProviderOperation,new_id).billing_pool is None
     assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==Decimal(".02")
+
+
+@pytest.mark.parametrize("raw,expected",[(487,487),(487.0,487),("487",487),(" 487.0 ",487),(0,0),("0",0),(None,None),(True,None),(-1,None),(1.2,None),("1.5K",None),("1,234",None),("1e3",None),(float("nan"),None),(float("inf"),None),(2**53,None)])
+def test_public_metric_count_preserves_exact_wholes_and_missing(raw,expected):
+    assert provider.public_count(raw)==expected
+
+
+@pytest.mark.parametrize("comments,expected,status",[("8",8,"available"),(0,0,"available"),(None,None,"unavailable"),("8.5",None,"invalid")])
+def test_native_metadata_preserves_returned_counts_dates_and_provenance(owned,monkeypatch,comments,expected,status):
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith("metadata"):
+            payload=metadata()
+            payload.update(createdAt="2024-03-02T12:00:00Z",additionalData={"subscriberCount":"25000"})
+            payload["stats"]={"views":"34021","likes":485.0,"comments":comments}
+            return httpx.Response(200,json=payload)
+        return httpx.Response(200,json={"lang":"en","content":[{"text":"A specific educational introduction.","offset":0,"duration":8000}]})
+    fake_transport(monkeypatch,handler)
+    result=provider.extract(owned[1],"content_1","youtube",URL)
+    assert (result.metadata.views,result.metadata.likes,result.metadata.comments)==(34021,485,expected)
+    assert result.metadata.upload_date=="2024-03-02" and result.metadata.subscriber_count==25000
+    provenance=result.metadata.transcript_evidence["provenance"]
+    assert provenance["metric_availability"]["comments"]==status
+    assert provenance["metadata_mapping_version"]==provider.METADATA_MAPPING_VERSION
+    assert len(calls)==2  # metadata plus native captions; no extra enrichment request.

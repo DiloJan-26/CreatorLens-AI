@@ -57,8 +57,21 @@ assert(!render(ExecutiveInsightSnapshot, { summary: unavailable }).includes("Con
 for (const outcome of ["tie", "insufficient_evidence", "incomparable"]) {
   const data = { ...summary, goal_comparison: { ...summary.goal_comparison, outcome, winner_slot: null } };
   const html = render(ExecutiveInsightSnapshot, { summary: data });
-  assert(html.includes(outcome.replaceAll("_", " ")) && !html.includes("leads under"));
+  const labels={tie:"A close match",insufficient_evidence:"More evidence needed",incomparable:"Not directly comparable"};
+  assert(html.includes(labels[outcome]) && !html.includes("leads under"));
 }
 const semantic = render(SemanticAnalysisPanel, { projectId: "synthetic-ui", slot: "content_1", onReady: () => {} });
-assert(semantic.includes("disabled") && semantic.includes("Provider generation is suspended"));
+assert(semantic.includes("disabled") && semantic.includes("Creative review is not available right now"));
 console.log("UI server-render contracts passed: null/zero, canonical outcome, four objectives, abstention states and disabled semantic generation. Not browser verification.");
+
+const {IngestionProgressPanel}=load(path.join(sourceRoot,"components/IngestionProgressPanel.tsx"));
+const status={job_id:"synthetic-job",status:"PARTIAL_READY",progress_percent:100,retry_count:0};
+const collapsed=render(IngestionProgressPanel,{status,isPolling:false});
+assert(collapsed.includes("Analysis progress") && !collapsed.includes('open=""'));
+assert(!collapsed.includes("BACKGROUND INGESTION"));
+const active=render(IngestionProgressPanel,{status:{...status,status:"INDEXING",progress_percent:80},isPolling:true});
+assert(active.includes('open=""') && active.includes('aria-valuenow="80"'));
+const action=render(GoalComparisonPanel,{summary:{...summary,goal_comparison:{...summary.goal_comparison,selected_objective:"balanced",outcome:"insufficient_evidence",winner_slot:null,missing_evidence:["semantic features"]}},onCreativeReview:()=>{}});
+assert(action.includes("Run creative review") && action.includes("provider costs"));
+assert(!panel.includes("points_out_of_10"));
+console.log("Creator presentation contracts passed: collapsible progress, truthful outcome labels, explicit creative action and friendly units.");

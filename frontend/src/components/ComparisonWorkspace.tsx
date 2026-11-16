@@ -7,7 +7,7 @@ import Link from "next/link";
 import { GoalComparisonPanel } from "./GoalComparisonPanel";
 import { SemanticAnalysisPanel } from "./SemanticAnalysisPanel";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   type AnalysisProgressStep,
@@ -18,7 +18,6 @@ import { ContentCard } from "@/components/ContentCard";
 import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPanel";
 import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
 import {
-  ExecutiveInsightSnapshot,
   ComparisonHighlights,
 } from "@/components/ExecutiveInsightSnapshot";
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
@@ -32,10 +31,14 @@ import {
   getProject,
   getProjectIngestionStatus,
   startProjectIngestion,
+  requestSemanticAnalysis,
+  getSemanticAnalysis,
+  getProviderStatus,
 } from "@/lib/api";
 import {
   clearActiveProjectId,
   getActiveProjectId,
+  getComparisonObjective,
   setActiveProjectId,
 } from "@/lib/app-session";
 import type {
@@ -96,6 +99,22 @@ export function ComparisonWorkspace() {
   const [insightSummary, setInsightSummary] =
     useState<CreatorInsightSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creativeBusyFor,setCreativeBusyFor]=useState<string|null>(null);
+  const creativeRequests=useRef(new Set<string>());
+  async function runCreativeReview(){
+    const id=projectDetail?.project_id;if(!id||creativeRequests.current.has(id))return;
+    creativeRequests.current.add(id);setCreativeBusyFor(id);setError(null);
+    const failures:string[]=[];
+    try{
+      const access=await getProviderStatus();
+      if(!access.provider_calls_enabled){setError("Creative review is currently paused. Your existing results remain available.");return;}
+      for(const slot of ["content_1","content_2"] as const){
+        try{const current=await getSemanticAnalysis(id,slot);if(!["ready","pending"].includes(current.status))await requestSemanticAnalysis(id,slot,current.status==="failed");window.dispatchEvent(new CustomEvent("creatorlens_semantic_queued",{detail:{projectId:id,slot}}));}
+        catch(e){failures.push(`${slot==="content_1"?"Content 1":"Content 2"}: ${getErrorMessage(e)}`);}
+      }
+      if(failures.length)setError(`Creative review: ${failures.join(" ")}`);
+    }catch(e){setError(getErrorMessage(e));}finally{creativeRequests.current.delete(id);setCreativeBusyFor(current=>current===id?null:current);}
+  }
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
   const [ingestionStatus, setIngestionStatus] =
     useState<IngestionStatusResponse | null>(null);
@@ -153,7 +172,7 @@ export function ComparisonWorkspace() {
     try {
       const [detail, summary, latestIngestion] = await Promise.all([
         getProject(activeProjectId),
-        getCreatorInsightSummary(activeProjectId).catch(() => null),
+        getCreatorInsightSummary(activeProjectId,getComparisonObjective(activeProjectId)).catch(() => null),
         getProjectIngestionStatus(activeProjectId).catch(() => null),
       ]);
 
@@ -248,7 +267,7 @@ export function ComparisonWorkspace() {
 
         const [detail, summary] = await Promise.all([
           getProject(ingestion.projectId),
-          getCreatorInsightSummary(ingestion.projectId).catch(() => null),
+          getCreatorInsightSummary(ingestion.projectId,getComparisonObjective(ingestion.projectId)).catch(() => null),
         ]);
 
         if (controller.signal.aborted) {
@@ -501,27 +520,14 @@ export function ComparisonWorkspace() {
         {createdProject && !hasResults && !ingestionStatus && (
           <Notice>Comparison created. Waiting for processing status...</Notice>
         )}
-        {hasResults && ingestionStatus?.status === "READY" ? (
-          <details className="processing-disclosure text-sm muted">
-            <summary>Analysis ready / Processing details</summary>
-            <IngestionProgressPanel
-              status={ingestionStatus}
-              isPolling={false}
-            />
-          </details>
-        ) : (
-          <IngestionProgressPanel
-            status={ingestionStatus}
-            isPolling={Boolean(activeIngestion)}
-          />
-        )}
-        {partialNotice && <Notice tone="warning">{partialNotice}</Notice>}
+        <IngestionProgressPanel status={ingestionStatus} isPolling={Boolean(activeIngestion)}/>
+        {partialNotice&&<span className="sr-only">{partialNotice}</span>}
         {error && <Notice tone="error">{error}</Notice>}
       </div>
       {hasResults && (
         <>
           {projectDetail && <AnalysisAllowancePanel projectId={projectDetail.project_id}/>}
-          {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} />}
+          {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} onCreativeReview={()=>void runCreativeReview()} creativeBusy={creativeBusyFor===projectDetail?.project_id}/>}
           <nav className="section-tabs" aria-label="Comparison sections">
             {[
               ["overview", "Overview"],
@@ -550,10 +556,6 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "overview"}
             className="section-panel"
           >
-            <ExecutiveInsightSnapshot
-              summary={insightSummary}
-              isLoading={isSubmitting}
-            />
             <div className="content-pair">
               <ContentCard
                 label="Content 1"
@@ -575,7 +577,7 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "insights"}
             className="section-panel"
           >
-            <div className="grid gap-4 lg:grid-cols-2 mb-5">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
+            <div className="grid gap-4 lg:grid-cols-2 mb-5">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id,getComparisonObjective(projectDetail!.project_id)).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
             <CreatorInsightSummaryPanel
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}

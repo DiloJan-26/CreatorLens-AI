@@ -38,7 +38,7 @@ export function ContentCard({
           <span className="muted">/ {platformLabel(item.platform)}</span>
         </span>
         <span className={`extraction-state state-${item.extraction_status}`}>
-          {item.extraction_status.replace(/_/g, " ")}
+          {item.extraction_status === "ready" ? "Evidence ready" : item.extraction_status === "partial" ? "Some details unavailable" : item.extraction_status.replace(/_/g, " ")}
         </span>
       </div>
       <div className="video-card-body">
@@ -64,7 +64,7 @@ export function ContentCard({
             />
             <Metric label="Comments" value={formatNumber(item.comments)} />
             <Metric
-              label="Semantic verbal hook"
+              label="Opening clarity"
               value={hookScore == null ? null : `${hookScore}/10`}
             />
           </dl>
@@ -72,8 +72,7 @@ export function ContentCard({
       </div>
       <div className="video-card-footnote">
         <span>
-          Public metric snapshot{" "}
-          <span className="muted">/ Verbal hook score uses validated semantic features</span>
+          Public video snapshot
         </span>
         <a
           className="source-link"
@@ -90,7 +89,7 @@ export function ContentCard({
         </p>
       )}
       <details className="detail-disclosure video-card-details">
-        <summary>Content details & provenance</summary>
+        <summary>Sources and video details</summary>
         <p className="muted text-xs mt-3">
           Extracted title: {item.title || "Unavailable"}
         </p>

@@ -1,4 +1,5 @@
 ﻿import type { ContentInsight, CreatorRecommendationBundle, RecommendationEvidence } from "@/types/project";
+import { objectiveNames } from "@/lib/intelligence-copy";
 import { Icon } from "./ui";
 
 type Props = {
@@ -31,8 +32,8 @@ function Evidence({ item, bundle, contents }: { item: RecommendationEvidence } &
 export function CreatorRecommendationList({ bundle, contents }: Props) {
   return (
     <section className="recommendation-panel rounded-md border border-slate-200 p-4" aria-label="Evidence-grounded creator recommendations">
-      <h3 className="flex items-center gap-2 text-base font-semibold"><Icon name="bulb" size={20} /> Evidence-grounded recommendations</h3>
-      <p className="mt-2 text-sm text-slate-600">{bundle.policy_version} · Objective: {bundle.selected_objective.replaceAll("_", " ")}</p>
+      <h3 className="flex items-center gap-2 text-base font-semibold"><Icon name="bulb" size={20} /> Your next creative moves</h3>
+      <p className="mt-2 text-sm text-slate-600">Practical experiments for {objectiveNames[bundle.selected_objective]?.toLowerCase() ?? "your content"}</p>
       {bundle.recommendations.length ? <ol className="mt-4 grid gap-4">{bundle.recommendations.map((recommendation) => {
         const target = contents.find((content) => content?.content_id === recommendation.target_content_id && content.slot === recommendation.target_slot && content.platform === recommendation.target_platform);
         if (!target || recommendation.project_id !== bundle.project_id || recommendation.selected_objective !== bundle.selected_objective) return <li key={recommendation.id} className="text-sm text-amber-800">Recommendation withheld because its target could not be verified.</li>;
@@ -40,7 +41,7 @@ export function CreatorRecommendationList({ bundle, contents }: Props) {
           <li key={recommendation.id} data-recommendation-id={recommendation.id} className="rounded-md border border-slate-200 p-4">
             <p className="text-sm font-medium text-teal-800">{target.label} · {target.platform} · {recommendation.priority.label} priority</p>
             <h4 className="mt-1 font-semibold">{recommendation.title}</h4>
-            <p className="mt-2 text-sm leading-6"><strong>Supported finding: </strong>{recommendation.detected_weakness}</p><p className="mt-2 text-sm leading-6">{recommendation.observed_signal}</p>
+            <p className="mt-2 text-sm leading-6"><strong>What we noticed: </strong>{recommendation.detected_weakness}</p><p className="mt-2 text-sm leading-6">{recommendation.observed_signal}</p>
             <p className="mt-3 leading-6"><strong>Try: </strong>{recommendation.recommended_change}</p>
             <p className="mt-2 text-sm leading-6"><strong>Experiment: </strong>{recommendation.experiment}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{recommendation.limitation}</p>
@@ -52,12 +53,12 @@ export function CreatorRecommendationList({ bundle, contents }: Props) {
               <p className="mt-2 text-sm text-slate-600">Basis: {recommendation.basis.replaceAll("_", " ")} · Selected decision: {recommendation.comparison.selected_objective_status}</p>
               <div className="mt-3 grid gap-2">{recommendation.evidence.map((item, index) => <Evidence key={`${item.evidence_id}-${index}`} item={item} bundle={bundle} contents={contents} />)}</div>
             </details>
-            {recommendation.example && recommendation.example.target_content_id === target.content_id && <details className="detail-disclosure mt-3"><summary>Deterministic draft structure</summary><p className="mt-2 leading-6">{recommendation.example.text}</p><p className="mt-2 text-sm text-slate-600">{recommendation.example.limitation}</p></details>}
+            {recommendation.example && recommendation.example.target_content_id === target.content_id && <details className="detail-disclosure mt-3"><summary>Suggested draft structure</summary><p className="mt-2 leading-6">{recommendation.example.text}</p><p className="mt-2 text-sm text-slate-600">{recommendation.example.limitation}</p></details>}
           </li>
         );
-      })}</ol> : <p className="mt-4 text-sm leading-6">{bundle.status === "unavailable" ? "Recommendation inputs are unavailable." : "No supported actionable weakness was identified from the current evidence. Missing evidence is not treated as a defect."}</p>}
+      })}</ol> : <p className="mt-4 text-sm leading-6">{bundle.status === "unavailable" ? "More source evidence is needed to suggest a supported next step." : "No specific improvement is supported by the current evidence. Explore the observations below or complete a creative review."}</p>}
       {bundle.findings.length > 0 && <details className="detail-disclosure mt-4"><summary>Observations and evidence limits ({bundle.findings.length})</summary><ul className="mt-3 grid gap-3">{bundle.findings.map((finding) => <li key={finding.id} className="rounded-md border border-slate-200 p-3 text-sm leading-6"><p className="font-medium">{contentLabel(finding.target_content_id, contents)} · {finding.status.replaceAll("_", " ")}</p><p>{finding.observation}</p>{finding.limitations.length > 0 && <p className="text-slate-600">{finding.limitations.join(" ")}</p>}{finding.missing_evidence.length > 0 && <p className="text-slate-600">Missing: {finding.missing_evidence.join("; ")}</p>}{finding.evidence.length > 0 && <details className="mt-2"><summary>Evidence references</summary><div className="mt-2 grid gap-2">{finding.evidence.map((item, index) => <Evidence key={`${item.evidence_id}-${index}`} item={item} bundle={bundle} contents={contents} />)}</div></details>}</li>)}</ul></details>}
-      <p className="mt-3 text-sm leading-6 text-slate-600">{bundle.limitations.join(" ")}</p>
+      <details className="detail-disclosure mt-3"><summary>Recommendation method and limitations</summary><p className="mt-3 text-sm muted">{bundle.policy_version}</p><p className="mt-2 text-sm muted">{bundle.limitations.join(" ")}</p></details>
     </section>
   );
 }

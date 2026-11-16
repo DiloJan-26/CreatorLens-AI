@@ -743,9 +743,18 @@ No exclusive ownership is claimed over the original project concept, assessment 
 
 ### Authenticated extraction safety
 
-Authenticated ingestion uses a separately admitted, synchronous Supadata metadata/native-caption path. Each operation reserves a provider credit and the configured USD ceiling before sending. Transcript calls require provider-verified duration; slot attempts, owner/project identity, global concurrency and a dedicated prepaid credit pool are checked durably. Unknown outcomes retain reservations and require review; task redelivery cannot replay uncertain provider work.
+Authenticated ingestion uses the bounded, synchronous Supadata metadata/native-caption path. Every operation requires an owned project, durable admission and the configured USD budget reservation before sending. Transcript calls require verified duration; slot attempts, global concurrency, response/time bounds and the emergency stop remain enforced. Unknown outcomes retain reservations and require review; task redelivery cannot replay uncertain work.
 
-Execution defaults to disabled. Enabling it requires approved duration/size/time/rate/budget limits, an applicable verified pricing interval, a verified prepaid account and auto-recharge disabled. Pro subscription allocation estimates are separate from actual invoices; missing billing is unavailable. Generated Supadata transcripts, translation, asynchronous polling, Apify and remote-audio Deepgram remain disabled in authenticated mode. Existing explicitly gated local provider integrations are preserved. See backend/.env.example for configuration names. No cloud configuration is changed by these defaults.
+Execution defaults to suspended. Enabling it requires provider credentials and valid operational bounds/budgets. Supadata account-plan attestations and a manually named prepaid pool are not execution prerequisites. Optional verified tariff configuration records allocation estimates separately from actual invoices; unavailable pricing remains unknown. Generated Supadata transcripts, translation, asynchronous polling, Apify and remote-audio Deepgram are not enabled by this path. See backend/.env.example for actual configuration names.
+
+### Creator workspace and metadata completeness
+
+The comparison workspace presents canonical goal-specific decisions, public metric cards and independent dimensions. Analysis progress can be expanded or collapsed; completed preparation is collapsed by default. Technical evidence notes and previous-policy assessments remain available inside disclosures rather than dominating the creator view.
+
+Explicit **Run creative review** queues the existing authorized semantic workflow for both slots, reuses ready/pending results and preserves the selected objective. It does not run on page load. Completion and provider admission rules still apply; saving metrics only closes subsequent creative review for that analysis.
+
+The metadata mapper preserves exact whole counts returned as integers, whole-valued floats or numeric strings, maps supplied publication dates and retains field-availability provenance. Missing or invalid likes/comments remain unavailable. This does not guarantee fields the upstream provider withholds, backfill existing stored analyses, fetch comment bodies or introduce extra enrichment requests. Current creator-size snapshots are used only when actually returned.
+
 
 
 ### Local authenticated acceptance
