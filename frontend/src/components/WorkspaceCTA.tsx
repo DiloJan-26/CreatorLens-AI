@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkspaceEntry } from "./WorkspaceEntry";
 
 export function WorkspaceCTA() {
   return (
@@ -14,16 +14,16 @@ export function WorkspaceCTA() {
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
               Explore the evidence-first workflow. Live extraction and model generation
-              require verified pricing and usage admission. Sign in with Google to access
+              use your account allowance. Sign in with Google to access
               your private workspace and existing analyses.
             </p>
           </div>
-          <Link
-            href="/analyze"
+          <WorkspaceEntry
+
             className="inline-flex h-12 items-center justify-center rounded-md bg-white px-6 text-sm font-semibold text-slate-950 transition hover:bg-teal-50"
           >
             Explore workspace
-          </Link>
+          </WorkspaceEntry>
         </div>
       </div>
     </section>

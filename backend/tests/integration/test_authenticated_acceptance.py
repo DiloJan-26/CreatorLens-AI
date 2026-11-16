@@ -79,6 +79,7 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
     monkeypatch.setattr(bounded_provider.httpx,"Client",provider_client)
     for i in range(2):
         response=client.get("/api/account",headers=headers[i]);assert response.status_code==200
+        assert "avatar_url" in response.json()
         assert response.json()["usage"]["available"]==5 and response.json()["id"]==ids[i]
         assert client.get("/api/account",headers=headers[i]).json()["usage"]["granted"]==5
     assert client.get("/api/account",headers={"Authorization":"Bearer "+token(0,True)}).status_code==401

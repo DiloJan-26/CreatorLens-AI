@@ -590,7 +590,7 @@ async function authenticatedFetch(input:RequestInfo|URL, init?:RequestInit) {
   return response;
 }
 export type AccountUsage={granted:number;completed:number;reserved:number;available:number};
-export type Account={id:string;email:string|null;display_name:string|null;role:string;plan:string;usage:AccountUsage};
+export type Account={id:string;email:string|null;display_name:string|null;avatar_url?:string|null;role:string;plan:string;usage:AccountUsage};
 export function getAccount(){return request<Account>("/api/account");}
 export function getAccountUsage(){return request<{balance:AccountUsage;events:{kind:string;reference_id:string;created_at:string}[];analyses:{id:string;project_id:string;state:string;completion_mode:string|null}[]}>("/api/account/usage");}
 export function listOwnedProjects(){return request<{projects: import("@/types/project").ProjectRecord[]}>("/api/projects");}

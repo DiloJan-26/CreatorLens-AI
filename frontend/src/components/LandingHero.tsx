@@ -1,3 +1,4 @@
+import { WorkspaceEntry } from "./WorkspaceEntry";
 import Link from "next/link";
 
 const HERO_BADGES = [
@@ -9,11 +10,7 @@ const HERO_BADGES = [
   "Your creator workspace",
 ];
 
-type LandingHeroProps = {
-  onStart?: () => void;
-};
-
-export function LandingHero({ onStart }: LandingHeroProps) {
+export function LandingHero() {
   return (
     <section className="relative overflow-hidden border-b border-slate-200 bg-[linear-gradient(135deg,#f8fafc_0%,#ecfeff_48%,#f0fdf4_100%)]">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-400 to-sky-400" />
@@ -42,13 +39,13 @@ export function LandingHero({ onStart }: LandingHeroProps) {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link
-              href="/analyze"
-              onClick={onStart}
+            <WorkspaceEntry
+
+
               className="inline-flex h-12 items-center justify-center rounded-md bg-slate-950 px-6 text-sm font-semibold text-white shadow-md transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-300"
             >
               Analyze Two URLs
-            </Link>
+            </WorkspaceEntry>
             <Link
               href="/#how-it-works"
               className="inline-flex h-12 items-center justify-center rounded-md border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:bg-teal-50"

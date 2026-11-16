@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkspaceEntry } from "./WorkspaceEntry";
 import { Icon } from "./ui";
 
 export function LandingComparisonPreview() {
@@ -73,9 +73,9 @@ export function LandingComparisonPreview() {
               <span>Cited transcript evidence</span>
             </li>
           </ul>
-          <Link href="/analyze">
+          <WorkspaceEntry className="button-quiet">
             Explore comparison <Icon name="arrow" size={16} />
-          </Link>
+          </WorkspaceEntry>
         </div>
       </div>
     </figure>

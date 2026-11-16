@@ -6,6 +6,8 @@ import { browserAuth } from "@/lib/supabase/browser";
 import { clearAccountWorkspace } from "@/lib/app-session";
 import { getAccount,revokeApplicationSession,type Account } from "@/lib/api";
 import { Dialog } from "./ui";
+import Image from "next/image";
+import { GoogleSignInButton } from "./GoogleSignIn";
 
 type AccountState={account:Account|null;loading:boolean;refresh:()=>Promise<void>;logout:()=>Promise<void>};
 const Context=createContext<AccountState>({account:null,loading:false,refresh:async()=>{},logout:async()=>{}});
@@ -59,15 +61,40 @@ export function AccountProvider({children}:{children:ReactNode}){
   }
   const isPublic=pathname==="/" || pathname.startsWith("/auth/") || pathname==="/login";
   return <Context.Provider value={{account,loading,refresh,logout}}>
-    {!isPublic && loading ? <main className="page-container" role="status">Restoring your session...</main> : !isPublic && !account ? <main className="page-container"><h1 className="text-2xl font-semibold">Sign in to your workspace</h1><p className="mt-3" role="alert">{error??"Continue with Google to access your own analyses."}</p><Link className="button-primary mt-5" href="/login">Continue with Google</Link></main> : <div key={account?.id??"public"}>{children}</div>}
+    {!isPublic && loading ? <main className="page-container" role="status">Restoring your session...</main> : !isPublic && !account ? <main className="page-container"><h1 className="text-2xl font-semibold">Sign in to your workspace</h1><p className="mt-3" role="alert">{error??"Continue with Google to access your own analyses."}</p><GoogleSignInButton className="button-primary mt-5"/></main> : <div key={account?.id??"public"}>{children}</div>}
+    {isPublic&&error&&<p className="auth-status-notice" role="alert">{error}</p>}
     <FreeAnalysisLimitDialog open={exhausted} onClose={()=>setExhausted(false)}/>
   </Context.Provider>;
 }
 export function AccountMenu(){
   const {account,loading,logout}=useAccount();
-  if(loading)return <span role="status">Restoring session...</span>;
-  if(!account)return <Link className="button-secondary" href="/login">Sign in</Link>;
-  return <div className="account-menu"><Link href="/workspace">{account.display_name??"Your workspace"}</Link><span className="text-sm">Free plan: {account.usage.available} of {account.usage.granted} available</span><button className="button-secondary" onClick={()=>void logout()}>Sign out</button></div>;
+  const [busy,setBusy]=useState(false),[photoFailed,setPhotoFailed]=useState(false);
+  const menu=useRef<HTMLDetailsElement>(null),pending=useRef(false);
+  useEffect(()=>{
+    const close=(event:PointerEvent)=>{if(menu.current&&!menu.current.contains(event.target as Node))menu.current.open=false;};
+    document.addEventListener("pointerdown",close);
+    return ()=>document.removeEventListener("pointerdown",close);
+  },[]);
+  if(loading)return <span role="status" className="muted text-sm">Restoring session...</span>;
+  if(!account)return <GoogleSignInButton className="button-secondary">Sign in</GoogleSignInButton>;
+  const name=account.display_name?.trim()||account.email?.split("@")[0]||"Your account";
+  const initials=name.split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join("").toUpperCase();
+  let photo:string|undefined;
+  try {const url=new URL(account.avatar_url??"");if(url.protocol==="https:"&&(url.hostname==="googleusercontent.com"||url.hostname.endsWith(".googleusercontent.com")))photo=url.href;}catch{}
+  async function signOut(){
+    if(pending.current)return;
+    pending.current=true;setBusy(true);
+    try{await logout();}finally{pending.current=false;setBusy(false);}
+  }
+  return <details className="profile-menu" ref={menu} onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();if(menu.current){menu.current.open=false;menu.current.querySelector("summary")?.focus();}}}} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node)&&menu.current)menu.current.open=false;}}>
+    <summary className="profile-trigger" aria-label={`Account for ${name}`}><span className="profile-avatar">{photo&&!photoFailed?<Image src={photo} alt="" width={36} height={36} unoptimized referrerPolicy="no-referrer" onError={()=>setPhotoFailed(true)}/>:initials}</span><span className="profile-trigger-name">{name}</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div className="profile-dropdown">
+      <div className="profile-identity"><strong>{name}</strong>{account.email&&<span>{account.email}</span>}</div>
+      <Link href="/workspace" onClick={()=>{if(menu.current)menu.current.open=false;}}>Your workspace</Link>
+      <p className="profile-allowance">{account.usage.available} of {account.usage.granted} analyses available</p>
+      <button type="button" className="profile-signout" disabled={busy} onClick={()=>void signOut()}>{busy?"Signing out...":"Sign out"}</button>
+    </div>
+  </details>;
 }
 
 export function FreeAnalysisLimitDialog({open,onClose}:{open:boolean;onClose:()=>void}){

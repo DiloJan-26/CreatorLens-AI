@@ -13,7 +13,8 @@ const calls=[],events=[];
 const storage=()=>{const data=new Map();return {get length(){return data.size;},key:i=>[...data.keys()][i],getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)};};
 globalThis.window={localStorage:storage(),sessionStorage:storage(),dispatchEvent:event=>events.push(event.type),location:{origin:"http://localhost:3000"}};
 globalThis.CustomEvent=class extends Event{constructor(type,init){super(type);this.detail=init?.detail;}};
-const sdk={auth:{getSession:async()=>({data:{session:token?{access_token:token}:null},error:null})}};
+let oauthError=null;const oauthCalls=[];
+const sdk={auth:{signInWithOAuth:async options=>{oauthCalls.push(options);return {error:oauthError};},getSession:async()=>({data:{session:token?{access_token:token}:null},error:null})}};
 const cache=new Map();
 function load(file){
   file=path.resolve(file);
@@ -25,6 +26,7 @@ function load(file){
     if(name==="@supabase/ssr")return {createServerClient:(url,key,options)=>({auth:{getClaims:async()=>{if(proxyThrows)throw Error("Synthetic verification outage");options.cookies.setAll([{name:"sb-fixture",value:"synthetic-cookie",options:{path:"/"}}]);return {data:proxyClaims?{claims:proxyClaims}:null,error:null};}}})};
     if(name==="next/server")return {NextResponse:class {constructor(body,init){this.body=body;this.status=init?.status;}static next(){return {headers:new Headers(),cookies:cookieJar()};}static redirect(location,init){return {location:String(location),headers:init?.headers??new Headers(),cookies:cookieJar()};}}};
     if(name==="next/navigation")return {usePathname:()=>"/login"};
+    if(name==="next/image")return function MockImage(props){const imageProps={...props};delete imageProps.unoptimized;delete imageProps.priority;return React.createElement("img",imageProps);};
     if(name==="next/link")return function MockLink({children,...props}){return React.createElement("a",props,children);};
     if(name==="./ui")return {Dialog:function MockDialog({children,title,open}){return open?React.createElement("section",null,React.createElement("h2",null,title),children):null;}};
     if(name.startsWith("@/")||name.startsWith("./")){
@@ -109,3 +111,25 @@ console.log("OAuth callback development request logs suppressed without hiding n
   }
   console.log("Configuration contracts passed: trusted deployed API origins, bounded environment-driven polling and no fixed client credit promise.");
 }
+
+// The same Google OAuth redirect serves registration and return sign-in.
+process.env.NEXT_PUBLIC_SITE_URL="https://wrong.fixture.invalid";
+const {startGoogleSignIn}=load(path.join(root,"lib/google-auth.ts"));
+await assert.rejects(()=>startGoogleSignIn(),/trusted sign-in origin/);
+assert.equal(oauthCalls.length,0);
+process.env.NEXT_PUBLIC_SITE_URL=window.location.origin;
+oauthError=Error("private SDK details");
+await assert.rejects(()=>startGoogleSignIn(),error=>error.message==="Google sign-in could not be started. Please try again.");
+oauthError=null;oauthCalls.length=0;
+await Promise.all([startGoogleSignIn(),startGoogleSignIn()]);
+assert.equal(oauthCalls.length,1);
+assert.equal(oauthCalls[0].provider,"google");
+assert.equal(oauthCalls[0].options.redirectTo,window.location.origin+"/auth/callback");
+assert.equal(oauthCalls[0].options.queryParams.prompt,"select_account");
+assert.equal(oauthCalls[0].options.scopes,"openid email profile");
+const navbar=fs.readFileSync(path.join(root,"components/AppNavbar.tsx"),"utf8");
+assert(!navbar.includes("setAuth")&&!navbar.includes("open={auth}"));
+for(const file of ["app/page.tsx","components/WorkspaceCTA.tsx","components/LandingHero.tsx","components/LandingComparisonPreview.tsx"]){
+  const source=fs.readFileSync(path.join(root,file),"utf8");assert(source.includes("WorkspaceEntry"));assert(!/href="\/analyze"/.test(source));
+}
+console.log("Direct OAuth contracts passed: trusted callback, Google-only identity, account chooser, duplicate suppression, recoverable errors and shared public entry actions without sign-in dialogs.");
