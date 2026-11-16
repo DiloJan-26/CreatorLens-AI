@@ -66,12 +66,9 @@ export function TranscriptPreviewPanel({
             {label} {item ? `- ${platformLabel(item.platform)}` : ""}
           </p>
           <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Transcript preview / up to 5 segments
+            Caption excerpts
           </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Review extracted transcript segments when public captions or
-            best-effort transcription are available.
-          </p>
+
         </div>
         <button
           type="button"
@@ -79,7 +76,7 @@ export function TranscriptPreviewPanel({
           disabled={isLoading || !projectId || !item}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Loading..." : "Load preview"}
+          {isLoading ? "Loading..." : "Read captions"}
         </button>
       </div>
 
@@ -91,29 +88,6 @@ export function TranscriptPreviewPanel({
 
       {preview ? (
         <div className="mt-4">
-          <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600 sm:grid-cols-2">
-            <PreviewMetric
-              label="Source"
-              value={transcriptSourceLabel(preview.transcript_source)}
-            />
-            <PreviewMetric
-              label="Detected language"
-              value={detectedLanguageLabel(preview)}
-            />
-            <PreviewMetric
-              label="Confidence"
-              value={confidenceLabel(preview.language_confidence)}
-            />
-            <PreviewMetric
-              label="Segments"
-              value={String(preview.transcript_segment_count)}
-            />
-          </div>
-          {preview.transcript_source_note ? (
-            <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-              {preview.transcript_source_note}
-            </p>
-          ) : null}
           {!preview.transcript_available || preview.segments.length === 0 ? (
             <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               Transcript unavailable for this content item.
@@ -137,15 +111,6 @@ export function TranscriptPreviewPanel({
   );
 }
 
-function PreviewMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-slate-950">{value}</p>
-    </div>
-  );
-}
-
 function platformLabel(platform: string): string {
   if (platform === "youtube") {
     return "YouTube";
@@ -160,74 +125,6 @@ function platformLabel(platform: string): string {
   }
 
   return platform;
-}
-
-function transcriptSourceLabel(source: string | null | undefined): string {
-  if (source === "platform_captions") {
-    return "Captions";
-  }
-
-  if (source === "deepgram_multilingual") {
-    return "Deepgram multilingual";
-  }
-
-  if (source === "unavailable") {
-    return "Unavailable";
-  }
-
-  return source?.replace(/_/g, " ") || "Unknown";
-}
-
-function languageLabel(language: string | null | undefined): string {
-  if (!language) {
-    return "Unknown";
-  }
-
-  const normalized = language.toLowerCase();
-
-  if (normalized.startsWith("en")) {
-    return "English";
-  }
-
-  if (normalized.startsWith("hi")) {
-    return "Hindi";
-  }
-
-  if (normalized.startsWith("ta")) {
-    return "Tamil";
-  }
-
-  if (normalized === "multi" || normalized === "multilingual") {
-    return "Multilingual";
-  }
-
-  return language;
-}
-
-function detectedLanguageLabel(preview: TranscriptPreviewResponse): string {
-  const detectedLanguage = preview.detected_language;
-
-  if (
-    detectedLanguage &&
-    !["multi", "multilingual", "auto"].includes(detectedLanguage.toLowerCase())
-  ) {
-    return languageLabel(detectedLanguage);
-  }
-
-  if (preview.transcript_language) {
-    return `${languageLabel(preview.transcript_language)} captions`;
-  }
-
-  return "Not confidently detected";
-}
-
-function confidenceLabel(confidence: number | null | undefined): string {
-  if (confidence == null) {
-    return "Unknown";
-  }
-
-  const percent = confidence <= 1 ? confidence * 100 : confidence;
-  return `${Math.round(percent)}%`;
 }
 
 function SegmentTimestamp({ segment }: { segment: TranscriptSegment }) {

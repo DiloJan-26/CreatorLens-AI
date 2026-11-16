@@ -220,10 +220,10 @@ function Limitations({ limitations }: { limitations: string[] }) {
 
 function EvidenceSummary({ evidence }: { evidence: StructuredEvidenceItem[] }) {
   return (
-    <details open className="evidence-summary">
-      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">
+    <section className="evidence-summary">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">
         <Icon name="shield" size={16} /> Supporting evidence ({evidence.length})
-      </summary>
+      </h3>
       <ul className="mt-3 grid gap-2">
         {evidence.map((item, index) => (
           <li key={`${item.citation_label}-${index}`}>
@@ -253,15 +253,15 @@ function EvidenceSummary({ evidence }: { evidence: StructuredEvidenceItem[] }) {
               {item.claim}
             </p>
             {item.excerpt && (
-              <details className="text-xs muted">
-                <summary>Source excerpt</summary>
+              <blockquote className="text-xs muted">
+
                 <p className="whitespace-pre-wrap">{item.excerpt}</p>
-              </details>
+              </blockquote>
             )}
           </li>
         ))}
       </ul>
-    </details>
+    </section>
   );
 }
 

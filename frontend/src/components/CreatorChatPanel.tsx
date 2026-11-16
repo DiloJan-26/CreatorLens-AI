@@ -25,15 +25,7 @@ import type {
   StructuredAnswerPayload,
 } from "@/types/project";
 
-const SUGGESTED_QUESTIONS = [
-  "What is the engagement rate of each content item?",
-  "Compare the hooks in the first 5 seconds.",
-  "Give me the Creator Insight Summary.",
-  "Which content has stronger confirmed public engagement?",
-  "What metadata is missing?",
-  "Suggest improvements for Content 2 based on Content 1.",
-  "Rewrite the opening for Content 2.",
-];
+const SUGGESTED_QUESTIONS = ["Which video has more views?", "Which has higher engagement?", "Compare their opening hooks.", "What should Content 1 improve?"];
 
 type CreatorChatPanelProps = {
   projectId: string | null;
@@ -44,7 +36,7 @@ export function CreatorChatPanel({
   projectId,
   indexReady,
 }: CreatorChatPanelProps) {
-  const [objective, setObjective] = useState<ComparisonObjective>("balanced");
+  const [objective, setObjective] = useState<ComparisonObjective>("reach");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -188,6 +180,7 @@ export function CreatorChatPanel({
         projectId,
         {
           message: question,
+          objective,
           session_id: sessionId,
         },
         {
@@ -242,14 +235,10 @@ export function CreatorChatPanel({
   return (
     <section className="chat-panel" aria-label="Evidence-grounded conversation">
       <div className="chat-top flex-wrap">
-          <label className="flex items-center gap-2 text-sm">Objective
-            <select aria-label="Comparison objective" className="max-w-full rounded-md border border-slate-300 bg-white p-2 text-sm" value={objective} disabled={isStreaming} onChange={(event) => { const next = event.target.value as ComparisonObjective; setObjective(next); if (projectId) setComparisonObjective(projectId, next); }}>
-              <option value="balanced">Balanced</option><option value="reach">Reach</option><option value="engagement">Engagement</option><option value="creative_quality">Creative quality</option>
-            </select>
-          </label>
+          <div className="objective-tabs" role="group" aria-label="Chat objective">{([['reach','Reach'],['engagement','Engagement'],['creative_quality','Creative quality']] as const).map(([id,label])=><button type="button" key={id} aria-pressed={objective===id} disabled={isStreaming} onClick={()=>{setObjective(id);if(projectId)setComparisonObjective(projectId,id);}}>{label}</button>)}</div>
         <span className="platform-label">
           <Icon name="shield" size={16} />
-          Evidence-grounded conversation
+          AI Assistant
         </span>
         <span className="muted text-xs">
           {isStreaming
@@ -392,15 +381,10 @@ export function CreatorChatPanel({
             </button>
           </div>
           <p className="composer-hint">
-            Ctrl / Cmd + Enter to send. AI suggestions are hypotheses to test.
+            Ctrl / Cmd + Enter to send.
           </p>
         </form>
-        <details className="text-xs muted mt-2">
-          <summary>About this session</summary>Context is retained while
-          navigating in this browser session. Reloading can start a new
-          conversation. Restored message history may not include structured
-          cards or source details.
-        </details>
+
       </div>
     </section>
   );
@@ -523,7 +507,7 @@ function ChatMessageBubble({
       ) : isStreaming ? (
         <p className="mt-2 text-sm leading-6 text-slate-400">Thinking...</p>
       ) : null}
-      {!isUser && message.citations && message.citations.length > 0 ? (
+      {!isUser && !message.structuredAnswer && message.citations && message.citations.length > 0 ? (
         <CitationList citations={message.citations} />
       ) : null}
     </article>
@@ -532,8 +516,8 @@ function ChatMessageBubble({
 
 function CitationList({ citations }: { citations: ChatCitation[] }) {
   return (
-    <details className="retrieved-citations">
-      <summary>All retrieved sources ({citations.length})</summary>
+    <section className="retrieved-citations">
+      <h3 className="text-sm font-semibold">Sources ({citations.length})</h3>
       <ol className="mt-2 grid gap-2">
         {citations.map((citation, index) => (
           <li
@@ -548,18 +532,16 @@ function CitationList({ citations }: { citations: ChatCitation[] }) {
               {platformLabel(citation.platform)} /{" "}
               {sourceTypeLabel(citation.source_type)}
             </p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-xs font-semibold text-teal-700">
-                View source text
-              </summary>
+            <div className="mt-2">
+
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                 {citation.text}
               </p>
-            </details>
+            </div>
           </li>
         ))}
       </ol>
-    </details>
+    </section>
   );
 }
 

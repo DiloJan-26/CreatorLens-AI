@@ -148,26 +148,8 @@ export function EvaluationDashboard() {
             <StatusBadge accepted={accepted} run={latestRun} />
           )}
         </div>
-        <label className="flex flex-wrap items-center gap-3 text-sm">Evaluation family
-          <select className="rounded-md border border-slate-300 bg-white p-2" value={family} onChange={(event) => {
-            const next = event.target.value; setFamily(next);
-            const matches = runs.filter((run) => next === "all" || (next === "intelligence") === Boolean(run.evaluation_details?.critical_gate));
-            setSelectedRunId(matches[0]?.id ?? null);
-          }}><option value="all">All run history</option><option value="legacy">Legacy RAG regression</option><option value="intelligence">Creator Intelligence v2</option></select>
-        </label>
-        <details className="notice text-sm">
-          <summary>How to read these results</summary>
-          <p className="muted">
-            Pass rate reflects deterministic rubric gates. Lexical faithfulness
-            and relevance measure text-based signals, not LLM-judge assessments.
-            Context precision and recall use the configured RAGAS metrics.
-            Intelligence v2 reports critical contracts separately from mocked-model probes,
-            synthetic retrieval and pending human/live references. Failed exploratory cases
-            and skips remain visible; a critical pass is not overall model accuracy.
-            Passing a regression suite does not guarantee every live answer is
-            correct. This view cannot execute evaluations.
-          </p>
-        </details>
+        <div className="objective-tabs" role="group" aria-label="Evaluation family">{([['all','All runs'],['legacy','RAG regression'],['intelligence','Creator intelligence']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={family===id} onClick={()=>{setFamily(id);const matches=runs.filter(run=>id==='all'||(id==='intelligence')===Boolean(run.evaluation_details?.critical_gate));setSelectedRunId(matches[0]?.id??null);}}>{label}</button>)}</div>
+        <p className="muted text-xs">Offline regression and mocked-response checks. Live model accuracy is not measured.</p>
         {error ? <ErrorBanner message={error} onRetry={loadOverview} /> : null}
 
         {isLoading && runs.length === 0 ? (
@@ -194,12 +176,7 @@ export function EvaluationDashboard() {
               }
               loading={isDetailLoading}
             />
-            <details className="dataset-disclosure">
-              <summary>
-                Evaluation datasets & versions ({datasets.length})
-              </summary>
-              <DatasetStrip datasets={datasets} />
-            </details>
+            <DatasetStrip datasets={datasets} />
           </>
         )}
       </div>
@@ -471,8 +448,8 @@ function CaseResult({ result }: { result: EvaluationResultSummary }) {
   const details = result.evaluation_details;
   const failedChecks = checks.filter(([, check]) => !check.passed).length;
   return (
-    <details className="group rounded-2xl border border-slate-200 bg-slate-50 open:bg-white">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4">
+    <section className="rounded-2xl border border-slate-200 bg-white">
+      <div className="flex items-center justify-between gap-4 p-4">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {friendlyCaseName(result.case_id)}
@@ -496,13 +473,13 @@ function CaseResult({ result }: { result: EvaluationResultSummary }) {
             {result.status}
           </span>
         </div>
-      </summary>
+      </div>
       <div className="border-t border-slate-200 p-4">
         {details?.category && <div className="mb-4 space-y-2 text-sm">
           <p><strong>{details.category.replaceAll("_", " ")}</strong> / {details.execution_mode?.replaceAll("_", " ")} / {details.critical ? "Critical contract" : "Exploratory indicator"}</p>
           {details.skip_reason && <p className="text-amber-800">Skipped: {details.skip_reason}</p>}
           {details.failure_reasons?.map((reason) => <p className="text-rose-800" key={reason}>{reason}</p>)}
-          <details><summary>Actual output and explicit reference</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md border p-3 text-xs">{JSON.stringify({ actual: details.actual_output, expected: details.expected_output, references: details.references }, null, 2)}</pre></details>
+
         </div>}
         <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
           Quality gates
@@ -544,7 +521,7 @@ function CaseResult({ result }: { result: EvaluationResultSummary }) {
           ) : null}
         </div>
       </div>
-    </details>
+    </section>
   );
 }
 
@@ -750,7 +727,7 @@ function IntelligenceMeasurements({ run }: { run: EvaluationRunSummary }) {
     <div className="mt-4 space-y-3">{Object.entries(details.indicators ?? {}).map(([name, metric]) => <div className="rounded-md border p-3 text-sm" key={name}>
       <p className="font-medium">{friendlyMetricName(name)}</p><p>{metric.numerator} / {metric.denominator} / {metric.value == null ? "Not measured" : metric.value.toFixed(3)}</p><p className="text-slate-600">{metric.mode.replaceAll("_", " ")}</p>
     </div>)}</div>
-    <details className="mt-4 text-sm"><summary>Category results and execution modes</summary><div className="mt-3 space-y-2">{Object.entries(details.categories ?? {}).map(([name, result]) => <p key={name}>{friendlyMetricName(name)}: {result.passed} passed / {result.failed} failed / {result.skipped} skipped</p>)}</div><pre className="mt-3 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(details.execution_modes, null, 2)}</pre></details>
+    <section className="mt-4 text-sm"><h3>Category results</h3><div className="mt-3 space-y-2">{Object.entries(details.categories ?? {}).map(([name, result]) => <p key={name}>{friendlyMetricName(name)}: {result.passed} passed / {result.failed} failed / {result.skipped} skipped</p>)}</div></section>
     <p className="mt-4 text-sm text-slate-600">{details.limitations?.join(" ")}</p>
   </section>;
 }

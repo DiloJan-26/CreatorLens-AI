@@ -749,9 +749,9 @@ Execution defaults to suspended. Enabling it requires provider credentials and v
 
 ### Creator workspace and metadata completeness
 
-The comparison workspace presents canonical goal-specific decisions, public metric cards and independent dimensions. Analysis progress can be expanded or collapsed; completed preparation is collapsed by default. Technical evidence notes and previous-policy assessments remain available inside disclosures rather than dominating the creator view.
+The comparison workspace presents canonical goal-specific decisions, public metric cards and independent dimensions. Reach is the default, with Engagement and Creative Quality available as compact buttons. Balanced remains in the API for compatibility but is not offered by the frontend. Processing appears only while active or failed. Compare owns outcomes and public metrics; Insights owns creative assessments and recommendations; Evidence owns caption excerpts. Analytical dropdowns and developer-policy disclosures are removed from these creator pages.
 
-Explicit **Run creative review** queues the existing authorized semantic workflow for both slots, reuses ready/pending results and preserves the selected objective. It does not run on page load. Completion and provider admission rules still apply; saving metrics only closes subsequent creative review for that analysis.
+Explicit **Review both videos** in Insights queues the existing authorized semantic workflow for both slots, reuses ready/pending results and preserves the selected objective. It does not run on page load. Completion and provider admission rules still apply; saving metrics only closes subsequent creative review for that analysis.
 
 The metadata mapper preserves exact whole counts returned as integers, whole-valued floats or numeric strings, maps supplied publication dates and retains field-availability provenance. Missing or invalid likes/comments remain unavailable. This does not guarantee fields the upstream provider withholds, backfill existing stored analyses, fetch comment bodies or introduce extra enrichment requests. Current creator-size snapshots are used only when actually returned.
 
@@ -769,3 +769,5 @@ Operational limits, new-account grants, generation caps, queues and approved act
 The release source head is now `20261115_0014` (configurable allowances). Quiesce old API/workers before migration and require the disposable PostgreSQL CI gate. A no-network configuration check is available from backend/: `python -m app.core.configuration_preflight --release`. It prints validation status and a shared-policy fingerprint, never secret values. Cloud deployment remains separately authorized.
 
 Local release documents: docs/CreatorLens-Intelligence-v2/Deployment-Preflight-Audit.md, Deployment-Environment-Matrix.md, Deployment-Configuration-Externalization.md, Deployment-Manual-Execution-Guide.md and Deployment-Post-Release-Acceptance.md. The docs directory remains Git-ignored; these local documents need an explicit user-chosen tracking/backup decision.
+
+The Assistant sends the selected objective through the existing authenticated SSE request, avoids a second retrieved-source list when structured citations exist, and polls pending ingestion status with bounded read-only checks. Analysis completion controls are available beside chat because paid explanations require a completed reservation. Deterministic questions retain their existing Gemini bypass. Live provider and deployment behavior must be verified separately; source tests use mocked streaming.

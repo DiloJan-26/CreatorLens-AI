@@ -1,53 +1,24 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
-import { decisionCopy,comparisonValue,objectiveNames,outcomeLabel } from "@/lib/intelligence-copy";
-import { ResultBanner } from "./ResultBanner";
-import { Icon } from "./ui";
-import { getCreatorInsightSummary } from "@/lib/api";
-import { getComparisonObjective, setComparisonObjective } from "@/lib/app-session";
-import type { ComparisonObjective, CreatorInsightSummaryResponse } from "@/types/project";
-
-export const OBJECTIVES = [["balanced", "Balanced"], ["reach", "Reach"], ["engagement", "Engagement"], ["creative_quality", "Creative Quality"]] as const;
-export function GoalComparisonPanel({ summary, onChange, onCreativeReview, creativeBusy=false }: { summary: CreatorInsightSummaryResponse; onChange?: (value: CreatorInsightSummaryResponse) => void; onCreativeReview?:()=>void; creativeBusy?:boolean }) {
-  const decision = summary.goal_comparison;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const requestId = useRef(0);
-  useEffect(() => {
-    let active = true;
-    async function sync() {
-      const id = ++requestId.current;
-      setBusy(true); setError(null);
-      try {
-        const next = await getCreatorInsightSummary(summary.project_id, getComparisonObjective(summary.project_id));
-        if (active && id === requestId.current) onChange?.(next);
-      } catch { if (active && id === requestId.current) setError("Could not load this objective. The previous assessment remains visible."); }
-      finally { if (active && id === requestId.current) setBusy(false); }
-    }
-    function changed(event: Event) {
-      if ((event as CustomEvent).detail.projectId === summary.project_id) void sync();
-    }
-    window.addEventListener("creatorlens_objective_changed", changed);
-    return () => { active = false; window.removeEventListener("creatorlens_objective_changed", changed); };
-  }, [summary.project_id, onChange]);
-  const copy=decision?decisionCopy(decision):null;
-  return <section className="ui-panel comparison-decision" aria-label="Canonical comparison" aria-busy={busy}>
-    <div className="decision-heading"><div><p className="eyebrow">Creator intelligence</p><h2><Icon name="compare" size={22}/> Performance snapshot</h2></div>
-      <label className="objective-picker">Comparison objective <select disabled={busy||!onChange} value={decision?.selected_objective??"balanced"} onChange={e=>setComparisonObjective(summary.project_id,e.target.value as ComparisonObjective)}>{OBJECTIVES.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-    </div>
-    {busy&&<p role="status" className="muted text-sm mt-3">Updating your comparison...</p>}
-    {error&&<p role="alert" className="mt-3 text-rose-800">{error}</p>}
-    {decision&&copy?<>
-      <ResultBanner title={copy.title} description={copy.description} winner={Boolean(decision.winner_slot)} detail={<><span className="signal-label">{copy.objective}</span><strong>{decision.eligibility.status==="eligible"?"Assessed":"Review needed"}</strong></>}/>
-      <dl className="objective-values">{(["content_1","content_2"] as const).map(slot=><div key={slot}><dt>{slot==="content_1"?"Content 1":"Content 2"}</dt><dd>{comparisonValue(decision.raw_objective_values[slot],decision.objective_units)}</dd></div>)}</dl>
-      {decision.outcome==="insufficient_evidence"&&["balanced","creative_quality"].includes(decision.selected_objective)&&<div className="creative-next-step"><span className="signal-icon"><Icon name="bulb" size={22}/></span><div><strong>Bring the creative story into focus</strong><p>Review both openings, audience value and calls to action. Uses your AI allowance and may incur provider costs.</p></div>{onCreativeReview?<button className="button-primary" type="button" disabled={creativeBusy} onClick={onCreativeReview}>{creativeBusy?"Queuing review...":"Run creative review"}</button>:<a className="button-secondary" href="/analyze#insights">Open creative review</a>}</div>}
-      <details className="detail-disclosure mt-4"><summary>Evidence, comparison method and limitations</summary>
-        <p className="mt-3 text-sm muted">{decision.explanation}</p>
-        {decision.missing_evidence.length>0&&<p className="mt-3 text-sm muted">Required evidence: {decision.missing_evidence.join("; ")}</p>}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">{Object.entries(decision.dimension_leaders).map(([key,value])=><article key={key} className="rounded-md border border-slate-200 p-3"><h3 className="font-semibold">{objectiveNames[key]??key.replaceAll("_"," ")}</h3><p>{outcomeLabel(value.outcome)}</p><p className="text-sm muted">{value.explanation}</p></article>)}</div>
-        <p className="mt-3 text-xs break-words">Decision policy: {decision.decision_policy_version} / Metric policy: {decision.metric_policy_version} / Creative policy: {decision.creative_policy_version??"Awaiting review"}</p>
-        <p className="mt-3 text-sm muted">{decision.limitations.join(" ")}</p>
-      </details>
-    </>:<p className="mt-3 muted">Your comparison will appear when its evidence is available.</p>}
-  </section>;
+import {useEffect,useState} from "react";
+import {getCreatorInsightSummary} from "@/lib/api";
+import {setComparisonObjective} from "@/lib/app-session";
+import {comparisonValue,outcomeLabel} from "@/lib/intelligence-copy";
+import type {CreatorInsightSummaryResponse} from "@/types/project";
+import {Icon} from "./ui";
+const OPTIONS=[["reach","Reach","trend"],["engagement","Engagement","target"],["creative_quality","Creative quality","bulb"]] as const;
+export function GoalComparisonPanel({summary,onChange,objective="reach"}:{summary:CreatorInsightSummaryResponse;onChange?:(value:CreatorInsightSummaryResponse)=>void;onCreativeReview?:()=>void;creativeBusy?:boolean;objective?:"reach"|"engagement"|"creative_quality"}){
+ const [selected,setSelected]=useState(objective),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
+ useEffect(()=>{if(!onChange)return;let active=true;const timer=setTimeout(()=>{setComparisonObjective(summary.project_id,selected);
+ if(summary.goal_comparison?.selected_objective!==selected){setBusy(true);getCreatorInsightSummary(summary.project_id,selected).then(value=>{if(active){onChange(value);setError(null);}}).catch(()=>{if(active)setError("Comparison unavailable. Try again.");}).finally(()=>{if(active)setBusy(false);});}else setBusy(false);
+ },0);return()=>{active=false;clearTimeout(timer);};},[summary.project_id,summary.goal_comparison?.selected_objective,selected,onChange]);
+ const current=summary.goal_comparison,decision=current?.selected_objective===selected?current:current?.objective_decisions?.[selected];
+ const values=decision&&("raw_objective_values" in decision?decision.raw_objective_values:decision.values);
+ const units=selected==="reach"?"views":selected==="engagement"?"percent":"points_out_of_10";
+ const ready=decision?.outcome==="content_1"||decision?.outcome==="content_2";
+ return <section className="ui-panel outcome-panel" aria-label="Canonical comparison" aria-busy={busy} data-objective={selected}>
+ <div className="objective-tabs" role="group" aria-label="Comparison objective">{OPTIONS.map(([id,label,icon])=><button type="button" key={id} aria-pressed={selected===id} disabled={busy} onClick={()=>setSelected(id)}><Icon name={icon} size={17}/>{label}</button>)}</div>
+ <div className="outcome-header"><span className="signal-icon"><Icon name={ready?"trophy":selected==="reach"?"trend":"evidence"} size={23}/></span><div><p className="eyebrow">{OPTIONS.find(([id])=>id===selected)?.[1]}</p><h2>{decision?outcomeLabel(decision.outcome):"Comparison unavailable"}</h2></div></div>
+ <div className="outcome-values">{(["content_1","content_2"] as const).map((slot,index)=><div key={slot}><span>Content {index+1}</span><strong>{comparisonValue(values?.[slot],units)}</strong></div>)}</div>
+ <p className="muted text-sm mt-3">{decision?.outcome==="incomparable"?"These sources are not directly comparable.":decision?.outcome==="tie"?"The difference is within the comparison threshold.":!ready?selected==="reach"?"Views are unavailable for one or both videos.":selected==="engagement"?"Complete interaction counts and 1,000+ views per video required.":"Creative review needed. Open Insights to review both videos.":selected==="reach"?"Confirmed lifetime views.":selected==="engagement"?"Observed interaction rate.":"Caption-based creative assessment."}</p>
+ {error&&<p role="alert" className="mt-3 text-sm text-rose-800">{error}</p>}</section>;
 }

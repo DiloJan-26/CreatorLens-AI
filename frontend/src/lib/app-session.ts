@@ -87,7 +87,7 @@ function readSession(key: string): string | null {
 }
 export function getComparisonObjective(projectId: string): import("@/types/project").ComparisonObjective {
   const value = comparisonObjectives.get(projectId) ?? readSession(`creatorlens_objective_${projectId}`);
-  return value === "reach" || value === "engagement" || value === "creative_quality" ? value : "balanced";
+  return value === "reach" || value === "engagement" || value === "creative_quality" ? value : "reach";
 }
 export function setComparisonObjective(projectId: string, objective: import("@/types/project").ComparisonObjective) {
   comparisonObjectives.set(projectId, objective);
