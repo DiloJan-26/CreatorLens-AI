@@ -1,8 +1,4 @@
-"""Fixed-credit prepaid exposure, independent of Gemini token pricing.
-
-USD values are allocated subscription estimates, not marginal tariffs or invoices.
-A verified, dedicated account with auto-recharge OFF is a prerequisite.
-"""
+"""Bounded extraction and optional, historical Supadata pricing metadata."""
 from app.core.config import setting_value
 from datetime import date, datetime, UTC
 from decimal import Decimal, ROUND_UP
@@ -59,33 +55,32 @@ def price_for(operation, tier, *, provider="supadata", at=None, data=None):
 
 
 def configuration(settings, *, at=None):
-    def deny():
-        raise HTTPException(403, "Approved provider-specific prepaid pricing, account verification, credit pool, duration, size and time bounds are required for extraction.")
+    """Validate bounded execution; provider account plans are not app entitlements."""
     if getattr(settings,"provider_emergency_stop",True):
-        deny()
-    if not getattr(settings, "supadata_prepaid_verified", False) or not getattr(settings, "supadata_auto_recharge_disabled", False) or not getattr(settings, "supadata_api_key", None):
-        deny()
-    if getattr(settings, "supadata_transcript_mode", "native") != "native":
-        deny()
-    for name in ("extraction_max_concurrent_operations", "extraction_max_video_seconds", "extraction_max_url_bytes", "extraction_max_response_bytes", "extraction_timeout_seconds", "supadata_credit_limit", "paid_requests_per_minute"):
-        if not getattr(settings, name, 0):
-            deny()
-    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", getattr(settings, "supadata_credit_pool", "")):
-        deny()
-    bounds = [Decimal(getattr(settings, name, "0")) for name in ("provider_operation_ceiling_usd", "user_budget_usd", "global_budget_usd")]
-    if any(not n.is_finite() or n <= 0 for n in bounds):
-        deny()
-    from app.core.active_pricing import active_registry
-    active = getattr(settings, "extraction_active_pricing_json", None)
-    data = active_registry(active, "extraction") if active is not None else registry(Path(__file__).with_name("pricing_registry.json"))
-    prices = [price_for(op, settings.supadata_billing_tier, at=at, data=data) for op in ("metadata", "native_transcript")]
-    if settings.supadata_credit_limit > min(setting_value(settings,'supadata_credit_pool_cap'),*(p["included_credits"] for p in prices)) or bounds[0] < max(Decimal(p["allocated_unit_usd"]) for p in prices):
-        deny()
-    from decimal import ROUND_CEILING
-    minimum = int((Decimal(1000)/min(Decimal(p["max_requests_per_second"]) for p in prices)).to_integral_value(rounding=ROUND_CEILING)) if active is not None else {"free_prepaid":1000,"pro_monthly_prepaid":100}.get(settings.supadata_billing_tier,60001)
-    if setting_value(settings,'supadata_request_interval_ms') < minimum:
-        deny()
-    return prices
+        raise HTTPException(403,"External provider execution is suspended.")
+    if not (getattr(settings,"supadata_api_key",None) or "").strip():
+        raise HTTPException(403,"SUPADATA_API_KEY is required for extraction.")
+    if getattr(settings,"supadata_transcript_mode","native") != "native":
+        raise HTTPException(403,"Only native caption extraction is supported.")
+    for name in ("extraction_max_concurrent_operations", "extraction_max_video_seconds", "extraction_max_url_bytes", "extraction_max_response_bytes", "extraction_timeout_seconds", "paid_requests_per_minute"):
+        if not getattr(settings,name,0):
+            raise HTTPException(403,"Nonzero extraction bounds and rate limits are required.")
+    bounds=[Decimal(getattr(settings,name,"0")) for name in ("provider_operation_ceiling_usd","user_budget_usd","global_budget_usd")]
+    if any(not value.is_finite() or value<=0 for value in bounds):
+        raise HTTPException(403,"Nonzero operation and user/global budget bounds are required.")
+    if setting_value(settings,'supadata_request_interval_ms') < 1000:
+        raise HTTPException(403,"Supadata requests must be paced at no more than one per second.")
+
+
+def observed_price(settings, operation):
+    """Optional local cost metadata, never an execution prerequisite or zero fallback."""
+    try:
+        from app.core.active_pricing import active_registry
+        raw=getattr(settings,"extraction_active_pricing_json",None)
+        data=active_registry(raw,"extraction") if raw is not None else registry(Path(__file__).with_name("pricing_registry.json"))
+        return price_for(operation,getattr(settings,"supadata_billing_tier",""),data=data)
+    except (HTTPException, ValueError, KeyError, TypeError):
+        return None
 
 
 def input_url(url, platform, settings):

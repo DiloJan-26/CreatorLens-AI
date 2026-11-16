@@ -93,7 +93,7 @@ def test_disposable_account_migration_and_last_credit_race(monkeypatch):
 
 
 def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
-    """Same slot delivered concurrently: one durable admission and one pool debit."""
+    """Same slot delivered concurrently: one durable admission and one USD reservation."""
     from datetime import date
     from decimal import Decimal
     from types import SimpleNamespace
@@ -109,7 +109,8 @@ def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
         supadata_api_key="offline-test-only",supadata_credit_pool="postgres-fixture-pool",
         supadata_credit_limit=1,supadata_transcript_mode="native",paid_requests_per_minute=1,
         provider_operation_ceiling_usd=".01",user_budget_usd="1",global_budget_usd="10")
-    monkeypatch.setattr(accounting,"configuration",lambda settings:policy.configuration(settings,at=date(2026,11,14)))
+    monkeypatch.setattr(accounting,"configuration",lambda settings:policy.configuration(settings))
+    monkeypatch.setattr(policy,"observed_price",lambda *args:None)
     with Session(engine) as session,session.begin():
         project=session.get(Project,project_id)
         project.content_1_url="https://www.youtube.com/watch?v=bounded_one"
@@ -129,7 +130,7 @@ def _verify_extraction_admission_race(engine,principal,project_id,monkeypatch):
     with Session(engine) as session:
         operations=session.scalars(select(ProviderOperation).where(ProviderOperation.project_id==project_id)).all()
         assert len(operations)==1 and operations[0].reserved_quantity==1
-        assert operations[0].provider_details["estimated_cost_usd"]=="0.005666666667"
+        assert operations[0].provider_details["estimated_cost_usd"] is None
         assert operations[0].provider_details["actual_billed_cost_usd"] is None
         assert session.get(BudgetAccount,principal.user_id).reserved_usd==Decimal(".01")
         assert session.get(BudgetAccount,"global").reserved_usd==Decimal(".01")

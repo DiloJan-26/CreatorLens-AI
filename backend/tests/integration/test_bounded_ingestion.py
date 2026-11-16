@@ -29,7 +29,7 @@ def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_sessio
         supadata_prepaid_verified=True,supadata_auto_recharge_disabled=True,supadata_api_key="offline-fixture",
         supadata_credit_pool="integration-fixture-pool",supadata_credit_limit=100,supadata_transcript_mode="native",
         provider_operation_ceiling_usd=".01",user_budget_usd="1",global_budget_usd="10",paid_requests_per_minute=12,
-        transcript_language="en",transcript_fallback_language_list=lambda:["en"],evidence_cache_max_age_seconds=86400)
+        transcript_language="en",transcript_fallback_language_list=["en"],evidence_cache_max_age_seconds=86400)
     @contextmanager
     def database():
         yield db_session

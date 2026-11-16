@@ -32,7 +32,7 @@ def request(project_id, slot, url, platform, operation):
         params.update(mode="native", text="false")
         preferred = settings.transcript_language
         if preferred == "multi":
-            preferred = next(iter(settings.transcript_fallback_language_list()), None)
+            preferred = next(iter(settings.transcript_fallback_language_list), None)
         if preferred:
             params["lang"] = preferred
     started = time.monotonic()
@@ -117,7 +117,7 @@ def extract(project_id, slot, platform, url):
                                   metric_source_note="Confirmed Supadata public metadata; missing counts are unavailable.",
                                   transcript_source_note="Native platform captions only; original audio language has not been verified.")
     metadata.transcript_evidence = {"provenance": {"provider": "supadata", "caption_track_language": transcript.get("lang"),
-        "requested_languages": [settings.transcript_language] if settings.transcript_language != "multi" else settings.transcript_fallback_language_list()[:1],
+        "requested_languages": [settings.transcript_language] if settings.transcript_language != "multi" else settings.transcript_fallback_language_list[:1],
         "caption_kind": "translated" if transcript.get("isTranslated") is True else "unknown",
         "audio_language_verified": False, "selection_reason": "bounded_native_preferred_language_with_provider_fallback",
         "extraction_policy": POLICY_VERSION, "source_url_fingerprint": accounting.source_key("source", canonical)}}

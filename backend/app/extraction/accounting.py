@@ -1,8 +1,4 @@
-"""One durable ledger for provider credit exposure and existing USD budgets.
-
-The global budget row serializes credit-pool and per-slot admissions on PostgreSQL.
-Neither a failed HTTP call nor a timeout releases estimated exposure automatically.
-"""
+"""Owned provider attempts and conservative USD reservations; history is preserved."""
 from app.core.config import setting_value
 from datetime import datetime, UTC
 from decimal import Decimal
@@ -23,7 +19,7 @@ def admit(session, principal, project_id, slot, url, platform, operation, *, set
     if platform != "youtube":
         raise HTTPException(403,"Only bounded YouTube extraction is approved for production.")
     settings = settings or get_settings()
-    prices = configuration(settings)
+    configuration(settings)
     if slot not in SLOTS or operation not in {"metadata", "native_transcript"}:
         raise HTTPException(403, "Unsupported bounded extraction operation.")
     normalized = input_url(url, platform, settings)
@@ -62,30 +58,33 @@ def admit(session, principal, project_id, slot, url, platform, operation, *, set
     historical = session.scalars(select(ProviderOperation).where(ProviderOperation.user_id == principal.user_id, ProviderOperation.reservation_id != reservation.id, ProviderOperation.provider_details["source_key"].as_string() == key)).all()
     if any(op.state != "safe_failure" and session.get(AnalysisReservation, op.reservation_id).state != "completed" for op in historical):
         raise HTTPException(409, "Previous extraction of this source requires reconciliation; project recreation cannot reset it.")
-    pool = "supadata:" + settings.supadata_credit_pool
-    # Same account pool is global across users, projects and retries, with no automatic reset.
-    used = session.scalar(select(func.coalesce(func.sum(ProviderOperation.reserved_quantity), 0)).where(ProviderOperation.billing_pool == pool))
-    if used + 1 > settings.supadata_credit_limit:
-        raise HTTPException(403, "Approved prepaid provider-credit pool exhausted.")
-    price = next(p for p in prices if p["operation"] == operation)
+    # Provider account allowance is enforced by Supadata. Keep durable attempts
+    # and conservative USD reservations; do not invent a prepaid credit balance.
+    from app.extraction.policy import observed_price
+    price = observed_price(settings, operation)
     ceiling = Decimal(settings.provider_operation_ceiling_usd)
+    if price and Decimal(price["allocated_unit_usd"]) > ceiling:
+        raise HTTPException(403,"Known extraction price exceeds the configured operation ceiling.")
     if any(b is None for b in budgets) or budgets[0].reserved_usd + ceiling > Decimal(settings.global_budget_usd) or budgets[1].reserved_usd + ceiling > Decimal(settings.user_budget_usd):
         raise HTTPException(403, "Estimated USD spending allowance exhausted.")
     for budget in budgets:
         budget.reserved_usd += ceiling
     attempt = len(previous) + 1
     operation_key = sha256(f"{reservation.id}:{slot}:{kind}:{attempt}:{key}".encode()).hexdigest()
-    details = dict(price, policy_version=POLICY_VERSION, source_key=key, platform=platform,
-                   estimated_cost_usd=price["allocated_unit_usd"], actual_billed_cost_usd=None,
-                   reported_usage=None, estimated_quantity=1, cost_status="bounded_prepaid_estimate",
-                   settlement="reserved", auto_recharge_disabled=True, provider_request_id=None)
+    details = dict(price or {}, provider="supadata", operation=operation,
+                   policy_version=POLICY_VERSION, admission_policy="bounded-account-independent-1.0.0",
+                   source_key=key, platform=platform, quantity_unit="request",
+                   estimated_cost_usd=price["allocated_unit_usd"] if price else None,
+                   actual_billed_cost_usd=None, reported_usage=None, estimated_quantity=1,
+                   cost_status="bounded_prepaid_estimate" if price else "pricing_unavailable",
+                   settlement="reserved", provider_request_id=None)
     row = ProviderOperation(id=str(uuid4()), reservation_id=reservation.id, project_id=project_id,
                             user_id=principal.user_id, kind=kind, slot=slot, attempt=attempt,
                             state="admitted", ceiling_usd=ceiling, operation_key=operation_key,
-                            billing_pool=pool, reserved_quantity=1, provider_details=details)
+                            billing_pool=None, reserved_quantity=1, provider_details=details)
     session.add(row)
     session.flush()
-    event(session, principal.user_id, "extraction_admitted", row.id, {"provider": "supadata", "operation": operation, "slot": slot, "attempt": attempt, "reserved_usd": str(ceiling), "reserved_credits": 1})
+    event(session, principal.user_id, "extraction_admitted", row.id, {"provider": "supadata", "operation": operation, "slot": slot, "attempt": attempt, "reserved_usd": str(ceiling), "recorded_requests": 1})
     return row.id
 
 
@@ -149,5 +148,6 @@ def public_operation(row):
     # Explicit allowlist: never return URLs, raw requests, headers or provider bodies.
     return {"id": row.id, "reservation_id": row.reservation_id, "slot": row.slot,
             "attempt": row.attempt, "state": row.state, "reserved_usd": str(row.ceiling_usd),
-            "reserved_credits": row.reserved_quantity,
+            "reserved_credits": row.reserved_quantity if row.billing_pool else None,
+            "recorded_requests": row.reserved_quantity if not row.billing_pool else None,
             **{key: details.get(key) for key in ("provider", "operation", "tier", "pricing_policy", "policy_version", "billing_unit", "reported_usage", "estimated_quantity", "known_billable_quantity", "estimated_cost_usd", "actual_billed_cost_usd", "estimate_basis", "cost_status", "settlement", "latency_ms")}}

@@ -14,8 +14,7 @@ SHARED_FIELDS = (
     "user_budget_usd", "global_budget_usd", "provider_operation_ceiling_usd",
     "provider_emergency_stop", "extraction_max_concurrent_operations",
     "extraction_max_video_seconds", "extraction_max_url_bytes", "extraction_max_response_bytes",
-    "extraction_timeout_seconds", "supadata_billing_tier", "supadata_prepaid_verified",
-    "supadata_auto_recharge_disabled", "supadata_credit_pool_cap", "supadata_credit_limit",
+    "extraction_timeout_seconds",
     "supadata_request_interval_ms", "llm_estimate_service_tier", "llm_cache_billing_mode",
     "llm_max_output_tokens", "assistant_max_output_tokens", "semantic_max_output_tokens",
     "llm_timeout_seconds", "semantic_timeout_seconds", "inference_deadline_grace_seconds",
@@ -26,7 +25,7 @@ SHARED_FIELDS = (
 # consistency aid; they do not establish authorization, account balance or health.
 PRIVATE_SHARED_FIELDS = (
     "database_url", "redis_url", "celery_broker_url", "celery_result_backend",
-    "llm_active_pricing_json", "extraction_active_pricing_json", "supadata_credit_pool",
+    "llm_active_pricing_json", "extraction_active_pricing_json",
     "qdrant_url", "qdrant_api_key", "gemini_api_key", "supadata_api_key",
 )
 

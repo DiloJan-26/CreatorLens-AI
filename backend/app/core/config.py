@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     extraction_max_url_bytes: int = Field(default=2048, alias="EXTRACTION_MAX_URL_BYTES", ge=0, le=8192)
     extraction_max_response_bytes: int = Field(default=2097152, alias="EXTRACTION_MAX_RESPONSE_BYTES", ge=0, le=16777216)
     extraction_timeout_seconds: int = Field(default=30, alias="EXTRACTION_TIMEOUT_SECONDS", ge=0, le=120)
+    # Legacy/optional reporting metadata only; never required to admit extraction.
     supadata_billing_tier: str = Field(default="", alias="SUPADATA_BILLING_TIER")
     supadata_prepaid_verified: bool = Field(default=False, alias="SUPADATA_PREPAID_VERIFIED")
     supadata_auto_recharge_disabled: bool = Field(default=False, alias="SUPADATA_AUTO_RECHARGE_DISABLED")

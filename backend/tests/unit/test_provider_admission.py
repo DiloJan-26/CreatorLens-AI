@@ -140,11 +140,11 @@ def test_input_budget_and_no_unadmitted_client_creation(monkeypatch):
     assert admission.active_operation.get() is None
 
 
-def test_paid_extraction_cannot_be_enabled_with_an_unverified_dollar_ceiling(db_session,monkeypatch):
+def test_large_dollar_ceiling_cannot_bypass_extraction_credentials(db_session,monkeypatch):
     a,p,r,s=setup(db_session,monkeypatch)
     s.provider_operation_ceiling_usd="1000";s.user_budget_usd="10000";s.global_budget_usd="100000"
     with pytest.raises(HTTPException) as error:admit(db_session,a,p,"extraction",settings=s)
-    assert error.value.status_code==403 and "provider-specific" in error.value.detail
+    assert error.value.status_code==403 and "SUPADATA_API_KEY" in error.value.detail
     assert db_session.scalar(select(func.count()).select_from(ProviderOperation))==0
 
 

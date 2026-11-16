@@ -31,7 +31,7 @@ def settings(**changes):
         supadata_credit_pool="offline-fixture-pool", supadata_credit_limit=100,
         supadata_transcript_mode="native", provider_operation_ceiling_usd=".01",
         user_budget_usd="1", global_budget_usd="10", paid_requests_per_minute=1,
-        transcript_language="en", transcript_fallback_language_list=lambda:["en"])
+        transcript_language="en", transcript_fallback_language_list=["en"])
     values.update(changes)
     return SimpleNamespace(**values)
 
@@ -99,9 +99,19 @@ def test_overlapping_registry_periods_rejected(tmp_path):
     with pytest.raises(ValueError,match="Overlapping"):policy.registry(p)
 
 
-@pytest.mark.parametrize("field,value",[("provider_emergency_stop",True),("supadata_billing_tier","unverified_tier"),("supadata_prepaid_verified",False),("supadata_auto_recharge_disabled",False),("supadata_api_key",None),("supadata_credit_limit",0),("supadata_credit_limit",3001),("supadata_credit_pool",""),("extraction_max_video_seconds",0),("extraction_max_response_bytes",0),("extraction_max_concurrent_operations",0),("extraction_timeout_seconds",0),("provider_operation_ceiling_usd",".00001"),("user_budget_usd","0"),("global_budget_usd","0"),("supadata_transcript_mode","auto")])
-def test_missing_approval_or_bound_is_fail_closed(field,value):
-    with pytest.raises(HTTPException):policy.configuration(settings(**{field:value}),at=date(2026,11,14))
+@pytest.mark.parametrize("field,value",[("provider_emergency_stop",True),("supadata_api_key",None),("extraction_max_video_seconds",0),("extraction_max_response_bytes",0),("extraction_max_concurrent_operations",0),("extraction_timeout_seconds",0),("provider_operation_ceiling_usd","0"),("user_budget_usd","0"),("global_budget_usd","0"),("supadata_transcript_mode","auto"),("supadata_request_interval_ms",100),("paid_requests_per_minute",0)])
+def test_missing_credentials_or_execution_bounds_fail_closed(field,value):
+    with pytest.raises(HTTPException):policy.configuration(settings(**{field:value}))
+
+
+@pytest.mark.parametrize("at",[date(2026,11,16),date(2030,1,1)])
+def test_provider_plan_and_expired_prices_are_not_execution_prerequisites(at):
+    from app.core.config import Settings
+    s=Settings(_env_file=None,PROVIDER_EMERGENCY_STOP=False,SUPADATA_API_KEY="offline-only")
+    assert policy.configuration(s,at=at) is None
+    assert not s.supadata_prepaid_verified and not s.supadata_auto_recharge_disabled
+    assert s.supadata_credit_limit==0 and not s.supadata_credit_pool and not s.supadata_billing_tier
+    assert policy.observed_price(s,"metadata") is None
 
 
 @pytest.mark.parametrize("value",[None,False,-1,0,301,float("nan"),float("inf"),"30"])
@@ -157,11 +167,11 @@ def test_completed_or_unavailable_requests_do_not_retry(db_session,owned):
     with pytest.raises(HTTPException):admit(db_session,owned,"native_transcript")
 
 
-def test_pool_usd_and_concurrency_cannot_be_reset_per_slot(db_session,owned):
+def test_usd_and_concurrency_remain_enforced_without_provider_credit_attestations(db_session,owned):
     s=owned[-1];s.supadata_credit_limit=1
     preflight(db_session,owned)
-    with pytest.raises(HTTPException):admit(db_session,owned,"native_transcript")
-    s.supadata_credit_limit=100;s.global_budget_usd=".01"
+    # The old credit field is ignored; the existing USD reservation still gates work.
+    s.global_budget_usd=".01"
     with pytest.raises(HTTPException):admit(db_session,owned,"native_transcript")
     s.global_budget_usd="10";s.extraction_max_concurrent_operations=1
     admit(db_session,owned,"native_transcript")
@@ -299,8 +309,8 @@ def test_legacy_network_paths_are_disabled_in_authenticated_mode(monkeypatch,mod
         with pytest.raises(policy.ExtractionSafetyError):function(*args)
 
 
-@pytest.mark.parametrize("tier,interval",[("free_prepaid",1100),("pro_monthly_prepaid",110)])
-def test_provider_pacing_is_shared_by_account_pool(tier,interval):
+@pytest.mark.parametrize("tier,interval",[("",1100),("pro_monthly_prepaid",1500)])
+def test_provider_pacing_is_shared_without_an_account_pool(tier,interval):
     from app.extraction.dispatch_limit import enforce_provider_rate
     calls=[]
     class Redis:
@@ -431,3 +441,80 @@ def test_pricing_review_adds_a_bounded_day_without_relabeling_history():
     assert current["pricing_policy"]=="extraction-prepaid-1.0.1"
     assert current["allocated_unit_usd"]==old["allocated_unit_usd"]=="0.005666666667"
     with pytest.raises(HTTPException):policy.price_for("native_transcript","pro_monthly_prepaid",at=date(2026,11,16))
+
+
+@pytest.mark.parametrize("field,value",[("supadata_billing_tier",""),("supadata_prepaid_verified",False),("supadata_auto_recharge_disabled",False),("supadata_credit_pool",""),("supadata_credit_limit",0)])
+def test_legacy_account_attestations_do_not_block_owned_requests(db_session,owned,field,value):
+    setattr(owned[-1],field,value)
+    identifier=admit(db_session,owned)
+    row=db_session.get(ProviderOperation,identifier)
+    assert row.ceiling_usd==Decimal(".01")
+    assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==Decimal(".01")
+    assert row.billing_pool is None and row.provider_details["actual_billed_cost_usd"] is None
+    public=accounting.public_operation(row)
+    assert public["reserved_credits"] is None and public["recorded_requests"]==1
+
+
+def test_missing_pricing_preserves_unknown_cost_and_historical_budget(db_session,owned,monkeypatch):
+    monkeypatch.setattr(policy,"observed_price",lambda *args:None)
+    budget=db_session.get(BudgetAccount,owned[0].user_id);budget.reserved_usd=Decimal(".20")
+    identifier=admit(db_session,owned)
+    row=db_session.get(ProviderOperation,identifier)
+    assert budget.reserved_usd==Decimal(".21")
+    assert row.provider_details["cost_status"]=="pricing_unavailable"
+    assert row.provider_details["estimated_cost_usd"] is None
+    assert row.provider_details["actual_billed_cost_usd"] is None
+
+
+def test_known_price_above_ceiling_is_rejected_before_reservation(db_session,owned,monkeypatch):
+    monkeypatch.setattr(policy,"observed_price",lambda *args:{"allocated_unit_usd":".02"})
+    with pytest.raises(HTTPException,match="exceeds"):admit(db_session,owned)
+    assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==0
+    assert db_session.scalar(select(func.count()).select_from(ProviderOperation))==0
+
+
+def test_generic_provider_route_cannot_bypass_per_slot_extraction(db_session,owned):
+    from app.services import provider_admission
+    # Even when configuration passes, generic extraction admission remains forbidden.
+    from app.core.config import Settings
+    s=Settings(_env_file=None,PROVIDER_EMERGENCY_STOP=False,SUPADATA_API_KEY="offline-only")
+    # generic admit still rejects extraction, even when its configuration passes.
+    with pytest.raises(HTTPException,match="provider-specific"):
+        provider_admission.admit(db_session,owned[0],owned[1],"extraction",settings=s,rate=False)
+
+
+def test_native_pipeline_uses_real_settings_without_account_attestations(db_session,owned,monkeypatch):
+    from app.core.config import Settings
+    actual=Settings(_env_file=None,PROVIDER_EMERGENCY_STOP=False,SUPADATA_API_KEY="offline-only")
+    assert actual.transcript_language=="multi" and actual.transcript_fallback_language_list==["en","hi","ta"]
+    monkeypatch.setattr(provider,"get_settings",lambda:actual)
+    monkeypatch.setattr(accounting,"get_settings",lambda:actual)
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith("metadata"):return httpx.Response(200,json=metadata())
+        assert request.url.params["lang"]=="en" and request.url.params["mode"]=="native"
+        return httpx.Response(200,json={"lang":"en","content":[{"text":"A synthetic explanation with native captions.","offset":0,"duration":8000}]})
+    fake_transport(monkeypatch,handler)
+    result=provider.extract(owned[1],"content_1","youtube",URL)
+    assert len(calls)==2 and result.metadata.views==1234 and result.metadata.transcript_available
+    assert result.metadata.transcript_evidence["provenance"]["requested_languages"]==["en"]
+    rows=db_session.scalars(select(ProviderOperation)).all()
+    assert len(rows)==2 and all(row.state=="completed" for row in rows)
+    assert all(row.provider_details["estimated_cost_usd"] is None for row in rows)
+    assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==Decimal(".10")
+
+
+def test_existing_credit_and_price_history_is_not_rewritten(db_session,owned,monkeypatch):
+    old_id=preflight(db_session,owned)
+    old=db_session.get(ProviderOperation,old_id)
+    old.billing_pool="supadata:historical-pool"
+    old.provider_details=dict(old.provider_details,pricing_policy="historical-policy",estimated_cost_usd="0.005666666667")
+    before=dict(old.provider_details);db_session.flush()
+    monkeypatch.setattr(policy,"observed_price",lambda *args:None)
+    owned[-1].supadata_credit_limit=0
+    new_id=admit(db_session,owned,"native_transcript")
+    assert old.billing_pool=="supadata:historical-pool" and old.provider_details==before
+    assert accounting.public_operation(old)["reserved_credits"]==1
+    assert db_session.get(ProviderOperation,new_id).billing_pool is None
+    assert db_session.get(BudgetAccount,owned[0].user_id).reserved_usd==Decimal(".02")
