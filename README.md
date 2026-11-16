@@ -771,3 +771,9 @@ The release source head is now `20261115_0014` (configurable allowances). Quiesc
 Local release documents: docs/CreatorLens-Intelligence-v2/Deployment-Preflight-Audit.md, Deployment-Environment-Matrix.md, Deployment-Configuration-Externalization.md, Deployment-Manual-Execution-Guide.md and Deployment-Post-Release-Acceptance.md. The docs directory remains Git-ignored; these local documents need an explicit user-chosen tracking/backup decision.
 
 The Assistant sends the selected objective through the existing authenticated SSE request, avoids a second retrieved-source list when structured citations exist, and polls pending ingestion status with bounded read-only checks. Analysis completion controls are available beside chat because paid explanations require a completed reservation. Deterministic questions retain their existing Gemini bypass. Live provider and deployment behavior must be verified separately; source tests use mocked streaming.
+
+### Reference design with private projects
+
+The frontend follows the visual composition from commit `10bef108d5602e19d0ea2bbcd14744dbd9f0b7c7`: a dark application rail, teal actions, a result banner, paired video cards, key-insight tiles, scorecards and an Assistant context sidebar. Google-only OAuth, profile/logout, authenticated transport and server-owned project access remain current. The historical anonymous demo, V1 winner calculations and confidence percentages were not restored.
+
+Your analyses provides an account-scoped project library, available/in-progress/completed allowances from the backend and reopen/new-comparison actions. Cached UI data is bound to the verified account identity so account switching does not render the previous account's cards. Compare uses current canonical decisions; creative scores and recommendations use current nullable evidence contracts. Reference-style metadata details remain optional disclosures.

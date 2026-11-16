@@ -72,7 +72,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   );
   const navigation = (
     <nav aria-label="Workspace navigation">
-      <Link href="/workspace" className="rail-link">Your analyses</Link>
+      <Link href="/workspace" className="rail-link" aria-current={pathname==="/workspace"?"page":undefined} onClick={()=>setDrawer(false)}><Icon name="home"/>Your analyses</Link>
       <p className="nav-group-label">Workspace</p>
       {creatorLinks.map((l) => (
         <Link
@@ -172,7 +172,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
               <span className="muted" aria-hidden="true">
                 /
               </span>
-              <span className="truncate">{active?.label ?? "CreatorLens"}</span>
+              <span className="truncate">{active?.label ?? (pathname==="/workspace"?"Your analyses":"CreatorLens")}</span>
             </div>
             <div className="header-actions">
               <AccountMenu />
