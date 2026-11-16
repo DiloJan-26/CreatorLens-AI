@@ -72,4 +72,4 @@ assert(active.includes('aria-valuenow="80"') && !active.includes("<details"));
 const chatSource=fs.readFileSync(path.join(sourceRoot,"components/CreatorChatPanel.tsx"),"utf8");
 assert(/message: question,\s*objective,/.test(chatSource),'Selected objective must be sent to the existing stream API');
 assert(chatSource.includes('!message.structuredAnswer'),'Structured answers must not duplicate retrieved source lists');
-console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach default, three objective buttons, no analytical dropdowns, completed-progress removal and chat objective transport.");
+console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach default, three objective buttons, objective controls without dropdowns, completed-progress removal and chat objective transport.");

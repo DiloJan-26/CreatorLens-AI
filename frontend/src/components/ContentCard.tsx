@@ -25,6 +25,7 @@ export function ContentCard({
         </p>
       </section>
     );
+  const description = item.caption || item.description;
   return (
     <article
       className="ui-panel content-identity"
@@ -37,7 +38,7 @@ export function ContentCard({
           <span className="muted">/ {platformLabel(item.platform)}</span>
         </span>
         <span className={`extraction-state state-${item.extraction_status}`}>
-          {item.extraction_status === "ready" ? "Evidence ready" : item.extraction_status === "partial" ? "Some details unavailable" : item.extraction_status.replace(/_/g, " ")}
+          {item.extraction_status.replace(/_/g, " ")}
         </span>
       </div>
       <div className="video-card-body">
@@ -71,7 +72,8 @@ export function ContentCard({
       </div>
       <div className="video-card-footnote">
         <span>
-          Public video snapshot
+          Public video snapshot{" "}
+          <span className="muted">/ Caption-based opening assessment</span>
         </span>
         <a
           className="source-link"
@@ -87,7 +89,77 @@ export function ContentCard({
           {item.error_message}
         </p>
       )}
-
+      <details className="detail-disclosure video-card-details">
+        <summary>Content details & provenance</summary>
+        <p className="muted text-xs mt-3">
+          Extracted title: {item.title || "Unavailable"}
+        </p>
+        <h3 className="text-sm mt-4 mb-3">Confirmed public metrics</h3>
+        <dl className="metric-grid">
+          {[
+            ["Views", formatNumber(item.views)],
+            [
+              item.platform === "facebook" ? "Reactions" : "Likes",
+              formatNumber(
+                item.platform === "facebook" ? item.reactions : item.likes,
+              ),
+            ],
+            ["Comments", formatNumber(item.comments)],
+            ["Shares", formatNumber(item.shares)],
+            [
+              "Followers / subscribers",
+              formatNumber(item.follower_count ?? item.subscriber_count),
+            ],
+            [
+              "Available-interaction rate",
+              item.engagement_rate == null
+                ? null
+                : `${item.engagement_rate.toFixed(2)}%`,
+            ],
+          ].map(([k, v]) => (
+            <Metric key={k} label={k as string} value={v} />
+          ))}
+        </dl>
+        <p className="muted text-xs mt-3">
+          Unavailable values are not zero. Engagement rate follows the existing
+          calculation and available inputs; missing interaction types may be excluded.
+        </p>
+        <dl className="grid gap-4 sm:grid-cols-2 text-sm my-4">
+          <Metric
+            label="Duration"
+            value={
+              item.duration_seconds == null ? null : `${item.duration_seconds}s`
+            }
+          />
+          <Metric label="Published" value={item.upload_date} />
+          <Metric label="Transcript" value={transcriptStatus(item)} />
+          <Metric
+            label="Segments"
+            value={formatNumber(item.transcript_segment_count)}
+          />
+        </dl>
+        <p className="text-sm whitespace-pre-wrap mb-4">
+          {description || "Description unavailable"}
+        </p>
+        <p className="muted text-xs mb-4">
+          Hashtags:{" "}
+          {item.hashtags?.length
+            ? item.hashtags.map((x) => `#${x}`).join(" ")
+            : "Unavailable"}
+        </p>
+        {Boolean(item.missing_fields?.length) && (
+          <p className="text-sm mb-4">
+            Missing fields: {item.missing_fields?.map(fieldLabel).join(", ")}
+          </p>
+        )}
+        <div className="grid gap-3">
+          <SourceNote label="Metric source" value={item.metric_source_note} />
+          <SourceNote
+            label="Transcript source"
+            value={item.transcript_source_note}
+          />
+        </div>
+      </details>
     </article>
   );
 }
@@ -142,6 +214,21 @@ function Metric({
   );
 }
 
+function SourceNote({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+      <span className="font-medium text-slate-700">{label}: </span>
+      {value || "Unavailable"}
+    </div>
+  );
+}
+
 function formatNumber(value: number | null | undefined): string | null {
   return value == null ? null : new Intl.NumberFormat("en-US").format(value);
 }
@@ -156,4 +243,78 @@ function platformLabel(platform: ContentPlatform): string {
   }
 
   return "Facebook";
+}
+
+function transcriptStatus(item: ContentItem): string {
+  if (!item.transcript_available) {
+    return "Unavailable";
+  }
+
+  const source = item.transcript_source
+    ? sourceLabel(item.transcript_source)
+    : "Unknown";
+  return `${transcriptLanguageStatus(item)} / ${source}`;
+}
+
+function sourceLabel(source: string): string {
+  if (source === "platform_captions") {
+    return "Captions";
+  }
+
+  if (source === "deepgram_multilingual") {
+    return "Deepgram multilingual";
+  }
+
+  if (source === "unavailable") {
+    return "Unavailable";
+  }
+
+  return source;
+}
+
+function languageLabel(language: string | null | undefined): string {
+  if (!language) {
+    return "Unknown";
+  }
+
+  const normalized = language.toLowerCase();
+
+  if (normalized.startsWith("en")) {
+    return "English";
+  }
+
+  if (normalized.startsWith("hi")) {
+    return "Hindi";
+  }
+
+  if (normalized.startsWith("ta")) {
+    return "Tamil";
+  }
+
+  if (normalized === "multi" || normalized === "multilingual") {
+    return "Multilingual";
+  }
+
+  return language;
+}
+
+function transcriptLanguageStatus(item: ContentItem): string {
+  const detectedLanguage = item.detected_language;
+
+  if (
+    detectedLanguage &&
+    !["multi", "multilingual", "auto"].includes(detectedLanguage.toLowerCase())
+  ) {
+    return `Detected ${languageLabel(detectedLanguage)}`;
+  }
+
+  if (item.transcript_language) {
+    return `${languageLabel(item.transcript_language)} captions`;
+  }
+
+  return "Language not confidently detected";
+}
+
+function fieldLabel(value: string): string {
+  return value.replace(/_/g, " ");
 }

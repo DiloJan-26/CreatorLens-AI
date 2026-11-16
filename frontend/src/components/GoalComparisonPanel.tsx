@@ -5,6 +5,7 @@ import {setComparisonObjective} from "@/lib/app-session";
 import {comparisonValue,outcomeLabel} from "@/lib/intelligence-copy";
 import type {CreatorInsightSummaryResponse} from "@/types/project";
 import {Icon} from "./ui";
+import {ResultBanner} from "./ResultBanner";
 const OPTIONS=[["reach","Reach","trend"],["engagement","Engagement","target"],["creative_quality","Creative quality","bulb"]] as const;
 export function GoalComparisonPanel({summary,onChange,objective="reach"}:{summary:CreatorInsightSummaryResponse;onChange?:(value:CreatorInsightSummaryResponse)=>void;onCreativeReview?:()=>void;creativeBusy?:boolean;objective?:"reach"|"engagement"|"creative_quality"}){
  const [selected,setSelected]=useState(objective),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
@@ -17,7 +18,7 @@ export function GoalComparisonPanel({summary,onChange,objective="reach"}:{summar
  const ready=decision?.outcome==="content_1"||decision?.outcome==="content_2";
  return <section className="ui-panel outcome-panel" aria-label="Canonical comparison" aria-busy={busy} data-objective={selected}>
  <div className="objective-tabs" role="group" aria-label="Comparison objective">{OPTIONS.map(([id,label,icon])=><button type="button" key={id} aria-pressed={selected===id} disabled={busy} onClick={()=>setSelected(id)}><Icon name={icon} size={17}/>{label}</button>)}</div>
- <div className="outcome-header"><span className="signal-icon"><Icon name={ready?"trophy":selected==="reach"?"trend":"evidence"} size={23}/></span><div><p className="eyebrow">{OPTIONS.find(([id])=>id===selected)?.[1]}</p><h2>{decision?outcomeLabel(decision.outcome):"Comparison unavailable"}</h2></div></div>
+ <ResultBanner title={decision?outcomeLabel(decision.outcome):"Comparison unavailable"} winner={ready} description={selected==="reach"?"Based on confirmed public views.":selected==="engagement"?"Based on comparable public interaction rates.":"Based on validated caption evidence."} detail={<><span className="signal-label">Assessment</span><strong>{OPTIONS.find(([id])=>id===selected)?.[1]}</strong><span className="muted">{ready?"Evidence supported":"Evidence limited"}</span></>}/>
  <div className="outcome-values">{(["content_1","content_2"] as const).map((slot,index)=><div key={slot}><span>Content {index+1}</span><strong>{comparisonValue(values?.[slot],units)}</strong></div>)}</div>
  <p className="muted text-sm mt-3">{decision?.outcome==="incomparable"?"These sources are not directly comparable.":decision?.outcome==="tie"?"The difference is within the comparison threshold.":!ready?selected==="reach"?"Views are unavailable for one or both videos.":selected==="engagement"?"Complete interaction counts and 1,000+ views per video required.":"Creative review needed. Open Insights to review both videos.":selected==="reach"?"Confirmed lifetime views.":selected==="engagement"?"Observed interaction rate.":"Caption-based creative assessment."}</p>
  {error&&<p role="alert" className="mt-3 text-sm text-rose-800">{error}</p>}</section>;
