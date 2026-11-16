@@ -1,6 +1,6 @@
 "use client";
 import { AccountMenu,useAccount } from "./AccountProvider";
-import { GoogleSignIn } from "./GoogleSignIn";
+import { WorkspaceEntry } from "./WorkspaceEntry";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -37,7 +37,6 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { account } = useAccount();
   const [drawer, setDrawer] = useState(false);
-  const [auth, setAuth] = useState(false);
   const [section, setSection] = useState("");
   useEffect(() => {
     const sync = () => setSection(window.location.hash);
@@ -135,15 +134,8 @@ export function AppNavbar({ children }: { children: ReactNode }) {
               <Link href="/evaluations">Engineering</Link>
             </nav>
             <div className="header-actions">
-              <button
-                className="button-secondary public-signin"
-                onClick={() => setAuth(true)}
-              >
-                {account ? "Your account" : "Sign in"}
-              </button>
-              <Link className="button-primary public-demo" href="/analyze">
-                Get started <Icon name="arrow" size={16} />
-              </Link>
+              {account ? <AccountMenu/> : <WorkspaceEntry className="button-secondary public-signin">Sign in</WorkspaceEntry>}
+              <WorkspaceEntry className="button-primary public-getstarted">Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
               <button
                 className="icon-button public-menu"
                 onClick={() => setDrawer(true)}
@@ -205,34 +197,14 @@ export function AppNavbar({ children }: { children: ReactNode }) {
           {navigation}
           {publicPage && (
             <div className="drawer-actions">
-              <button
-                className="button-secondary"
-                onClick={() => {
-                  setDrawer(false);
-                  setAuth(true);
-                }}
-              >
-                {account ? "Your account" : "Sign in"}
-              </button>
-              <Link
-                href="/analyze"
-                className="button-primary"
-                onClick={() => setDrawer(false)}
-              >
-                Open workspace
-              </Link>
+              <AccountMenu/>
+              <WorkspaceEntry>Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
             </div>
           )}
           {homeLink}
         </div>
       </Dialog>
-      <Dialog
-        open={auth}
-        onClose={() => setAuth(false)}
-        title="Sign in to CreatorLens"
-      >
-        {account ? <AccountMenu/> : <GoogleSignIn/>}
-      </Dialog>
+
     </>
   );
 }

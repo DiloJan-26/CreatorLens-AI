@@ -43,6 +43,8 @@ Google/Supabase authentication is mandatory in every API environment. Configure 
 
 The recommended initial deployment needs **10 Render values, 7 Azure worker values and 4 public Vercel values**, including the explicit default-on provider stop on both servers. Approved product limits are central defaults, not required dashboard overrides. See `docs/CreatorLens-Intelligence-v2/Deployment-Environment-Matrix.md` and `Production-Configuration-Simplification.md`. Source migration head remains `20261115_0014`; final-source PostgreSQL CI and real OAuth acceptance remain required. No cloud deployment or actual environment-file modification was performed.
 
+Landing-page Sign in and workspace entry buttons start Google OAuth directly, with no app sign-in dialog. First-time and returning users share the same flow. Signed-in users see a profile menu with their name, Google photo or initials, account allowance and Sign out.
+
 From `frontend/`, run `npm run test:auth` for mocked SDK/transport checks and `npm run test:ui` for presentation contracts. These do not prove live Google login or browser acceptance. The detailed local handoff is in `docs/CreatorLens-Intelligence-v2/Phase-10C-Authentication-Implementation.md`; `docs/` remains ignored unless you explicitly choose to track selected documents.
 
 ## Engineering highlights

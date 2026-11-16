@@ -1,3 +1,4 @@
+import { WorkspaceEntry } from "@/components/WorkspaceEntry";
 import Link from "next/link";
 import { Icon } from "@/components/ui";
 import { LandingComparisonPreview } from "@/components/LandingComparisonPreview";
@@ -21,9 +22,9 @@ export default function Home() {
               evidence and a cited AI assistant powered by RAG.
             </p>
             <div className="hero-actions">
-              <Link className="button-primary" href="/analyze">
+              <WorkspaceEntry className="button-primary" >
                 Try CreatorLens <Icon name="arrow" size={18} />
-              </Link>
+              </WorkspaceEntry>
               <a className="button-secondary" href="#how-it-works">
                 See how it works
               </a>
@@ -114,9 +115,9 @@ export default function Home() {
             what AI suggests. It helps you form creative hypotheses without
             presenting them as proven causes of performance.
           </p>
-          <Link href="/analyze" className="button-quiet mt-5">
+          <WorkspaceEntry  className="button-quiet mt-5">
             Open the comparison workspace <Icon name="arrow" />
-          </Link>
+          </WorkspaceEntry>
         </div>
         <div className="evidence-ledger">
           {[
@@ -178,9 +179,9 @@ export default function Home() {
           <p className="eyebrow">Start with a real question</p>
           <h2>What could your next video do differently?</h2>
         </div>
-        <Link className="button-primary" href="/analyze">
+        <WorkspaceEntry className="button-primary" >
           Compare two videos <Icon name="arrow" />
-        </Link>
+        </WorkspaceEntry>
       </section>
       <footer className="landing-footer">
         <strong>CreatorLens AI</strong>
