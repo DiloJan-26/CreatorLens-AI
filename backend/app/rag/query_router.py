@@ -28,7 +28,7 @@ class RetrievalPlan(TypedDict):
 
 
 def classify_question(message: str) -> QuestionIntent:
-    normalized_message = _normalize(message)
+    normalized_message = _normalize(message).replace("-", " ")
 
     if _contains_any(
         normalized_message,
@@ -37,7 +37,7 @@ def classify_question(message: str) -> QuestionIntent:
         return "metadata_missing"
     if _contains_any(
         normalized_message,
-        ["score", "insight summary", "creator insight summary", "creator insight score"],
+        ["score", "insight summary", "creator insight summary", "creator insight score", "strengths", "weaknesses"],
     ):
         return "insight_summary"
     if _contains_any(normalized_message, ["rewrite", "caption", "opening line"]):
@@ -119,7 +119,7 @@ def classify_question(message: str) -> QuestionIntent:
         return "metrics"
     if _contains_any(
         normalized_message,
-        ["creator", "followers", "who is", "upload date", "duration", "posted"],
+        ["creator", "followers", "subscribers", "who is", "upload date", "duration", "posted"],
     ):
         return "creator_info"
     if _contains_any(
@@ -234,6 +234,9 @@ def parse_target_reference_slots(message: str) -> tuple[str | None, str | None]:
             return ("content_2" if has_content_2 else None), "content_1"
         return ("content_1" if has_content_1 else None), "content_2"
 
+    if has_content_1 != has_content_2:
+        return ("content_1" if has_content_1 else "content_2"), None
+
     if _contains_any(normalized, ["improve", "rewrite", "fix", "for", "of"]):
         content_1_index = normalized.find("content 1") if has_content_1 else 9999
         content_2_index = normalized.find("content 2") if has_content_2 else 9999
@@ -292,3 +295,26 @@ def _contains_any(message: str, keywords: list[str]) -> bool:
 
 def _normalize(message: str) -> str:
     return " ".join(message.lower().strip().split())
+
+
+def resolve_comparison_objective(message: str, selected=None):
+    """Explicit question dimension wins; otherwise retain the caller's selection."""
+    from app.insights.comparison_models import ComparisonObjective
+    import re
+    text=_normalize(message)
+    dimensions=[]
+    if re.search(r"\b(reach|views|exposure)\b",text):dimensions.append('reach')
+    if re.search(r"\b(engagement|interaction|like rate|comment rate)\b",text):dimensions.append('engagement')
+    if re.search(r"\b(creative|creativity|hook|opening)\b",text):dimensions.append('creative_quality')
+    if re.search(r"\b(balanced|overall|real winner)\b",text):return ComparisonObjective.BALANCED
+    if len(set(dimensions))==1:return ComparisonObjective(dimensions[0])
+    return ComparisonObjective(selected or 'balanced')
+
+
+def is_canonical_direct_question(message: str, intent: str) -> bool:
+    """Select execution, not a second retrieval router or comparison policy."""
+    import re
+    text=_normalize(message)
+    if re.search(r"\b(why|explain|rewrite|draft|suggest a better|how does|summarize|transcript)\b",text):return False
+    return bool(re.search(r'\b(which|who)\b.*\b(better|stronger|higher|more|reach|engagement|creative)\b|\bcurrent\b.*\bdecision\b',text)) or intent in {'metrics','insight_summary','improvement_suggestions','metadata_missing','creator_info'} or bool(
+        re.search(r"\b(winner|wins|leads|leader|higher|more views|performs? better|performed better|current balanced|creative quality)\b",text))

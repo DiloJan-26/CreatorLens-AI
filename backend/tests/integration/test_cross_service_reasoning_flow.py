@@ -63,6 +63,11 @@ def test_fixture_flows_through_insights_chunks_routing_and_reranking(
         balance_slots=plan["multi_source"],
     )
     insight = insight_service.get_creator_insight_summary("fixture-project")
+    assert insight.content_1.scoring.policy.version == "creator-insight-2.0.0"
+    assert insight.content_2.scoring.metrics.platform == insight.content_2.platform
+    assert insight.content_1.scores.policy_version == "legacy-1.0.0"
+    assert insight.comparison.scoring_eligibility["authoritative_winner"] is None
+    assert "scoring" in insight.model_dump(mode="json")["content_1"]
 
     assert plan["mode"] == RetrievalMode.BALANCED_COMPARE
     assert plan["retrieve"] is True

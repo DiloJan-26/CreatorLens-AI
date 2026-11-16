@@ -1,0 +1,338 @@
+{
+  "version": "2.0.0",
+  "fixtures": {
+    "educational": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 4.0,
+          "text": "Why do short breaks help students focus?"
+        },
+        {
+          "segment_index": 1,
+          "start_time": 4.0,
+          "end_time": 8.0,
+          "text": "Students can try a timed break when distraction interrupts study."
+        },
+        {
+          "segment_index": 2,
+          "start_time": 8.0,
+          "end_time": 12.0,
+          "text": "Try a break, return to the task, and share your study question."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "question",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "direct_introduction": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 4.0,
+          "text": "This explanation is about timed study breaks."
+        },
+        {
+          "segment_index": 1,
+          "start_time": 4.0,
+          "end_time": 8.0,
+          "text": "Students can try a short pause when distracted."
+        },
+        {
+          "segment_index": 2,
+          "start_time": 8.0,
+          "end_time": 12.0,
+          "text": "Try a break and share a study question."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "introduction",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "question_led": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 4.0,
+          "text": "Why do short breaks help students focus?"
+        },
+        {
+          "segment_index": 1,
+          "start_time": 4.0,
+          "end_time": 8.0,
+          "text": "Students can try a timed break when distraction interrupts study."
+        },
+        {
+          "segment_index": 2,
+          "start_time": 8.0,
+          "end_time": 12.0,
+          "text": "Try a break, return to the task, and share your study question."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "question",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "problem_led": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 4.0,
+          "text": "Distraction interrupts a study session."
+        },
+        {
+          "segment_index": 1,
+          "start_time": 4.0,
+          "end_time": 8.0,
+          "text": "Students can test a timed break and return to their task."
+        },
+        {
+          "segment_index": 2,
+          "start_time": 8.0,
+          "end_time": 12.0,
+          "text": "Try that sequence and share one study question."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "problem",
+        "verbal_hook_clarity": "clear",
+        "topic_specificity": "clear",
+        "curiosity_gap": "clear",
+        "audience_benefit": "clear",
+        "problem_solution_clarity": "clear",
+        "audience_specificity": "clear",
+        "spoken_cta": "clear",
+        "description_cta": "clear",
+        "evidence_coverage": "clear"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "music_only": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 12.0,
+          "text": "[Music]"
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "ambiguous_partial": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 3.0,
+          "end_time": 4.0,
+          "text": "And then maybe..."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "missing_transcript": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [],
+      "mocked_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "caption_kind": "original",
+      "language": "en"
+    },
+    "translated_caption": {
+      "metadata": {
+        "title": "A study explanation",
+        "description": "Share one study question below.",
+        "duration_seconds": 12,
+        "views": 10000,
+        "likes": 100,
+        "comments": 20,
+        "subscriber_count": 1000,
+        "upload_date": "2026-01-01",
+        "captured_at": "2026-02-01T00:00:00Z"
+      },
+      "segments": [
+        {
+          "segment_index": 0,
+          "start_time": 0.0,
+          "end_time": 4.0,
+          "text": "Why do short breaks help students focus?"
+        },
+        {
+          "segment_index": 1,
+          "start_time": 4.0,
+          "end_time": 8.0,
+          "text": "Students can try a timed break when distraction interrupts study."
+        },
+        {
+          "segment_index": 2,
+          "start_time": 8.0,
+          "end_time": 12.0,
+          "text": "Try a break, return to the task, and share your study question."
+        }
+      ],
+      "mocked_labels": {
+        "opening_type": "unassessable",
+        "verbal_hook_clarity": "unassessable",
+        "topic_specificity": "unassessable",
+        "curiosity_gap": "unassessable",
+        "audience_benefit": "unassessable",
+        "problem_solution_clarity": "unassessable",
+        "audience_specificity": "unassessable",
+        "spoken_cta": "unassessable",
+        "description_cta": "unassessable",
+        "evidence_coverage": "unassessable"
+      },
+      "caption_kind": "translated",
+      "language": "en"
+    }
+  }
+}

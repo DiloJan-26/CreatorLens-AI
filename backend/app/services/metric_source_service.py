@@ -80,6 +80,8 @@ def ensure_public_metric_records(project_id: str) -> None:
 
         upsert_metric_source_record(
             project_id=project_id,
+            slot=video_record.get("slot"),
+            content_item_id=video_record.get("id") or video_record.get("content_id"),
             platform=platform,
             source_platform=platform,
             source_method="public_extractor",
@@ -106,9 +108,23 @@ def save_verified_metrics(
 ) -> MetricSourceRecord:
     _ensure_project_exists(project_id)
     _validate_metric_input(payload)
+    items = [item for item in list_video_records(project_id) if item.get("platform") == payload.source_platform]
+    slot = payload.slot
+    if slot is None and payload.metric_scope in {"native", "verified_override"}:
+        if len(items) > 1:
+            raise MetricValidationError("Provide a content slot for same-platform native metrics.")
+        slot = items[0].get("slot") if items else None
+    matching = next((item for item in items if item.get("slot") == slot), None)
+    if slot is not None and matching is None:
+        raise MetricValidationError("Content slot/platform does not belong to the project.")
+    content_item_id = (matching.get("id") or matching.get("content_id")) if matching else None
+    if payload.content_item_id is not None and payload.content_item_id != content_item_id:
+        raise MetricValidationError("Content identity does not match the selected slot.")
     engagement_rate = _engagement_rate_for_payload(payload)
     record = upsert_metric_source_record(
         project_id=project_id,
+        slot=slot,
+        content_item_id=content_item_id,
         platform=payload.platform,
         source_platform=payload.source_platform,
         source_method=payload.source_method,
@@ -375,6 +391,12 @@ def _latest_matching(
     source_platform: str,
     metric_scope: str,
 ) -> MetricSourceRecord | None:
+    matching_slots = {record.slot for record in records if record.source_platform == source_platform
+                      and record.metric_scope == metric_scope and record.slot is not None}
+    if len(matching_slots) > 1:
+        return None  # A platform-wide scalar cannot represent two distinct contents.
+    # Unbound verified legacy records remain project-scoped for the unambiguous
+    # single-platform-content case; never select one across two bound slots.
     verified_records = [
         record
         for record in records

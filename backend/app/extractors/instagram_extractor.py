@@ -123,6 +123,8 @@ def extract_instagram_hashtags(*texts: str | None) -> list[str]:
 
 
 def fetch_instagram_info(url: str) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -269,6 +271,7 @@ def extract_instagram_video(url: str) -> VideoExtractionResult:
         )
         metadata.transcript_source_note = INSTAGRAM_TRANSCRIPT_UNAVAILABLE_NOTE
 
+    metadata.transcript_evidence = {"provenance": transcript_result.provenance if transcript_result else {}}
     return VideoExtractionResult(
         metadata=metadata,
         transcript_segments=transcript_segments,

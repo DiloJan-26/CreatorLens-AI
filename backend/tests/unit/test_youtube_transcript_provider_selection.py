@@ -26,7 +26,7 @@ def test_supadata_configuration_prevents_apify_actor_calls(monkeypatch) -> None:
     monkeypatch.setattr(
         youtube_extractor,
         "fetch_youtube_transcript_with_metadata",
-        lambda _video_id: TranscriptionResult(segments=[]),
+        lambda _video_id, _audio_language=None: TranscriptionResult(segments=[]),
     )
     monkeypatch.setattr(
         youtube_extractor,

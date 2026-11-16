@@ -53,6 +53,7 @@ class HybridCandidate:
     text: str
     semantic_score: float
     keyword_overlap_score: float
+    evidence_revision: str | None = None
 
 
 def keyword_overlap_score(query: str, text: str) -> float:
@@ -98,6 +99,7 @@ def build_hybrid_candidates(
         )
         candidates.append(
             HybridCandidate(
+                evidence_revision=_text(record.get("evidence_revision")),
                 chunk_id=chunk_id,
                 content_id=_text(record.get("content_id")),
                 slot=_text(record.get("slot")),
@@ -129,7 +131,7 @@ def _identities(value: dict[str, Any]) -> list[tuple[object, ...]]:
     identities: list[tuple[object, ...]] = []
     chunk_id = _text(value.get("chunk_id"))
     if chunk_id:
-        identities.append(("chunk_id", chunk_id))
+        return [("chunk_id", chunk_id)]  # Never attach stale-vector scores by location alone.
     identities.append(
         (
             "location",

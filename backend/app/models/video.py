@@ -44,6 +44,7 @@ class VideoMetadata(BaseModel):
     transcript_language: str | None = None
     detected_language: str | None = None
     language_confidence: float | None = None
+    transcript_evidence: dict = Field(default_factory=dict)
     transcript_source: str | None = None
     extraction_status: ExtractionStatus = "pending"
     error_message: str | None = None
@@ -65,6 +66,7 @@ class TranscriptPreviewResponse(BaseModel):
     transcript_language: str | None = None
     detected_language: str | None = None
     language_confidence: float | None = None
+    transcript_evidence: dict = Field(default_factory=dict)
     transcript_source: str | None = None
     transcript_source_note: str | None = None
     segments: list[TranscriptSegment] = Field(default_factory=list)

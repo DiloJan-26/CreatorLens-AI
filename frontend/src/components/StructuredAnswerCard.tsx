@@ -41,6 +41,7 @@ export function StructuredAnswerCard({ payload }: StructuredAnswerCardProps) {
           No supporting evidence was returned for this answer.
         </p>
       )}
+      {answer.answer_type === "recommendation" && answer.hypothetical_draft && <section className="notice text-sm"><strong>Hypothetical draft for an existing supported experiment</strong><p className="mt-2">{answer.hypothetical_draft.text}</p><p className="muted mt-2">Not a measured improvement or performance prediction.</p></section>}
       <Limitations limitations={answer.limitations} />
       {answer.answer_type !== "metric" && (
         <Recommendations recommendations={answer.recommendations} />
@@ -85,32 +86,15 @@ function ComparisonAnswerCard({
 }: {
   answer: ComparisonStructuredAnswer;
 }) {
-  const confidencePercent = Number.isFinite(answer.confidence)
-    ? Math.round(Math.max(0, Math.min(1, answer.confidence)) * 100)
-    : null;
-
   return (
     <section className="structured-answer-body">
       <ResultBanner
-        title={winnerLabel(answer.winner)}
+        title={answer.decision_status === "incomparable" ? "The selected objective is not comparable" : winnerLabel(answer.winner)}
         winner={answer.winner === "content_1" || answer.winner === "content_2"}
         description="Based on the available metrics and cited evidence."
-        detail={
-          <>
-            <span className="signal-label">Model confidence</span>
-            <strong>
-              {confidencePercent == null
-                ? "Unavailable"
-                : `${confidencePercent}%`}
-            </strong>
-            <span className="muted">Uncalibrated</span>
-          </>
-        }
+        detail={<><span className="signal-label">Objective</span><strong>{(answer.objective || "Unspecified").replaceAll("_", " ")}</strong><span className="muted">{(answer.decision_status || answer.evidence_status || "Evidence limited").replaceAll("_", " ")}</span></>}
       />
-      <p className="confidence-note">
-        Model-reported confidence is uncalibrated, not a probability of
-        correctness.
-      </p>
+      <p className="confidence-note">This is an evidence-based decision status, not a probability of correctness.</p>
 
       {answer.key_reasons.length > 0 ? (
         <CardList title="Why this result?" items={answer.key_reasons} />
@@ -173,6 +157,9 @@ function Recommendations({
             <p className="mt-1 text-sm leading-6 text-slate-600">
               {item.rationale}
             </p>
+            {item.target_slot && <p className="mt-2 text-sm font-medium">{slotLabel(item.target_slot)}</p>}
+            {item.experiment && <p className="mt-2 text-sm"><strong>Experiment: </strong>{item.experiment}</p>}
+            {item.limitation && <p className="mt-2 text-sm text-slate-600">{item.limitation}</p>}
             {item.citation_labels.length > 0 && (
               <p className="muted text-xs mt-2">
                 Sources: {item.citation_labels.join(" / ")}

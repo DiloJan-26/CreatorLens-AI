@@ -1,4 +1,8 @@
 from typing import Any
+from app.insights.recommendation_engine import build_creator_recommendations
+from app.insights.comparison_engine import build_goal_comparison
+from app.insights.comparison_models import ComparisonObjective
+from app.insights.deterministic_scoring import calculate_scoring, comparison_eligibility
 
 from app.insights.hook_analyzer import analyze_hook
 from app.insights.insight_models import (
@@ -29,8 +33,8 @@ class CreatorInsightProjectNotFoundError(Exception):
     """Raised when a Creator Insight Summary is requested for a missing project."""
 
 
-def get_creator_insight_summary(project_id: str) -> CreatorInsightSummaryResponse:
-    project = get_project_detail_record(project_id)
+def get_creator_insight_summary(project_id: str, objective: ComparisonObjective = ComparisonObjective.BALANCED, *, project_record: dict | None = None) -> CreatorInsightSummaryResponse:
+    project = project_record if project_record is not None else get_project_detail_record(project_id)
 
     if project is None:
         raise CreatorInsightProjectNotFoundError("Project not found.")
@@ -55,12 +59,18 @@ def get_creator_insight_summary(project_id: str) -> CreatorInsightSummaryRespons
         content_2_insight=content_2_insight,
     )
 
+    goal_comparison = build_goal_comparison(project_id, content_1, content_2, content_1_insight, content_2_insight, objective)
+    creator_recommendations = build_creator_recommendations(project_id, goal_comparison,
+        [(content_1, content_1_insight), (content_2, content_2_insight)])
+
     return CreatorInsightSummaryResponse(
         project_id=project_id,
         content_1=content_1_insight,
         content_2=content_2_insight,
         comparison=comparison,
-        notes=_summary_notes(content_1_insight, content_2_insight),
+        goal_comparison=goal_comparison,
+        creator_recommendations=creator_recommendations,
+        notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; Authoritative objective decisions are in goal_comparison; legacy winners are not V2 decisions."],
     )
 
 
@@ -116,13 +126,37 @@ def _build_content_insight(
         hook_type=hook_analysis.hook_type,
     )
 
+    base_scoring = calculate_scoring(content_item, scores.model_dump(), hook_assessable=bool(hook_analysis.hook_text))
+    semantic_analysis = {"status": "unavailable"}
+    semantic_scoring = None
+    try:
+        from app.services.semantic_service import get_semantic_analysis
+        from app.insights.semantic_scoring import apply_semantic_scoring
+        from app.insights.semantic_models import CreativeFeatures
+        semantic_analysis = get_semantic_analysis(project_id, slot)
+        if semantic_analysis.get("status") == "ready":
+            from app.insights.semantic_evidence import build_semantic_input
+            from app.core.config import get_settings
+            supported = tuple(x.strip().lower() for x in get_settings().semantic_supported_languages.split(",") if x.strip())
+            local_revision = build_semantic_input(project_id, content_item, transcript_segments, supported_languages=supported)["input_revision"]
+            if semantic_analysis["input_revision"] != local_revision:
+                raise ValueError("Evidence changed while assembling insight summary.")
+            semantic_scoring = apply_semantic_scoring(base_scoring,
+                CreativeFeatures.model_validate(semantic_analysis["features"]), semantic_analysis["snapshot_id"])
+    except Exception:
+        semantic_analysis = {"status": "unavailable", "reason": "Semantic storage or current evidence unavailable."}
+
     return ContentInsight(
+        content_id=content_item.get("id") or content_item.get("content_item_id") or content_item.get("content_id"),
         slot=slot,
         label=_slot_label(slot),
         platform=platform,
         title=_optional_text(content_item.get("title")),
         creator=_optional_text(content_item.get("creator")),
         hook_analysis=hook_analysis,
+        scoring=base_scoring,
+        semantic_analysis=semantic_analysis,
+        semantic_scoring=semantic_scoring,
         scores=scores,
         strengths=strengths,
         weaknesses=weaknesses,
@@ -178,6 +212,7 @@ def _build_comparison(
     )
 
     return ComparisonInsight(
+        scoring_eligibility=comparison_eligibility(content_1_insight.scoring, content_2_insight.scoring),
         confirmed_metric_winner=metric_winner,
         creator_efficiency_winner=efficiency_winner,
         creative_structure_winner=creative_structure_winner,

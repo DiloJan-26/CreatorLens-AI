@@ -14,6 +14,13 @@ class StructuredAnswerType(StrEnum):
 
 
 class EvidenceItem(BaseModel):
+    project_id: str | None = None
+    content_id: str | None = None
+    evidence_id: str | None = None
+    evidence_revision: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+    claim_type: Literal["observation", "derived_fact", "interpretation", "hypothesis", "not_assessable"] = "interpretation"
     citation_label: str = Field(min_length=1)
     claim: str = Field(min_length=1)
     slot: ContentSlot | None = None
@@ -44,6 +51,13 @@ class MetricItem(BaseModel):
 
 
 class RecommendationItem(BaseModel):
+    recommendation_id: str | None = None
+    target_content_id: str | None = None
+    target_slot: ContentSlot | None = None
+    objective: str | None = None
+    experiment: str | None = None
+    limitation: str | None = None
+    source_evidence_ids: list[str] = Field(default_factory=list)
     recommendation: str = Field(min_length=1)
     rationale: str = Field(min_length=1)
     priority: Literal["high", "medium", "low"] = "medium"
@@ -51,6 +65,8 @@ class RecommendationItem(BaseModel):
 
 
 class MetricAnswer(BaseModel):
+    objective: str | None = None
+    evidence_status: str = "legacy_unverified"
     answer_type: Literal["metric"] = "metric"
     summary: str = Field(min_length=1)
     metrics: list[MetricItem] = Field(default_factory=list)
@@ -59,6 +75,11 @@ class MetricAnswer(BaseModel):
 
 
 class ComparisonAnswer(BaseModel):
+    objective: str | None = None
+    decision_status: str | None = None
+    evidence_status: str = "legacy_unverified"
+    confidence_status: str = "uncalibrated_compatibility_only"
+    canonical_decision: dict | None = None
     answer_type: Literal["comparison"] = "comparison"
     winner: Literal[
         "content_1",
@@ -73,7 +94,18 @@ class ComparisonAnswer(BaseModel):
     recommendations: list[RecommendationItem] = Field(default_factory=list)
 
 
+class HypotheticalDraft(BaseModel):
+    target_content_id: str
+    recommendation_id: str
+    source_evidence_ids: list[str] = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=700)
+    status: Literal["hypothesis"] = "hypothesis"
+
+
 class RecommendationAnswer(BaseModel):
+    hypothetical_draft: HypotheticalDraft | None = None
+    objective: str | None = None
+    evidence_status: str = "legacy_unverified"
     answer_type: Literal["recommendation"] = "recommendation"
     summary: str = Field(min_length=1)
     recommendations: list[RecommendationItem] = Field(default_factory=list)

@@ -42,6 +42,9 @@ class _StructuredComparisonLlm:
 
 
 def test_comparison_chat_emits_validated_structure_and_citations(monkeypatch) -> None:
+    from app.services import provider_admission
+    monkeypatch.setattr(provider_admission,"admit_current",lambda *args,**kwargs:"mocked-stream-admission")
+    monkeypatch.setattr(provider_admission,"finish",lambda *args,**kwargs:None)
     project_id = "project-1"
     session_id = "session-1"
     citations = [

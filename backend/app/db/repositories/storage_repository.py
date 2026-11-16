@@ -101,6 +101,7 @@ def get_cached_extraction(normalized_url: str) -> dict[str, Any] | None:
             "content_hash": item.content_hash,
             "metadata_hash": item.metadata_hash,
             "transcript_hash": item.transcript_hash,
+            "captured_at": snapshot.captured_at.isoformat(),
             "metadata": dict(snapshot.raw_payload),
             "segments": TranscriptRepository(session).list_for_content_item(item.id),
         }
@@ -243,6 +244,7 @@ def get_transcript_preview(
         "language_confidence": video["language_confidence"],
         "transcript_source": video["transcript_source"],
         "transcript_source_note": video["transcript_source_note"],
+        "transcript_evidence": video.get("transcript_evidence", {}),
         "segments": [
             TranscriptSegment(
                 segment_index=record["segment_index"],

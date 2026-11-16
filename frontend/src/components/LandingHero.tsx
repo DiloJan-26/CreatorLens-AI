@@ -6,7 +6,7 @@ const HERO_BADGES = [
   "Facebook Reels",
   "Multilingual transcripts",
   "Cited AI insights",
-  "No signup demo",
+  "Your creator workspace",
 ];
 
 type LandingHeroProps = {
@@ -57,7 +57,7 @@ export function LandingHero({ onStart }: LandingHeroProps) {
             </Link>
           </div>
           <p className="mt-3 text-sm font-medium text-slate-600">
-            No signup required for this demo.
+            Sign in with Google to access your private analyses.
           </p>
         </div>
 

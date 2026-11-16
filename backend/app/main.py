@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.semantic import router as semantic_router
 from app.api.chat import router as chat_router
 from app.api.evaluations import router as evaluations_router
 from app.api.health import router as health_router
@@ -148,6 +149,7 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    get_settings().require_service_configuration()
     init_db()
     yield
 
@@ -165,6 +167,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# All routers remain gated; outer CORS makes denial responses readable to configured frontends.
+from app.core.authentication_middleware import AuthenticationMiddleware
+app.add_middleware(AuthenticationMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -173,6 +179,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.api.account import router as account_router
+app.include_router(account_router)
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(ingestion_router)
@@ -180,4 +188,20 @@ app.include_router(chat_router)
 app.include_router(metrics_router)
 app.include_router(cost_router)
 app.include_router(insights_router)
+app.include_router(semantic_router)
 app.include_router(evaluations_router)
+
+
+
+@app.get("/api/providers/status",include_in_schema=False)
+def provider_status():
+    from app.core.access import require_principal
+    from app.services.provider_admission import paid_configuration
+    from fastapi import HTTPException
+    require_principal()
+    settings=get_settings()
+    available={}
+    for name,kind in (("provider_calls_enabled","semantic"),("extraction_available","extraction")):
+        try:paid_configuration(settings,kind);available[name]=True
+        except (HTTPException,ValueError):available[name]=False
+    return {"provider_emergency_stop":settings.provider_emergency_stop,**available}

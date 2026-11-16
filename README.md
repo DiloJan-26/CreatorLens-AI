@@ -6,7 +6,7 @@
 
 ### Evidence-grounded, multi-cloud RAG intelligence for short-form content
 
-CreatorLens AI compares two public YouTube, Instagram, or Facebook videos and turns their confirmed metadata, transcripts, creative structure, and engagement signals into defensible creator insights. It combines deterministic analytics with hybrid retrieval and structured LLM reasoning so every factual conclusion remains traceable to source evidence.
+CreatorLens AI analyzes stored YouTube, Instagram, or Facebook content comparisons; new admitted extraction currently supports bounded public YouTube videos. The engine turns confirmed metadata, transcripts, creative structure, and engagement signals into defensible creator insights. It combines deterministic analytics with hybrid retrieval and structured LLM reasoning so every factual conclusion remains traceable to source evidence.
 
 > Built as a production-style AI engineering case study: asynchronous ingestion, vector retrieval, constrained generation, evaluation, LLM observability, and a cost-controlled multi-cloud deployment.
 
@@ -24,16 +24,26 @@ The same workflow is observable end to end through persisted retrieval and LLM r
 
 ## Project status
 
-**The planned CreatorLens AI V2 implementation is complete and deployed.** Backend, frontend, ingestion workers, structured RAG, evaluation, LLM observability, and CI/CD reliability controls have completed local, GitHub-hosted, and deployed smoke acceptance.
+**This checkout includes the V2 intelligence engine and a local authentication/ownership integration.** The new account migration, hosted Google OAuth flow and coordinated deployment have not yet passed live acceptance. Local offline checks are distinct from production verification. Private API access always requires Google/Supabase authentication and ownership. External providers stay suspended by the default-on emergency stop until separately approved account, pricing and budget acceptance.
 
 | Delivery area | Accepted state |
 | --- | --- |
-| Product experience | Deployed analysis, evidence, structured chat, evaluation, and LLMOps views |
+| Product experience | Implemented analysis, evidence, structured chat, evaluation, LLMOps and account views; current-checkout cloud acceptance pending |
 | Backend platform | FastAPI APIs, durable PostgreSQL state, hybrid retrieval, structured generation, and observability |
 | Async ingestion | Redis-backed Celery processing on Azure Container Apps with persisted progress and graceful partial readiness |
-| Quality engineering | 114 unit tests, eight integration tests, deterministic evaluation smoke suite, and migration validation |
+| Quality engineering | Offline backend/frontend regressions, synthetic authentication/security tests, deterministic evaluation and disposable-PostgreSQL CI gates; see current local report |
 | Delivery controls | Required backend, frontend, evaluation, and Docker checks enforced on production pull requests |
 | Protection acceptance | Successful changes are admitted; intentional backend and frontend failures are confirmed to block merging |
+
+## Authenticated application access
+
+Supabase manages Google OAuth and sessions; FastAPI verifies ES256 access JWTs against configured public JWKS. Application profiles, nullable project ownership, five lifetime analysis credits and durable operation reservations stay in PostgreSQL. Historical ownerless projects remain quarantined. No service-role key or client-supplied owner is used.
+
+Google/Supabase authentication is mandatory in every API environment. Configure the trusted Supabase URL, issuer and JWKS; missing verification fails closed. There are no demo/access-mode or authentication enable switches. `PROVIDER_EMERGENCY_STOP=true` suspends billable execution without hiding owned existing results. Releasing it still requires durable quotas, supported providers, bounded requests and user/global budgets. Only bounded YouTube/Supadata extraction is approved for new provider work; legacy Apify/Deepgram and new Instagram/Facebook extraction remain blocked. Supadata extraction uses the existing API key; provider-plan attestations and a manually configured credit pool are not required. Optional pricing metadata never blocks extraction when expired or unavailable, and unknown charges remain unknown. Gemini retains its existing model-pricing admission checks.
+
+The recommended initial deployment needs **10 Render values, 7 Azure worker values and 4 public Vercel values**, including the explicit default-on provider stop on both servers. Approved product limits are central defaults, not required dashboard overrides. See `docs/CreatorLens-Intelligence-v2/Deployment-Environment-Matrix.md` and `Production-Configuration-Simplification.md`. Source migration head remains `20261115_0014`; final-source PostgreSQL CI and real OAuth acceptance remain required. No cloud deployment or actual environment-file modification was performed.
+
+From `frontend/`, run `npm run test:auth` for mocked SDK/transport checks and `npm run test:ui` for presentation contracts. These do not prove live Google login or browser acceptance. The detailed local handoff is in `docs/CreatorLens-Intelligence-v2/Phase-10C-Authentication-Implementation.md`; `docs/` remains ignored unless you explicitly choose to track selected documents.
 
 ## Engineering highlights
 
@@ -69,6 +79,55 @@ Supported sources:
 | YouTube | Shorts, watch URLs, and `youtu.be` URLs | Public metadata, captions, Supadata/Apify fallback, and audio transcription when required |
 | Instagram | Reels, posts, and public video URLs | Public extraction with Deepgram transcription when public audio is available |
 | Facebook | Reels, watch URLs, and public video posts | Public extraction with Deepgram transcription when public audio is available |
+
+## Goal-aware comparison
+
+The existing insight-summary endpoint accepts `?objective=balanced|reach|engagement|creative_quality` and returns the canonical `goal_comparison` contract under `goal-comparison-1.0.0`. It includes the selected decision, all four objective decisions, six independent dimensional leaders, stable content IDs, supporting values, evidence references and explicit eligibility. Winner selection is deterministic and performs no Gemini inference.
+
+Reach and Engagement work without semantic analysis. Balanced and Creative Quality require compatible current semantic snapshots. Cross-platform metric comparisons remain descriptive without a winner; semantic creative comparison uses a shared textual rubric with matching versions and coverage. Heuristic tie tolerances are explicit and do not represent statistical confidence. Existing `comparison` fields remain labeled legacy for later consumer migration. No Phase 4 cloud deployment was performed.
+
+## Evidence-grounded creator recommendations
+
+The insight summary adds `creator_recommendations` under `creator-recommendations-1.0.0`. It consumes the selected `goal_comparison` decision and current validated semantic snapshots. Fixed rules identify supported individual weaknesses, attach owned excerpts/revisions, and propose specific manual experiments. A weaker count or unavailable metric alone is not a creative defect. Winning videos can receive advice; ties never select a default target.
+
+Recommendations expose stable project/content IDs, observed labels, trigger rules, evidence provenance, priority breakdowns, actions, experiments and limitations. Ordinal priority combines severity, evidence support, objective relevance and actionability; overlapping interventions merge without a priority bonus. At most five actions are returned. Reach/efficiency remain descriptive where actionable creative evidence is absent; eligible Engagement can support a controlled interaction experiment without asserting a creative cause.
+
+The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. The Assistant now consumes these canonical contracts for decisions and supported experiments; legacy advice is not used as a V2 fallback. No live rollout or new migration is included in this change.
+
+## Intelligence evaluation
+
+The existing evaluation service now includes `creatorlens_intelligence_v2` (133 offline cases) and `creatorlens_intelligence_ci_v2` (23 critical cases), version `2.0.0`, alongside the unchanged legacy 20-case core and five-case smoke datasets. Reports separate deterministic contracts, mocked-model behavior, synthetic retrieval, critical gates, exploratory failures and explicit skips. They preserve actual outputs, expected contracts, failure reasons, methodology and dataset fingerprints in the existing history tables.
+
+The initial full baseline contains three visible exploratory failures: a forged recommendation-priority validation gap, a suppressed valid reach paraphrase, and an accepted indirect sentiment claim. These findings were retained in the historical baseline and subsequently remediated through canonical metric-claim validation, source-aware sentiment safeguards and full deterministic recommendation verification. The post-remediation baseline is **119 passed, 0 failed and 14 skipped**, with strict execution passing and the original dataset expectations unchanged. Independent human semantic review, multilingual reference quality and live Gemini/Qdrant acceptance remain pending. No combined semantic-accuracy percentage is reported.
+
+Run offline without provider credentials from `backend/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_ci_v2
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2
+```
+
+Default V2 CLI success means all curated critical contracts passed. Add `--strict` to fail on exploratory findings too. Reports and the read-only dashboard always retain failures/skips. CI publishes bounded JSON artifacts; it does not invoke a paid judge or live providers. See `backend/app/evaluations/fixtures/ANNOTATION-GUIDE.md` before approving reference labels.
+
+## Canonical RAG Assistant
+
+The Assistant resolves Balanced, Reach, Engagement or Creative Quality from the question and optional selected objective. Deterministic metric, comparison, insight and supported-recommendation requests read the same canonical intelligence contracts as Insights, without Gemini or vector retrieval. Missing Balanced evidence still permits eligible Reach and Engagement observations.
+
+Deeper questions reuse the existing five-mode retrieval pipeline and Gemini client. Current project/content ownership, SQL source text, revisions and timestamp ranges are checked before evidence enters the prompt. Structured output is checked against canonical winners, metric values, recommendation IDs, targets and priorities; malformed or rejected output falls back to available canonical facts. Qualitative explanations remain explicitly evidence-limited, and citation matching is not claimed to prove semantic entailment.
+
+The existing SSE/history/telemetry flow remains intact. The chat UI exposes the selected objective and evidence status instead of numerical model confidence. Prompt-injection defenses treat retrieved material as untrusted data; offline mocked regressions cover these boundaries, not live model robustness. Cloud rollout remains deferred.
+
+## Semantic creative analysis
+
+An optional, explicitly queued Gemini operation now extracts versioned creative labels from validated transcript and description evidence. `POST /api/projects/{project_id}/semantic/{slot}?allow_inference=true` queues the existing Celery worker; GET only reads compatible persisted snapshots. This operation can incur Gemini charges and is deferred to the coordinated release for live acceptance.
+
+Strict validation binds feature references to content identity, source excerpts, timestamps and evidence revision. Fixed deterministic rules map accepted labels into `semantic-creative-1.0.0`; Gemini supplies no scores or winners. Insight responses expose `semantic_analysis` and nullable `semantic_scoring` separately from legacy and Phase 2 results. A new additive semantic-snapshot migration is included. Offline mocks verify the implementation; live Gemini and PostgreSQL migration acceptance remain outstanding.
+
+## Versioned deterministic scoring
+
+The insight summary API now returns `content_1.scoring` and `content_2.scoring` under policy `creator-insight-2.0.0`. These objects preserve unavailable scores as null, expose metric definitions, sample sufficiency, feature contributions and calculation coverage, and separate evidence assessment from quality. Engagement scoring requires complete platform-defined interactions and at least 1,000 views. These thresholds and weights are uncalibrated heuristics.
+
+Existing `scores` and comparison winner fields retain `legacy-1.0.0` for client, recommendation and Assistant compatibility. The original formulas documented below describe that legacy policy. They are not authoritative V2 decisions. The Insights view labels both versions; The scoring objects alone do not select winners; `goal_comparison` now supplies objective-specific decisions when eligible. In V2, reach and engagement are separate; public performance requires both; current-audience efficiency is nullable; overall requires performance and creative evidence and renormalizes eligible weights 0.35/0.30/0.25 without a confidence bonus. No cloud rollout of this upgrade has been performed.
 
 ## Scope Justification
 
@@ -487,6 +546,19 @@ The accepted v1.1 core regression run recorded **20/20 passing cases**, with cit
 
 ## LLMOps and observability
 
+
+The local observability upgrade separates deterministic responses, RAG generation and semantic extraction. It records provider-reported usage categories, exact model identity where reported, thinking/cache usage, invocation counts and independent request timings. Whole-scope latency samples exclude deterministic zeros from Gemini means and preserve unknown historical invocation counts.
+
+A reviewed, versioned registry supports the exact `gemini-3.5-flash-lite` Standard paid-tier reference: $0.30 input, $2.50 output including thinking, and $0.03 cached input per million tokens. The 6,803-input/946-output fixture estimates **$0.0044059**, not an invoice. Unknown models/tiers remain unpriced; partial totals and legacy unverified estimates are labeled explicitly. See [Google's official pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
+
+Configuration now allowlists exact Gemini Developer API model IDs: `gemini-3.5-flash-lite` (intended model), `gemini-3.6-flash`, and `gemini-3.8-flash`. Production API and worker inference require an explicit matching `LLM_MODEL`; automatic model substitution is disabled. Local/test defaults use Flash-Lite. No deployed setting was changed.
+
+The registry retains a historical snapshot and selects Standard reference rates using the UTC inference-start timestamp. Gemini 3.6/3.8 entries distinguish the verified November 14?December 31, 2026 period from the documented January 1, 2027 increase. Other API tiers and Vertex AI remain unpriced. Exact component amounts survive storage and aggregation; cached input and thinking tokens are counted once. Changing models creates distinct semantic snapshot keys and requires authorized compatibility acceptance, rather than treating cached labels from another model as current.
+
+Cost estimates are observational, not a spending cap. Public inference authorization, rate limiting and hard spending controls remain release requirements; offline tests do not establish live model availability or billed charges.
+
+The read-only dashboard presents pricing coverage, per-operation cost provenance and timing sample counts. This implementation introduces additive migration `20261113_0011`; cloud deployment remains deferred to the coordinated release. Optional `LLM_ESTIMATE_SERVICE_TIER=standard` selects a reference estimate, not an assertion about account billing. No paid evaluator or live inference was used for verification.
+
 Each RAG interaction creates an auditable operational record.
 
 ```mermaid
@@ -509,7 +581,7 @@ Tracked signals include:
 - LangSmith trace ID, retrieval-run ID, session ID, and error code
 - estimated cost when model pricing is configured; otherwise an explicit unavailable state
 
-The LLMOps dashboard is read-only and never triggers model calls. It exposes recent runs, token mix, latency composition, trace coverage, retrieval balance, and reliability signals from persisted telemetry.
+The LLMOps dashboard is read-only and never triggers model calls. It exposes recent runs, reported token mix, separate latency populations, trace coverage, retrieval balance, and reliability signals from persisted telemetry.
 
 ## Persistence model
 
@@ -655,3 +727,34 @@ Cost controls before accidental scale.
 ## License
 
 This repository is provided for portfolio review and technical evaluation. See [LICENSE](LICENSE) for usage terms.
+
+### Project Origin & Attribution
+
+CreatorLens AI was independently implemented as part of a technical assessment based on a project concept presented.
+
+The underlying project idea was not originated by me and may have been provided to other candidates.
+
+The implementation presented in this repository represents my own independently developed engineering work, except for clearly identified third-party components and dependencies.
+
+No exclusive ownership is claimed over the original project concept, assessment requirements, project name, or independently developed implementations by others.
+
+
+### Authenticated extraction safety
+
+Authenticated ingestion uses a separately admitted, synchronous Supadata metadata/native-caption path. Each operation reserves a provider credit and the configured USD ceiling before sending. Transcript calls require provider-verified duration; slot attempts, owner/project identity, global concurrency and a dedicated prepaid credit pool are checked durably. Unknown outcomes retain reservations and require review; task redelivery cannot replay uncertain provider work.
+
+Execution defaults to disabled. Enabling it requires approved duration/size/time/rate/budget limits, an applicable verified pricing interval, a verified prepaid account and auto-recharge disabled. Pro subscription allocation estimates are separate from actual invoices; missing billing is unavailable. Generated Supadata transcripts, translation, asynchronous polling, Apify and remote-audio Deepgram remain disabled in authenticated mode. Existing explicitly gated local provider integrations are preserved. See backend/.env.example for configuration names. No cloud configuration is changed by these defaults.
+
+
+### Local authenticated acceptance
+
+The local acceptance suite exercises synthetic ES256 identities, owner-scoped API and worker execution, quota settlement and bounded mocked extraction without cloud access. Optional real-Chromium component checks use `frontend/scripts/verify-browser-acceptance.mjs` with an existing Playwright installation; their SDK/API fixtures do not prove real OAuth or Next.js proxy acceptance. The user-run `backend/scripts/local_auth_acceptance.py` launcher rejects remote database/broker targets and keeps provider credentials and paid execution disabled. Real OAuth, individual PostgreSQL CI gates and coordinated cloud release still require explicit acceptance. See the local acceptance documents for pending configuration approvals.
+
+
+### Configuration and coordinated release preparation
+
+Operational limits, new-account grants, generation caps, queues and approved active-pricing JSON are centralized in backend Settings. Start with [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example); never overwrite actual environment files or expose server credentials in NEXT_PUBLIC variables. Existing entitlements and pricing history are preserved; paid execution stays off.
+
+The release source head is now `20261115_0014` (configurable allowances). Quiesce old API/workers before migration and require the disposable PostgreSQL CI gate. A no-network configuration check is available from backend/: `python -m app.core.configuration_preflight --release`. It prints validation status and a shared-policy fingerprint, never secret values. Cloud deployment remains separately authorized.
+
+Local release documents: docs/CreatorLens-Intelligence-v2/Deployment-Preflight-Audit.md, Deployment-Environment-Matrix.md, Deployment-Configuration-Externalization.md, Deployment-Manual-Execution-Guide.md and Deployment-Post-Release-Acceptance.md. The docs directory remains Git-ignored; these local documents need an explicit user-chosen tracking/backup decision.

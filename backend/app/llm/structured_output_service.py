@@ -30,6 +30,9 @@ def parse_structured_output(
     answer_type: StructuredAnswerType | str,
     *,
     citations: Sequence[Citation] | None = None,
+    canonical_context: dict | None = None,
+    question: str = "",
+    intent: str = "general",
 ) -> StructuredOutputParseResult:
     normalized_type = StructuredAnswerType(answer_type)
 
@@ -42,12 +45,19 @@ def parse_structured_output(
             "The model response could not be validated, so a safe "
             "insufficient-evidence response was returned."
         )
+        if canonical_context is not None:
+            from app.rag.intelligence_context import canonical_answer
+            return StructuredOutputParseResult(answer=canonical_answer(canonical_context,question,intent,list(citations or [])),used_fallback=True,warnings=["Generated JSON was invalid; the current canonical answer was retained."])
         return StructuredOutputParseResult(
             answer=_fallback_answer(normalized_type, warning),
             used_fallback=True,
             warnings=[warning],
         )
 
+    if canonical_context is not None:
+        from app.llm.assistant_grounding import validate_generated_answer
+        answer,warnings=validate_generated_answer(answer,canonical_context,question,intent,list(citations or []))
+        return StructuredOutputParseResult(answer=answer,used_fallback=bool(warnings),warnings=warnings)
     if citations is None:
         return StructuredOutputParseResult(answer=answer)
 
@@ -87,7 +97,7 @@ def render_structured_answer(answer: StructuredAnswer) -> str:
     elif isinstance(answer, ComparisonAnswer):
         lines = [
             f"## Verdict\n{_winner_label(answer.winner)}",
-            f"**Confidence:** {round(answer.confidence * 100)}%",
+            f"**Objective:** {answer.objective or 'not specified'}; **Evidence status:** {answer.evidence_status}",
         ]
         if answer.key_reasons:
             lines.extend(["", "## Key reasons"])
@@ -97,27 +107,31 @@ def render_structured_answer(answer: StructuredAnswer) -> str:
             )
         if answer.recommendations:
             lines.extend(["", "## Recommendations"])
-            lines.extend(
-                f"{index}. **{item.recommendation}** — {item.rationale}"
-                for index, item in enumerate(answer.recommendations, start=1)
-            )
+            lines.extend(_recommendation_lines(answer.recommendations))
     else:
         lines = [answer.summary]
         if answer.recommendations:
             lines.extend(["", "## Recommendations"])
-            lines.extend(
-                (
-                    f"{index}. **{item.recommendation}** "
-                    f"({item.priority} priority) — {item.rationale}"
-                )
-                for index, item in enumerate(answer.recommendations, start=1)
-            )
+            lines.extend(_recommendation_lines(answer.recommendations))
 
+    if isinstance(answer, RecommendationAnswer) and answer.hypothetical_draft:
+        lines.extend(["", "## Hypothetical draft (not a measured improvement)", answer.hypothetical_draft.text])
     if answer.limitations:
         lines.extend(["", "## Limitations"])
         lines.extend(f"- {limitation}" for limitation in answer.limitations)
 
     return "\n".join(lines).strip()
+
+
+
+def _recommendation_lines(items) -> list[str]:
+    lines=[]
+    for index,item in enumerate(items,start=1):
+        target=(_slot_label(item.target_slot)+": ") if item.target_slot else ""
+        lines.append(f"{index}. **{target}{item.recommendation}** ({item.priority} priority) - {item.rationale}")
+        if item.experiment:lines.append("   - Experiment: "+item.experiment)
+        if item.limitation:lines.append("   - Limitation: "+item.limitation)
+    return lines
 
 
 def _extract_json_object(raw_output: str) -> dict[str, Any]:

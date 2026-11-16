@@ -1,3 +1,5 @@
+from app.db.models.account import AppUser, RevokedSession, UserEntitlement, AnalysisReservation, UsageEvent, BudgetAccount, ProviderOperation, DispatchOutbox
+from app.db.models.semantic_snapshot import SemanticSnapshot
 from app.db.models.chat import ChatCitation, ChatMessage, ChatSession
 from app.db.models.content_item import ContentItem
 from app.db.models.evidence_chunk import EvidenceChunk
@@ -16,6 +18,7 @@ from app.db.models.retrieval_run import RetrievalRun
 from app.db.models.transcript_segment import TranscriptSegment
 
 __all__ = [
+    "SemanticSnapshot",
     "ChatCitation",
     "ChatMessage",
     "ChatSession",
@@ -34,3 +37,5 @@ __all__ = [
     "RetrievalRun",
     "TranscriptSegment",
 ]
+
+import app.db.membership  # noqa: F401; register matching-parent checks

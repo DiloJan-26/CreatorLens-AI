@@ -93,8 +93,8 @@ def get_project_endpoint(project_id: str) -> ProjectDetailResponse:
         "the results. Continue with availability/transcript checks, then build chunks."
     ),
 )
-def extract_project_endpoint(project_id: str) -> ProjectDetailResponse:
-    return extract_project_videos(project_id)
+def extract_project_endpoint(project_id: str, refresh_evidence: bool = False) -> ProjectDetailResponse:
+    return extract_project_videos(project_id, refresh_evidence=refresh_evidence)
 
 
 @router.get(

@@ -33,7 +33,7 @@ cost_router = APIRouter(
     response_model=CostMetricsResponse,
     summary="Inspect LLM cost and latency telemetry",
     description=(
-        "Returns persisted token, configured cost-estimate, latency, cache, "
+        "Returns persisted usage categories, versioned inference estimates and pricing coverage, latency, cache, "
         "retrieval, transcript, and prompt-version signals."
     ),
 )

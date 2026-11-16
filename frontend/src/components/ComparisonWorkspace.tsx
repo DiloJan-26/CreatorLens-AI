@@ -1,6 +1,11 @@
 "use client";
+import { uiConfig } from "@/lib/ui-config";
 
+import { useAccount } from "./AccountProvider";
+import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
 import Link from "next/link";
+import { GoalComparisonPanel } from "./GoalComparisonPanel";
+import { SemanticAnalysisPanel } from "./SemanticAnalysisPanel";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -52,6 +57,7 @@ const INITIAL_PROGRESS_STEPS: AnalysisProgressStep[] = [
 ];
 
 export function ComparisonWorkspace() {
+  const {account,refresh}=useAccount();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
   useEffect(() => {
@@ -226,7 +232,7 @@ export function ComparisonWorkspace() {
         setProgressSteps(progressStepsForIngestion(latest.status));
 
         if (!isTerminalStatus(latest.status)) {
-          pollTimer = window.setTimeout(poll, 2000);
+          pollTimer = window.setTimeout(poll, uiConfig.pollIntervalMs);
           return;
         }
 
@@ -279,13 +285,13 @@ export function ComparisonWorkspace() {
         }
 
         consecutiveFailures += 1;
-        if (consecutiveFailures < 3) {
-          pollTimer = window.setTimeout(poll, 3000);
+        if (consecutiveFailures < uiConfig.pollFailureLimit) {
+          pollTimer = window.setTimeout(poll, uiConfig.pollIntervalMs);
           return;
         }
 
         setError(
-          `${getErrorMessage(caughtError)} Automatic status checks stopped after three attempts. Refresh the page to resume.`,
+          `${getErrorMessage(caughtError)} Automatic status checks stopped after ${uiConfig.pollFailureLimit} attempts. Refresh the page to resume.`,
         );
         setIsSubmitting(false);
         setActiveIngestion(null);
@@ -327,6 +333,7 @@ export function ComparisonWorkspace() {
   }, [resetWorkspaceState, restoreProject, startNew]);
 
   async function handleAnalyzeContent() {
+    if(account && account.usage.available<=0){window.dispatchEvent(new Event("creatorlens_quota_exhausted"));return;}
     setIsSubmitting(true);
     setShowProgress(true);
     setProgressSteps(resetProgressSteps());
@@ -350,6 +357,7 @@ export function ComparisonWorkspace() {
       setProgressStatus("detect", "complete");
 
       const started = await startProjectIngestion(created.project_id);
+      await refresh();
       setActiveIngestion({
         projectId: created.project_id,
         jobId: started.job_id,
@@ -358,6 +366,7 @@ export function ComparisonWorkspace() {
       failRunningSteps();
       setError(getErrorMessage(caughtError));
       setIsSubmitting(false);
+      void refresh();
     }
   }
 
@@ -511,6 +520,8 @@ export function ComparisonWorkspace() {
       </div>
       {hasResults && (
         <>
+          {projectDetail && <AnalysisAllowancePanel projectId={projectDetail.project_id}/>}
+          {insightSummary && <GoalComparisonPanel summary={insightSummary} onChange={setInsightSummary} />}
           <nav className="section-tabs" aria-label="Comparison sections">
             {[
               ["overview", "Overview"],
@@ -546,15 +557,15 @@ export function ComparisonWorkspace() {
             <div className="content-pair">
               <ContentCard
                 label="Content 1"
+                hookScore={insightSummary?.content_1?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_1")}
                 isPending={isSubmitting}
-                hookScore={insightSummary?.content_1?.hook_analysis.hook_score}
               />
               <ContentCard
                 label="Content 2"
+                hookScore={insightSummary?.content_2?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_2")}
                 isPending={isSubmitting}
-                hookScore={insightSummary?.content_2?.hook_analysis.hook_score}
               />
             </div>
             <ComparisonHighlights summary={insightSummary} />
@@ -564,6 +575,7 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "insights"}
             className="section-panel"
           >
+            <div className="grid gap-4 lg:grid-cols-2 mb-5">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
             <CreatorInsightSummaryPanel
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}

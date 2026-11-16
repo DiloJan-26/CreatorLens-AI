@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, String, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -10,6 +10,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("app_users.id"), index=True)
     content_1_url: Mapped[str] = mapped_column(Text, nullable=False)
     content_2_url: Mapped[str] = mapped_column(Text, nullable=False)
     content_1_platform: Mapped[str] = mapped_column(String(32), nullable=False)

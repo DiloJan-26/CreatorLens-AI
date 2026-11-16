@@ -69,52 +69,22 @@ def retry_or_fail_job(
 ) -> None:
     settings = get_settings()
     safe_message = safe_worker_error(exc, fallback=fallback_message)
-    next_retry = int(task.request.retries) + 1
-
-    if int(task.request.retries) < settings.celery_max_retries:
-        with database_session() as session:
-            JobRepository(session).record_retry(
-                job_id,
-                retry_count=next_retry,
-                error_code=f"{error_code}_RETRY",
-                error_message=safe_message,
-            )
-        countdown = settings.celery_retry_backoff_seconds * (
-            2 ** int(task.request.retries)
-        )
-        logger.warning(
-            "Worker job scheduled for retry job_id=%s project_id=%s "
-            "error_code=%s retry_count=%s exception_type=%s",
-            job_id,
-            project_id,
-            error_code,
-            next_retry,
-            type(exc).__name__,
-        )
-        raise task.retry(
-            exc=WorkerTaskFailedError(safe_message),
-            countdown=countdown,
-            max_retries=settings.celery_max_retries,
-        )
-
+    from app.services.account_usage import latest_reservation,settle
     with database_session() as session:
-        JobRepository(session).fail(
-            job_id,
-            error_code=error_code,
-            error_message=safe_message,
-        )
-        ProjectRepository(session).update_status(project_id, "failed")
-
-    logger.error(
-        "Worker job failed job_id=%s project_id=%s error_code=%s "
-        "retry_count=%s exception_type=%s",
-        job_id,
-        project_id,
-        error_code,
-        task.request.retries,
-        type(exc).__name__,
-    )
-    raise WorkerTaskFailedError(safe_message) from None
+        reservation=latest_reservation(session,project_id)
+        from app.extraction.policy import ExtractionSafetyError
+        from app.db.models.account import ProviderOperation
+        from sqlalchemy import select
+        uncertain = reservation and session.scalar(select(ProviderOperation.id).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.state.in_(["admitted","running","needs_reconciliation"])))
+        if reservation and isinstance(exc,ExtractionSafetyError) and not uncertain:
+            JobRepository(session).fail(job_id,error_code="EXTRACTION_UNAVAILABLE",error_message="Bounded extraction did not provide usable evidence; no provider work remains active.")
+            ProjectRepository(session).update_status(project_id,"failed")
+            settle(session,reservation.id,"failed",verified_no_active_work=True)
+        elif reservation: settle(session,reservation.id,"needs_reconciliation")
+        if not reservation or reservation.state!="failed":
+            JobRepository(session).fail(job_id,error_code="NEEDS_RECONCILIATION",error_message="Provider/worker outcome requires review; no automatic paid retry.")
+    message="Bounded extraction unavailable; analysis credit released." if reservation and reservation.state=="failed" else "Provider/worker outcome requires reconciliation."
+    raise WorkerTaskFailedError(message) from None
 
 
 def safe_worker_error(exc: Exception, *, fallback: str) -> str:
@@ -132,7 +102,6 @@ def safe_worker_error(exc: Exception, *, fallback: str) -> str:
         settings.youtube_api_key,
         settings.apify_api_token,
         settings.deepgram_api_key,
-        settings.assemblyai_api_key,
     )
     for secret in secret_values:
         if secret and str(secret) in message:

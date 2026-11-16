@@ -30,6 +30,7 @@ def get_engine() -> Engine:
     return create_engine(
         database_url,
         pool_pre_ping=True,
+        hide_parameters=True,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_recycle=settings.db_pool_recycle_seconds,
@@ -48,9 +49,9 @@ def database_session() -> Iterator[Session]:
     try:
         yield session
         session.commit()
-    except Exception:
+    except Exception as exc:
         session.rollback()
-        logger.exception("Database transaction failed and was rolled back.")
+        logger.error("Database transaction rolled back; exception_type=%s", type(exc).__name__)
         raise
     finally:
         session.close()

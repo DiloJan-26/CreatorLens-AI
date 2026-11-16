@@ -24,7 +24,10 @@ class ProjectRepository:
         instagram_url: str | None = None,
     ) -> dict[str, Any]:
         timestamp = utc_now()
+        from app.core.access import current_principal
+        principal = current_principal.get()
         project = Project(
+            owner_user_id=principal.user_id if principal else None,
             id=project_id,
             content_1_url=content_1_url,
             content_2_url=content_2_url,
@@ -42,13 +45,20 @@ class ProjectRepository:
 
     def get(self, project_id: str) -> dict[str, Any] | None:
         project = self.session.get(Project, project_id)
+        from app.core.access import current_principal
+        principal = current_principal.get()
+        if principal and project and project.owner_user_id != principal.user_id:
+            return None
         return self.to_record(project) if project is not None else None
 
     def list(self, limit: int = 20) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 100))
-        projects = self.session.scalars(
-            select(Project).order_by(desc(Project.created_at)).limit(safe_limit)
-        ).all()
+        from app.core.access import current_principal
+        principal = current_principal.get()
+        query = select(Project)
+        if principal:
+            query = query.where(Project.owner_user_id == principal.user_id)
+        projects = self.session.scalars(query.order_by(desc(Project.created_at)).limit(safe_limit)).all()
         return [self.to_record(project) for project in projects]
 
     def update_status(self, project_id: str, status: str) -> bool:

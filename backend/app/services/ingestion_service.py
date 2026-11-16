@@ -43,75 +43,10 @@ class ExistingIngestionJobError(RuntimeError):
         self.job_id = job_id
 
 
-def start_project_ingestion(project_id: str) -> IngestionStartResponse:
+def start_project_ingestion(project_id: str, idempotency_key: str | None = None) -> IngestionStartResponse:
     settings = get_settings()
-    if settings.celery_broker_url is None:
-        raise IngestionQueueConfigurationError("Redis is not configured.")
-
-    project_exists = True
-    active_job_id: str | None = None
-    job_id: str | None = None
-    celery_task_id: str | None = None
-    try:
-        with database_session() as session:
-            if ProjectRepository(session).get(project_id) is None:
-                project_exists = False
-            else:
-                repository = JobRepository(session)
-                try:
-                    job = repository.create(project_id)
-                except ActiveIngestionJobError:
-                    active = repository.get_active_for_project(project_id)
-                    active_job_id = active.id if active is not None else "unknown"
-                else:
-                    job_id = job.id
-                    celery_task_id = str(uuid4())
-                    repository.set_task_id(job_id, celery_task_id)
-    except IntegrityError:
-        active_job_id = _active_job_id(project_id)
-        raise ExistingIngestionJobError(job_id=active_job_id or "unknown") from None
-
-    if not project_exists:
-        raise IngestionProjectNotFoundError("Project not found.")
-    if active_job_id is not None:
-        raise ExistingIngestionJobError(job_id=active_job_id)
-    if job_id is None or celery_task_id is None:
-        raise IngestionQueueUnavailableError(
-            "The ingestion job could not be prepared."
-        )
-
-    try:
-        from app.workers.ingestion_tasks import ingest_project_task
-
-        ingest_project_task.apply_async(
-            args=[job_id],
-            task_id=celery_task_id,
-        )
-    except Exception as exc:
-        _mark_enqueue_failure(job_id)
-        logger.error(
-            "Could not enqueue ingestion job job_id=%s project_id=%s "
-            "exception_type=%s",
-            job_id,
-            project_id,
-            type(exc).__name__,
-        )
-        raise IngestionQueueUnavailableError(
-            "The ingestion queue is temporarily unavailable."
-        ) from None
-
-    logger.info(
-        "Ingestion job queued job_id=%s project_id=%s",
-        job_id,
-        project_id,
-    )
-    return IngestionStartResponse(
-        project_id=project_id,
-        job_id=job_id,
-        status=IngestionJobStatus.PENDING,
-        status_url=f"/api/projects/{project_id}/status?job_id={job_id}",
-        message="Ingestion was queued for background processing.",
-    )
+    from app.services.admitted_ingestion import start
+    return start(project_id,idempotency_key)
 
 
 def get_project_ingestion_status(

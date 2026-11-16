@@ -47,7 +47,11 @@ def transcribe_video_url_with_supadata(url: str) -> TranscriptionResult:
     return TranscriptionResult(
         segments=segments,
         transcript_language=language,
-        detected_language=language,
+        detected_language=None,
+        provenance={"requested_languages": [], "caption_track_language": language,
+                    "detected_text_language": None, "audio_language_verified": False,
+                    "caption_kind": "translated" if payload.get("isTranslated") is True else "unknown",
+                    "selection_reason": "supadata_" + mode},
         transcript_source=(
             "supadata_platform_captions"
             if native_captions_only
@@ -65,12 +69,14 @@ def transcribe_video_url_with_supadata(url: str) -> TranscriptionResult:
 def _fetch_transcript_payload(
     *, url: str, api_key: str, mode: str, timeout_seconds: int
 ) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     timeout = max(timeout_seconds, 10)
     deadline = time.monotonic() + timeout
     headers = {"x-api-key": api_key}
 
     try:
-        client_timeout = httpx.Timeout(float(timeout), connect=10.0)
+        client_timeout = httpx.Timeout(float(timeout), connect=min(timeout,get_settings().http_connect_timeout_seconds))
         with httpx.Client(timeout=client_timeout) as client:
             response = client.get(
                 f"{SUPADATA_API_BASE}/transcript",
@@ -112,6 +118,8 @@ def _poll_transcript_job(
     headers: dict[str, str],
     deadline: float,
 ) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     while time.monotonic() < deadline:
         response = client.get(
             f"{SUPADATA_API_BASE}/transcript/{job_id}", headers=headers
@@ -135,7 +143,7 @@ def _poll_transcript_job(
         if "content" in payload:
             return payload
 
-        time.sleep(1.0)
+        time.sleep(get_settings().supadata_poll_interval_seconds)
 
     raise SupadataTranscriptUnavailableError("Supadata transcript request timed out.")
 

@@ -41,3 +41,22 @@ def db_session() -> Session:
         session.rollback()
     Base.metadata.drop_all(engine)
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def block_external_provider_network(monkeypatch):
+    """Normal tests cannot reach external Python HTTP providers; disposable DBs remain loopback-only."""
+    import socket
+    connect = socket.socket.connect
+    resolve = socket.getaddrinfo
+    allowed = {'localhost', '127.0.0.1', '::1', None}
+    def safe_connect(sock, address):
+        if isinstance(address, tuple) and address[0] not in allowed:
+            raise RuntimeError('Tests prohibit external provider connections.')
+        return connect(sock, address)
+    def safe_resolve(host, *args, **kwargs):
+        if host not in allowed:
+            raise RuntimeError('Tests prohibit external provider DNS resolution.')
+        return resolve(host, *args, **kwargs)
+    monkeypatch.setattr(socket.socket, 'connect', safe_connect)
+    monkeypatch.setattr(socket, 'getaddrinfo', safe_resolve)

@@ -1,3 +1,4 @@
+from app.workers.owned_execution import owned_task
 import logging
 
 from app.rag.indexing_service import index_project
@@ -49,7 +50,10 @@ def completion_status_for_content(
     bind=True,
     name="creatorlens.index_project",
 )
+@owned_task("index")
 def index_project_task(self, job_id: str) -> dict[str, str]:
+    from app.core.access import require_principal
+    require_principal()
     project_id, current = job_context(job_id)
     if current in {
         IngestionJobStatus.READY,

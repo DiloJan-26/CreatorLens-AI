@@ -39,7 +39,7 @@ export default function Home() {
                       : "Facebook"}
                 </span>
               ))}
-              <span>No sign-in required</span>
+              <span>Google sign-in / private workspace</span>
             </div>
           </div>
           <LandingComparisonPreview />

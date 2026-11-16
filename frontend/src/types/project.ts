@@ -224,6 +224,11 @@ export type StructuredMetricItem = {
 };
 
 export type StructuredRecommendationItem = {
+  recommendation_id?: string | null;
+  target_content_id?: string | null;
+  target_slot?: ContentSlot | null;
+  experiment?: string | null;
+  limitation?: string | null;
   recommendation: string;
   rationale: string;
   priority: "high" | "medium" | "low";
@@ -231,6 +236,8 @@ export type StructuredRecommendationItem = {
 };
 
 export type MetricStructuredAnswer = {
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "metric";
   summary: string;
   metrics: StructuredMetricItem[];
@@ -239,6 +246,9 @@ export type MetricStructuredAnswer = {
 };
 
 export type ComparisonStructuredAnswer = {
+  decision_status?: string | null;
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "comparison";
   winner: "content_1" | "content_2" | "tie" | "insufficient_evidence";
   confidence: number;
@@ -249,6 +259,9 @@ export type ComparisonStructuredAnswer = {
 };
 
 export type RecommendationStructuredAnswer = {
+  hypothetical_draft?: { target_content_id: string; recommendation_id: string; text: string; status: "hypothesis" } | null;
+  objective?: ComparisonObjective | null;
+  evidence_status?: string;
   answer_type: "recommendation";
   summary: string;
   recommendations: StructuredRecommendationItem[];
@@ -294,7 +307,10 @@ export type ChatHistoryResponse = {
   messages: StoredChatMessage[];
 };
 
+export type ComparisonObjective = "balanced" | "reach" | "engagement" | "creative_quality";
+
 export type ChatStreamRequest = {
+  objective?: ComparisonObjective | null;
   message: string;
   session_id?: string | null;
 };
@@ -408,6 +424,7 @@ export type HookAnalysis = {
 };
 
 export type InsightScores = {
+  policy_version?: string;
   hook_clarity: number;
   problem_solution_clarity: number;
   cta_strength: number;
@@ -421,7 +438,33 @@ export type InsightScores = {
   overall_score: number;
 };
 
+export type EvidenceScoreBreakdown = {
+  score: number | null;
+  status: string;
+  coverage: number;
+  rationale: string;
+  missing_inputs: string[];
+  limitations?: string[];
+  components?: { feature: string; rule: string; source: string; score: number | null; contribution: number | null }[];
+};
+
+export type CreatorScoring = {
+  metrics?: { counts: Record<string, number | null>; rates_percent: Record<string, number | null>; engagement_status: string; views_per_current_creator_size: number | null; publication_date: string | null; observed_at: string | null; limitations: string[] };
+  evidence?: { metric_completeness: number; transcript_status: string; source_reliability: string; limitations: string[] };
+  policy: { version: string };
+  reach: EvidenceScoreBreakdown;
+  engagement: EvidenceScoreBreakdown;
+  public_performance: EvidenceScoreBreakdown;
+  creator_efficiency: EvidenceScoreBreakdown;
+  creative_structure: EvidenceScoreBreakdown;
+  overall: EvidenceScoreBreakdown;
+};
+
 export type ContentInsight = {
+  semantic_analysis?: SemanticAnalysis;
+  semantic_scoring?: CreatorScoring | null;
+  content_id?: string | null;
+  scoring?: CreatorScoring | null;
   slot: string;
   label: string;
   platform: string;
@@ -450,6 +493,8 @@ export type ComparisonInsight = {
 };
 
 export type CreatorInsightSummaryResponse = {
+  goal_comparison?: GoalComparison | null;
+  creator_recommendations?: CreatorRecommendationBundle | null;
   project_id: string;
   content_1?: ContentInsight | null;
   content_2?: ContentInsight | null;
@@ -498,3 +543,93 @@ export type LlmGenerationTestResponse = {
   generated_text?: string | null;
   message?: string | null;
 };
+
+export type RecommendationEvidence = {
+  evidence_id: string;
+  project_id: string;
+  content_id: string;
+  slot: "content_1" | "content_2";
+  platform: string;
+  role: "target" | "comparison_context";
+  source_type: "opening" | "transcript" | "description" | "metric_snapshot";
+  excerpt: string | null;
+  start_time: number | null;
+  end_time: number | null;
+  metric_values: Record<string, number | null>;
+  metric_provenance: Record<string, unknown>;
+  input_revision: string;
+  transcript_revision: string | null;
+  semantic_snapshot_id: string | null;
+};
+
+export type GroundedCreatorRecommendation = {
+  id: string;
+  project_id: string;
+  target_content_id: string;
+  target_slot: "content_1" | "content_2";
+  target_platform: string;
+  selected_objective: string;
+  category: string;
+  detected_weakness: string;
+  observed_signal: string;
+  evidence_status: string;
+  evidence: RecommendationEvidence[];
+  title: string;
+  recommended_change: string;
+  rationale: string;
+  experiment: string;
+  hypothesis: string;
+  limitation: string;
+  basis: string;
+  priority: { label: "high" | "medium" | "low"; score: number; explanation: string };
+  comparison: { selected_objective_status: string; dimension: string | null; dimension_status: string | null };
+  example: { target_content_id: string; method: "deterministic_template"; text: string; limitation: string; source_evidence_ids: string[] } | null;
+};
+
+export type CreatorRecommendationBundle = {
+  policy_version: string;
+  project_id: string;
+  selected_objective: string;
+  status: "ready" | "no_supported_actions" | "unavailable";
+  recommendations: GroundedCreatorRecommendation[];
+  findings: {
+    id: string;
+    target_content_id: string | null;
+    target_slot: string | null;
+    category: string;
+    status: string;
+    observation: string;
+    missing_evidence: string[];
+    limitations: string[];
+    evidence: RecommendationEvidence[];
+  }[];
+  limitations: string[];
+};
+
+
+export type DecisionOutcome = "content_1" | "content_2" | "tie" | "insufficient_evidence" | "incomparable";
+export type DimensionLeader = {
+  dimension: string; metric: string; interpretation: "descriptive" | "heuristic";
+  outcome: DecisionOutcome; winner_slot: ContentSlot | null; winner_content_id: string | null;
+  eligibility: { status: string; reasons: string[]; missing_evidence: string[] };
+  values: Record<string, number | null>; units: string; explanation: string; limitations: string[];
+  difference_content_1_minus_content_2: number | null;
+};
+export type GoalComparison = {
+  project_id: string; selected_objective: ComparisonObjective; outcome: DecisionOutcome;
+  winner_slot: ContentSlot | null; winner_content_id: string | null;
+  decision_policy_version: string; metric_policy_version: string; creative_policy_version: string | null;
+  explanation: string; limitations: string[]; missing_evidence: string[];
+  raw_objective_values: Record<string, number | null>; objective_units: string;
+  eligibility: DimensionLeader["eligibility"];
+  dimension_leaders: Record<string, DimensionLeader>;
+  objective_decisions: Record<ComparisonObjective, DimensionLeader>;
+};
+export type SemanticAnalysis = {
+  status: "pending" | "ready" | "unavailable" | "failed";
+  snapshot_id?: string | null; input_revision?: string; model_id?: string;
+  reason?: string; error_code?: string | null; cache_hit?: boolean;
+  limitations?: string[]; attempts?: number;
+  assessments?: { feature: string; value: string; status: string; explanation: string }[];
+};
+export type ProviderStatus = { provider_emergency_stop: boolean; provider_calls_enabled: boolean; extraction_available: boolean };

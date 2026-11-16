@@ -60,6 +60,8 @@ def _run_actor(
     input_style: str,
     timeout_seconds: int,
 ) -> list[Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     actor_id = actor.replace("/", "~")
     endpoint = f"{APIFY_API_BASE}/acts/{actor_id}/run-sync-get-dataset-items"
     payload = _actor_input(url=url, input_style=input_style)
@@ -69,7 +71,7 @@ def _run_actor(
             endpoint,
             params={"token": token, "timeout": max(timeout_seconds, 30)},
             json=payload,
-            timeout=httpx.Timeout(float(max(timeout_seconds, 30)) + 15, connect=10.0),
+            timeout=httpx.Timeout(float(max(timeout_seconds, 30)) + get_settings().apify_transport_grace_seconds, connect=get_settings().http_connect_timeout_seconds),
         )
         response.raise_for_status()
         data = response.json()

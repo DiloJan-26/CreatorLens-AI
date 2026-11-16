@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import Request, APIRouter, HTTPException, Query, status
 
 from app.schemas.ingestion import IngestionStartResponse, IngestionStatusResponse
 from app.services.ingestion_service import (
@@ -25,9 +25,9 @@ router = APIRouter(prefix="/api/projects", tags=["2. Async Ingestion"])
         "embedding, and Qdrant indexing. Poll the returned `status_url`."
     ),
 )
-def start_ingestion_endpoint(project_id: str) -> IngestionStartResponse:
+def start_ingestion_endpoint(project_id: str, request: Request) -> IngestionStartResponse:
     try:
-        return start_project_ingestion(project_id)
+        return start_project_ingestion(project_id, idempotency_key=request.headers.get("Idempotency-Key"))
     except IngestionProjectNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

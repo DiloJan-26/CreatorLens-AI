@@ -2,6 +2,9 @@ import re
 from typing import Any
 
 from app.insights.insight_models import HookAnalysis
+from app.services.evidence_window import select_evidence_window
+from app.services.evidence_quality import assess_transcript
+from app.models.video import TranscriptSegment
 
 
 QUESTION_TERMS = ("how", "why", "what", "did you know")
@@ -41,14 +44,22 @@ def analyze_hook(
     content_item: dict[str, Any],
     transcript_segments: list[dict[str, Any]],
 ) -> HookAnalysis:
+    clean, quality = assess_transcript([TranscriptSegment.model_validate(s) for s in transcript_segments],
+        duration=content_item.get("duration_seconds"), source=content_item.get("transcript_source"),
+        provenance=(content_item.get("transcript_evidence") or {}).get("provenance"))
+    transcript_segments = [s.model_dump(mode="json") for s in clean]
+    window = select_evidence_window(transcript_segments)
     hook_text = _select_hook_text(content_item, transcript_segments)
+    if quality["status"] == "invalid" or (transcript_segments and not window.text):
+        hook_text = None
 
     if hook_text is None:
         return HookAnalysis(
+            evidence_window={**window.describe(), "transcript_quality": quality["status"], "quality_issues": quality["issues"]},
             hook_text=None,
             hook_type="unavailable",
             hook_score=0,
-            clarity_reason="Hook evidence is unavailable from transcript, caption, or description.",
+            clarity_reason="Verbal hook is not assessable from reliable, timed speech wholly within 0-8 seconds.",
             detected_patterns=[],
         )
 
@@ -58,6 +69,7 @@ def analyze_hook(
     hook_score = _score_hook(normalized, hook_text, detected_patterns)
 
     return HookAnalysis(
+        evidence_window={**window.describe(), "transcript_quality": quality["status"], "quality_issues": quality["issues"]},
         hook_text=_compact_text(hook_text, 420),
         hook_type=hook_type,
         hook_score=hook_score,
@@ -75,40 +87,11 @@ def _select_hook_text(
     if transcript_text:
         return transcript_text
 
-    description = _optional_text(content_item.get("caption")) or _optional_text(
-        content_item.get("description")
-    )
-
-    if description:
-        return _first_sentence(description)
-
-    return None
+    return None  # Written caption/description is not verbal-hook timing evidence.
 
 
 def _hook_from_transcript(segments: list[dict[str, Any]]) -> str | None:
-    clean_segments = [
-        segment
-        for segment in segments
-        if _optional_text(segment.get("text")) is not None
-    ]
-
-    if not clean_segments:
-        return None
-
-    timed_segments = [
-        segment
-        for segment in clean_segments
-        if (start_time := _as_float(segment.get("start_time"))) is not None
-        and start_time <= 8.0
-    ]
-    selected_segments = timed_segments or clean_segments[:2]
-    text = " ".join(
-        str(segment.get("text", "")).strip()
-        for segment in selected_segments
-        if str(segment.get("text", "")).strip()
-    ).strip()
-
-    return text or None
+    return select_evidence_window(segments).text
 
 
 def _classify_hook(

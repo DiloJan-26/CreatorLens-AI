@@ -38,6 +38,13 @@ def run_regression(
     session: Session | None = None,
     persist: bool | None = None,
 ) -> EvaluationRunReport:
+    from app.evaluations.intelligence_models import DATASETS
+    if dataset_name in DATASETS:
+        from app.evaluations.intelligence_runner import run_intelligence_regression
+        if persist and session is None:
+            with database_session() as managed_session:
+                return run_intelligence_regression(dataset_name,session=managed_session,persist=True)
+        return run_intelligence_regression(dataset_name,session=session,persist=(session is not None if persist is None else persist))
     cases = load_dataset(dataset_name)
     fixtures = load_project_fixtures()
     should_persist = (session is not None or is_database_configured()) if persist is None else persist
@@ -162,6 +169,7 @@ def main() -> int:
     parser.add_argument("--dataset", default="creatorlens_core_v1")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--no-persist", action="store_true")
+    parser.add_argument("--strict", action="store_true", help="Also fail CLI on exploratory failures; default V2 exit reflects critical gates.")
     args = parser.parse_args()
 
     report = run_regression(args.dataset, persist=False if args.no_persist else None)
@@ -174,10 +182,14 @@ def main() -> int:
         "total_cases": report.total_cases,
         "passed_cases": report.passed_cases,
         "failed_cases": report.failed_cases,
+        "skipped_cases": report.skipped_cases,
+        "evaluation_details": report.evaluation_details,
         "aggregate_metrics": report.aggregate_metrics,
         "persisted": report.persisted,
         "report_path": str(output),
     }, indent=2))
+    if report.evaluation_details and not args.strict:
+        return 0 if report.evaluation_details['critical_gate']['passed'] else 1
     return 0 if report.failed_cases == 0 else 1
 
 

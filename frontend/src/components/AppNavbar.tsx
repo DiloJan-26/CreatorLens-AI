@@ -1,4 +1,6 @@
 "use client";
+import { AccountMenu,useAccount } from "./AccountProvider";
+import { GoogleSignIn } from "./GoogleSignIn";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -33,6 +35,7 @@ function Brand() {
 }
 export function AppNavbar({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { account } = useAccount();
   const [drawer, setDrawer] = useState(false);
   const [auth, setAuth] = useState(false);
   const [section, setSection] = useState("");
@@ -57,7 +60,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
       !(href === "/analyze" && ["#insights", "#evidence"].includes(section))
     );
   };
-  const publicPage = pathname === "/";
+  const publicPage = pathname === "/" || pathname === "/login" || pathname.startsWith("/auth/");
   const homeLink = (
     <Link
       href="/"
@@ -70,6 +73,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   );
   const navigation = (
     <nav aria-label="Workspace navigation">
+      <Link href="/workspace" className="rail-link">Your analyses</Link>
       <p className="nav-group-label">Workspace</p>
       {creatorLinks.map((l) => (
         <Link
@@ -135,7 +139,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
                 className="button-secondary public-signin"
                 onClick={() => setAuth(true)}
               >
-                Sign in
+                {account ? "Your account" : "Sign in"}
               </button>
               <Link className="button-primary public-demo" href="/analyze">
                 Get started <Icon name="arrow" size={16} />
@@ -179,7 +183,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
               <span className="truncate">{active?.label ?? "CreatorLens"}</span>
             </div>
             <div className="header-actions">
-              <span className="demo-label">Demo mode</span>
+              <AccountMenu />
             </div>
           </header>
         </>
@@ -208,14 +212,14 @@ export function AppNavbar({ children }: { children: ReactNode }) {
                   setAuth(true);
                 }}
               >
-                Sign in
+                {account ? "Your account" : "Sign in"}
               </button>
               <Link
                 href="/analyze"
                 className="button-primary"
                 onClick={() => setDrawer(false)}
               >
-                Explore demo
+                Open workspace
               </Link>
             </div>
           )}
@@ -225,19 +229,9 @@ export function AppNavbar({ children }: { children: ReactNode }) {
       <Dialog
         open={auth}
         onClose={() => setAuth(false)}
-        title="Explore without an account"
+        title="Sign in to CreatorLens"
       >
-        <p className="muted">
-          CreatorLens is currently an open demo. You can use the existing
-          workspace without signing in.
-        </p>
-        <Link
-          href="/analyze"
-          className="button-primary mt-6"
-          onClick={() => setAuth(false)}
-        >
-          Continue to demo <Icon name="arrow" size={16} />
-        </Link>
+        {account ? <AccountMenu/> : <GoogleSignIn/>}
       </Dialog>
     </>
   );

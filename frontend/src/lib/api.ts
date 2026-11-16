@@ -1,3 +1,6 @@
+import { authorizedHeaders,ApiError,sessionExpired } from "./auth-transport";
+import { getComparisonObjective } from "./app-session";
+import type { ComparisonObjective, SemanticAnalysis, ProviderStatus } from "@/types/project";
 import type {
   ChatCitation,
   ChatHistoryResponse,
@@ -32,7 +35,15 @@ import type {
 import type { CostMetricsResponse } from "@/types/cost";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
+
+if (API_BASE_URL) {
+  const url = new URL(API_BASE_URL);
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/" ||
+      url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
+    throw new Error("Authenticated clients require an exact trusted API origin.");
+  }
+}
 
 export async function checkBackend(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
@@ -108,6 +119,7 @@ export async function startProjectIngestion(
 ): Promise<IngestionStartResponse> {
   return request<IngestionStartResponse>(`/api/projects/${projectId}/ingest`, {
     method: "POST",
+    headers: {"Idempotency-Key": `ingest-${projectId}`},
     ...init,
   });
 }
@@ -177,9 +189,10 @@ export async function getMetadataAvailability(
 
 export async function getCreatorInsightSummary(
   projectId: string,
+  objective: ComparisonObjective = getComparisonObjective(projectId),
 ): Promise<CreatorInsightSummaryResponse> {
   return request<CreatorInsightSummaryResponse>(
-    `/api/projects/${projectId}/insights/summary`,
+    `/api/projects/${projectId}/insights/summary?objective=${encodeURIComponent(objective)}`,
   );
 }
 
@@ -257,7 +270,7 @@ export async function streamChatResponse(
   payload: ChatStreamRequest,
   handlers: StreamChatHandlers,
 ): Promise<void> {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_BASE_URL}/api/projects/${projectId}/chat/stream`,
     {
       method: "POST",
@@ -270,7 +283,7 @@ export async function streamChatResponse(
   );
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    throw new ApiError(response.status,await getErrorMessage(response),response.headers.get("Retry-After"));
   }
 
   if (!response.body) {
@@ -307,13 +320,13 @@ export async function streamChatResponse(
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
     cache: "no-store",
     ...init,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    throw new ApiError(response.status,await getErrorMessage(response),response.headers.get("Retry-After"));
   }
 
   return (await response.json()) as T;
@@ -342,6 +355,8 @@ function extractDetail(data: unknown): string | null {
   if ("message" in data && typeof data.message === "string") {
     return data.message;
   }
+
+  if ("detail" in data && data.detail && typeof data.detail === "object") return extractDetail(data.detail);
 
   if ("detail" in data && typeof data.detail === "string") {
     return data.detail;
@@ -553,3 +568,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
+
+
+export function getProviderStatus() {
+  return request<ProviderStatus>("/api/providers/status");
+}
+export function getSemanticAnalysis(projectId: string, slot: ContentSlot, signal?: AbortSignal) {
+  return request<SemanticAnalysis>(`/api/projects/${encodeURIComponent(projectId)}/semantic/${slot}`, { signal });
+}
+export function requestSemanticAnalysis(projectId: string, slot: ContentSlot, retry: boolean) {
+  return request<SemanticAnalysis>(`/api/projects/${encodeURIComponent(projectId)}/semantic/${slot}?allow_inference=true&retry_failed=${retry}`, { method: "POST" });
+}
+
+async function authenticatedFetch(input:RequestInfo|URL, init?:RequestInit) {
+  const response=await fetch(input,{...init,headers:await authorizedHeaders(init?.headers),cache:"no-store",redirect:"error"});
+  if(response.status===401) sessionExpired();
+  if(response.status===403 && typeof window!=="undefined") {
+    const body=await response.clone().json().catch(()=>null);
+    if(body?.detail?.code==="analysis_limit_reached")window.dispatchEvent(new Event("creatorlens_quota_exhausted"));
+  }
+  return response;
+}
+export type AccountUsage={granted:number;completed:number;reserved:number;available:number};
+export type Account={id:string;email:string|null;display_name:string|null;role:string;plan:string;usage:AccountUsage};
+export function getAccount(){return request<Account>("/api/account");}
+export function getAccountUsage(){return request<{balance:AccountUsage;events:{kind:string;reference_id:string;created_at:string}[];analyses:{id:string;project_id:string;state:string;completion_mode:string|null}[]}>("/api/account/usage");}
+export function listOwnedProjects(){return request<{projects: import("@/types/project").ProjectRecord[]}>("/api/projects");}
+export function revokeApplicationSession(){return request("/api/account/logout",{method:"POST"});}
+export function completeAnalysis(projectId:string,metricsOnly:boolean){return request(`/api/projects/${encodeURIComponent(projectId)}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({metrics_only:metricsOnly})});}
+export function getProjectUsage(projectId:string){return request<{analysis_state:string;completion_mode:string|null;assistant_remaining:number;semantic_remaining:Record<string,number>}>(`/api/projects/${encodeURIComponent(projectId)}/usage`);}

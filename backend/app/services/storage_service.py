@@ -206,6 +206,11 @@ def init_db() -> None:
         _ensure_project_columns(connection)
         _migrate_videos_table_for_slots(connection)
         _ensure_video_columns(connection)
+        metric_columns = {row["name"] for row in connection.execute("PRAGMA table_info(metric_sources)")}
+        for name, kind in {"slot": "TEXT", "content_item_id": "TEXT"}.items():
+            if name not in metric_columns:
+                connection.execute(f"ALTER TABLE metric_sources ADD COLUMN {name} {kind}")
+        connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_metric_sources_slot_identity ON metric_sources(project_id, slot, source_platform, metric_scope, source_method) WHERE slot IS NOT NULL")
         _ensure_transcript_columns(connection)
         _ensure_rag_chunk_columns(connection)
         connection.execute(
@@ -483,6 +488,7 @@ def upsert_video_metadata(
             """,
             (normalized_url, video_id),
         )
+        connection.execute("UPDATE videos SET transcript_evidence_json = ? WHERE id = ?", (json.dumps(metadata.transcript_evidence), video_id))
         connection.commit()
 
     record = get_video_by_project_slot(project_id, content_slot)
@@ -499,7 +505,7 @@ def get_cached_extraction(normalized_url: str) -> dict[str, Any] | None:
             """
             SELECT * FROM videos
             WHERE normalized_url = ?
-              AND extraction_status = 'ready'
+              AND extraction_status IN ('ready', 'partial')
               AND transcript_available = 1
               AND content_hash IS NOT NULL
               AND metadata_hash IS NOT NULL
@@ -528,6 +534,7 @@ def get_cached_extraction(normalized_url: str) -> dict[str, Any] | None:
         "content_hash": record["content_hash"],
         "metadata_hash": record["metadata_hash"],
         "transcript_hash": record["transcript_hash"],
+        "captured_at": record["updated_at"],
         "metadata": _metadata_from_video_record(record),
         "segments": [dict(segment) for segment in segments],
     }
@@ -612,11 +619,18 @@ def replace_transcript_segments(
     segments: list[TranscriptSegment],
     slot: str | None = None,
 ) -> None:
+    from app.services.evidence_quality import assess_transcript
+    _, quality = assess_transcript(segments)
+    if quality["rejected_segments"]:
+        raise ValueError("Invalid transcript segments must be quarantined before persistence.")
     init_db()
     timestamp = _utc_timestamp()
     content_slot = _content_slot(slot or platform)
 
     with _connect() as connection:
+        identity = connection.execute("SELECT project_id, slot, platform FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if identity is None or tuple(identity) != (project_id, content_slot, platform):
+            raise ValueError("Transcript source identity does not match project/slot/platform.")
         connection.execute(
             """
             DELETE FROM transcript_segments
@@ -915,6 +929,7 @@ def get_transcript_preview(
         "language_confidence": video["language_confidence"],
         "transcript_source": video["transcript_source"],
         "transcript_source_note": video["transcript_source_note"],
+        "transcript_evidence": video.get("transcript_evidence", {}),
         "segments": segments,
     }
 
@@ -1042,6 +1057,7 @@ def replace_rag_chunks(project_id: str, chunks: list[RagChunk]) -> None:
                 for chunk in chunks
             ],
         )
+        connection.executemany("UPDATE rag_chunks SET evidence_revision = ? WHERE id = ?", [(c.evidence_revision, c.chunk_id) for c in chunks])
         connection.commit()
 
 
@@ -1068,6 +1084,7 @@ def get_rag_chunks(
             title,
             creator,
             text,
+            evidence_revision,
             content_hash,
             chunk_hash,
             embedding_hash,
@@ -1361,235 +1378,69 @@ def save_chat_citations(
         connection.commit()
 
 
-def upsert_metric_source_record(
-    project_id: str,
-    platform: str,
-    source_platform: str,
-    source_method: str,
-    metric_scope: str,
-    url: str | None = None,
-    views: int | None = None,
-    likes: int | None = None,
-    reactions: int | None = None,
-    comments: int | None = None,
-    shares: int | None = None,
-    followers: int | None = None,
-    engagement_rate: float | None = None,
-    confidence: str = "medium",
-    note: str | None = None,
-    record_id: str | None = None,
-) -> dict[str, Any]:
+def upsert_metric_source_record(project_id: str, platform: str, source_platform: str,
+        source_method: str, metric_scope: str, url=None, views=None, likes=None,
+        reactions=None, comments=None, shares=None, followers=None, engagement_rate=None,
+        confidence="medium", note=None, record_id=None, slot=None, content_item_id=None):
     init_db()
+    if slot is not None and slot not in {"content_1", "content_2"}:
+        raise ValueError("Invalid content slot.")
+    if content_item_id is not None:
+        item = get_video_by_project_slot(project_id, slot)
+        if not item or item["id"] != content_item_id:
+            raise ValueError("Metric source content identity does not match project/slot.")
+    if record_id:
+        with _connect() as connection:
+            owner = connection.execute("SELECT project_id FROM metric_sources WHERE id = ?", (record_id,)).fetchone()
+        if owner and owner[0] != project_id:
+            raise ValueError("Metric source belongs to another project.")
+    existing = (get_metric_source_record(project_id, record_id) if record_id else
+        get_latest_metric_source(project_id, source_platform, metric_scope, source_method, slot=slot))
+    if existing and (existing["project_id"] != project_id or existing["slot"] != slot):
+        raise ValueError("Metric source identity cannot be reassigned.")
     timestamp = _utc_timestamp()
-
-    existing = None
-    if record_id is None:
-        existing = get_latest_metric_source(
-            project_id=project_id,
-            source_platform=source_platform,
-            metric_scope=metric_scope,
-            source_method=source_method,
-        )
-
-    metric_source_id = record_id or (
-        str(existing["id"]) if existing is not None else str(uuid4())
-    )
-    created_at = (
-        str(existing["created_at"])
-        if existing is not None and existing.get("created_at")
-        else timestamp
-    )
-
+    values = dict(id=record_id or (existing["id"] if existing else str(uuid4())), project_id=project_id,
+        platform=platform, source_platform=source_platform, source_method=source_method,
+        metric_scope=metric_scope, slot=slot, content_item_id=content_item_id, url=url, views=views,
+        likes=likes, reactions=reactions, comments=comments, shares=shares, followers=followers,
+        engagement_rate=engagement_rate, confidence=confidence, note=note,
+        created_at=existing["created_at"] if existing else timestamp, updated_at=timestamp)
+    columns = list(values)
+    updates = ", ".join(f"{name}=excluded.{name}" for name in columns if name not in {"id", "project_id", "created_at"})
     with _connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO metric_sources (
-                id,
-                project_id,
-                platform,
-                source_platform,
-                source_method,
-                metric_scope,
-                url,
-                views,
-                likes,
-                reactions,
-                comments,
-                shares,
-                followers,
-                engagement_rate,
-                confidence,
-                note,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                platform = excluded.platform,
-                source_platform = excluded.source_platform,
-                source_method = excluded.source_method,
-                metric_scope = excluded.metric_scope,
-                url = excluded.url,
-                views = excluded.views,
-                likes = excluded.likes,
-                reactions = excluded.reactions,
-                comments = excluded.comments,
-                shares = excluded.shares,
-                followers = excluded.followers,
-                engagement_rate = excluded.engagement_rate,
-                confidence = excluded.confidence,
-                note = excluded.note,
-                updated_at = excluded.updated_at
-            """,
-            (
-                metric_source_id,
-                project_id,
-                platform,
-                source_platform,
-                source_method,
-                metric_scope,
-                url,
-                views,
-                likes,
-                reactions,
-                comments,
-                shares,
-                followers,
-                engagement_rate,
-                confidence,
-                note,
-                created_at,
-                timestamp,
-            ),
-        )
+        connection.execute(f"INSERT INTO metric_sources ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)}) ON CONFLICT(id) DO UPDATE SET {updates}", tuple(values.values()))
         connection.commit()
+    return get_metric_source_record(project_id, values["id"])
 
-    record = get_metric_source_record(
-        project_id=project_id,
-        record_id=metric_source_id,
-    )
-    if record is None:
-        raise RuntimeError("Metric source record was not saved.")
 
+def _metric_identity_record(row):
+    if row is None:
+        return None
+    record = dict(row)
+    record["identity_status"] = "bound" if record.get("slot") else "legacy_unresolved"
     return record
 
 
-def get_metric_source_record(
-    project_id: str,
-    record_id: str,
-) -> dict[str, Any] | None:
+def get_metric_source_record(project_id: str, record_id: str):
     init_db()
-
     with _connect() as connection:
-        row = connection.execute(
-            """
-            SELECT
-                id,
-                project_id,
-                platform,
-                source_platform,
-                source_method,
-                metric_scope,
-                url,
-                views,
-                likes,
-                reactions,
-                comments,
-                shares,
-                followers,
-                engagement_rate,
-                confidence,
-                note,
-                created_at,
-                updated_at
-            FROM metric_sources
-            WHERE project_id = ? AND id = ?
-            """,
-            (project_id, record_id),
-        ).fetchone()
-
-    return dict(row) if row is not None else None
+        row = connection.execute("SELECT * FROM metric_sources WHERE project_id = ? AND id = ?", (project_id, record_id)).fetchone()
+    return _metric_identity_record(row)
 
 
-def list_metric_source_records(project_id: str) -> list[dict[str, Any]]:
+def list_metric_source_records(project_id: str):
     init_db()
-
     with _connect() as connection:
-        rows = connection.execute(
-            """
-            SELECT
-                id,
-                project_id,
-                platform,
-                source_platform,
-                source_method,
-                metric_scope,
-                url,
-                views,
-                likes,
-                reactions,
-                comments,
-                shares,
-                followers,
-                engagement_rate,
-                confidence,
-                note,
-                created_at,
-                updated_at
-            FROM metric_sources
-            WHERE project_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (project_id,),
-        ).fetchall()
-
-    return [dict(row) for row in rows]
+        rows = connection.execute("SELECT * FROM metric_sources WHERE project_id = ? ORDER BY updated_at DESC", (project_id,)).fetchall()
+    return [_metric_identity_record(row) for row in rows]
 
 
-def get_latest_metric_source(
-    project_id: str,
-    source_platform: str,
-    metric_scope: str,
-    source_method: str | None = None,
-) -> dict[str, Any] | None:
-    init_db()
-    query = """
-        SELECT
-            id,
-            project_id,
-            platform,
-            source_platform,
-            source_method,
-            metric_scope,
-            url,
-            views,
-            likes,
-            reactions,
-            comments,
-            shares,
-            followers,
-            engagement_rate,
-            confidence,
-            note,
-            created_at,
-            updated_at
-        FROM metric_sources
-        WHERE project_id = ? AND source_platform = ? AND metric_scope = ?
-    """
-    params: tuple[Any, ...]
-
-    if source_method is None:
-        params = (project_id, source_platform, metric_scope)
-    else:
-        query += " AND source_method = ?"
-        params = (project_id, source_platform, metric_scope, source_method)
-
-    query += " ORDER BY updated_at DESC LIMIT 1"
-
-    with _connect() as connection:
-        row = connection.execute(query, params).fetchone()
-
-    return dict(row) if row is not None else None
+def get_latest_metric_source(project_id: str, source_platform: str, metric_scope: str,
+                             source_method: str | None = None, slot: str | None = None):
+    rows = [r for r in list_metric_source_records(project_id) if r["source_platform"] == source_platform
+            and r["metric_scope"] == metric_scope and r.get("slot") == slot
+            and (source_method is None or r["source_method"] == source_method)]
+    return rows[0] if rows else None
 
 
 def delete_metric_source_record(project_id: str, record_id: str) -> None:
@@ -1660,6 +1511,11 @@ def _video_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     record = dict(row)
     record["hashtags"] = json.loads(record.pop("hashtags_json") or "[]")
     record["missing_fields"] = json.loads(record.pop("missing_fields_json") or "[]")
+    if "transcript_evidence_json" not in record:
+        with _connect() as connection:
+            extra = connection.execute("SELECT transcript_evidence_json FROM videos WHERE id = ?", (record["id"],)).fetchone()
+        record["transcript_evidence_json"] = extra[0] if extra else None
+    record["transcript_evidence"] = json.loads(record.pop("transcript_evidence_json") or "{}")
     record["transcript_available"] = bool(record["transcript_available"])
     for field in ("last_extraction_cache_hit", "last_embedding_reused"):
         if record.get(field) is not None:
@@ -1704,6 +1560,7 @@ def _metadata_from_video_record(
         "transcript_language": record["transcript_language"],
         "detected_language": record["detected_language"],
         "language_confidence": record["language_confidence"],
+        "transcript_evidence": record.get("transcript_evidence", {}),
         "transcript_source": record["transcript_source"],
         "extraction_status": record["extraction_status"],
         "error_message": record["error_message"],
@@ -1734,6 +1591,7 @@ def _ensure_video_columns(connection: sqlite3.Connection) -> None:
         "transcript_language": "TEXT",
         "detected_language": "TEXT",
         "language_confidence": "REAL",
+        "transcript_evidence_json": "TEXT",
         "transcript_source": "TEXT",
         "metric_source_note": "TEXT",
         "transcript_source_note": "TEXT",
@@ -1817,6 +1675,7 @@ def _ensure_rag_chunk_columns(connection: sqlite3.Connection) -> None:
     }
 
     required_columns = {
+        "evidence_revision": "TEXT",
         "content_id": "TEXT",
         "slot": "TEXT",
         "embedding_model_name": "TEXT",

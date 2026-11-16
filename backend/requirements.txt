@@ -19,3 +19,5 @@ rapidfuzz>=3.0,<4
 deepeval>=4.3.1,<5
 youtube-transcript-api
 yt-dlp
+
+PyJWT[crypto]==2.15.1

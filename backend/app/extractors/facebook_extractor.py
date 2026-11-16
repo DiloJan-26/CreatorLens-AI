@@ -80,6 +80,7 @@ def extract_facebook_content(
         ),
     )
 
+    metadata.transcript_evidence = {"provenance": transcript_result.provenance if transcript_result else {}}
     return VideoExtractionResult(
         metadata=metadata,
         transcript_segments=transcript_segments,
@@ -87,6 +88,8 @@ def extract_facebook_content(
 
 
 def fetch_facebook_info(url: str) -> dict[str, Any]:
+    from app.extraction.policy import block_legacy_provider
+    block_legacy_provider()
     options = {
         "quiet": True,
         "no_warnings": True,

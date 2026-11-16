@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "methodology": "Agent-authored synthetic relevance judgments; not live Qdrant quality.",
+  "query": "student focus question",
+  "documents": [
+    {
+      "id": "relevant-a",
+      "text": "Students ask a student focus question about timed breaks during study."
+    },
+    {
+      "id": "distractor",
+      "text": "Student Focus Question is a football club name; this passage lists its shirts."
+    },
+    {
+      "id": "relevant-b",
+      "text": "A quiet pause during study can be tested before returning to the task."
+    }
+  ],
+  "relevant_ids": [
+    "relevant-a",
+    "relevant-b"
+  ],
+  "rationale": "The first and third passages concern study attention. The second uses overlapping terms as a club name and is a distractor."
+}
