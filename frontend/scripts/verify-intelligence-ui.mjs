@@ -73,3 +73,10 @@ const chatSource=fs.readFileSync(path.join(sourceRoot,"components/CreatorChatPan
 assert(/message: question,\s*objective,/.test(chatSource),'Selected objective must be sent to the existing stream API');
 assert(chatSource.includes('!message.structuredAnswer'),'Structured answers must not duplicate retrieved source lists');
 console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach default, three objective buttons, objective controls without dropdowns, completed-progress removal and chat objective transport.");
+
+const {CreatorInsightSummaryPanel}=load(path.join(sourceRoot,"components/CreatorInsightSummaryPanel.tsx"));
+const insights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",initialSummary:summary});
+for(const title of ["Run AI creative review","Side-by-side assessment","What each video does well","The opening, under the lens"])assert(insights.includes(title));
+assert(insights.includes("disabled"));assert(!insights.includes("AI connection diagnostic"));
+assert(!insights.includes("legacy-1.0.0"));
+console.log("Insights flow contracts passed: explicit disabled-by-default AI action, distinct sections, missing scores stay unavailable, no diagnostic inference control.");

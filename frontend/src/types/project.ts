@@ -571,6 +571,7 @@ export type GroundedCreatorRecommendation = {
   selected_objective: string;
   category: string;
   detected_weakness: string;
+  signals?: { feature: string; classification: string }[];
   observed_signal: string;
   evidence_status: string;
   evidence: RecommendationEvidence[];
