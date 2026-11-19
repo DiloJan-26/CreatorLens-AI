@@ -6,7 +6,6 @@ import { ComparisonHighlights } from "./ExecutiveInsightSnapshot";
 import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
 import Link from "next/link";
 import { GoalComparisonPanel } from "./GoalComparisonPanel";
-import { SemanticAnalysisPanel } from "./SemanticAnalysisPanel";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -37,7 +36,6 @@ import {
 import {
   clearActiveProjectId,
   getActiveProjectId,
-  getComparisonObjective,
   setActiveProjectId,
 } from "@/lib/app-session";
 import type {
@@ -574,9 +572,10 @@ export function ComparisonWorkspace() {
             hidden={activeTab !== "insights"}
             className="section-panel"
           >
-            <div className="insights-heading"><h2><Icon name="bulb" size={21}/> Creative insights</h2><button type="button" className="button-primary" disabled={creativeBusyFor===projectDetail?.project_id} onClick={()=>void runCreativeReview()}>{creativeBusyFor===projectDetail?.project_id?"Starting review...":"Review both videos"}</button></div><p className="muted text-xs mb-3">Uses your AI analysis allowance.</p>
-            <div className="grid gap-4 lg:grid-cols-2 my-4">{(["content_1", "content_2"] as const).map(slot => <SemanticAnalysisPanel key={`${projectDetail!.project_id}-${slot}`} projectId={projectDetail!.project_id} slot={slot} onReady={() => { void getCreatorInsightSummary(projectDetail!.project_id,getComparisonObjective(projectDetail!.project_id)).then(setInsightSummary).catch(() => setError("Could not reload the updated semantic summary.")); }} />)}</div>
             <CreatorInsightSummaryPanel
+              key={projectDetail?.project_id}
+              onReview={runCreativeReview}
+              reviewBusy={creativeBusyFor===projectDetail?.project_id}
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}
               initialSummary={insightSummary}

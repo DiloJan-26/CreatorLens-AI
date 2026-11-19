@@ -1,13 +1,17 @@
 "use client";
+import { Icon } from "./ui";
 import { uiConfig } from "@/lib/ui-config";
 import { useEffect, useRef, useState } from "react";
 import { getSemanticAnalysis } from "@/lib/api";
 import type { ContentSlot, SemanticAnalysis } from "@/types/project";
 
-export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId: string; slot: ContentSlot; onReady: () => void }) {
+export function SemanticAnalysisPanel({ projectId, slot, onReady, onStatusChange, compact=false }: { projectId: string; slot: ContentSlot; onReady: () => void; onStatusChange?: (slot:ContentSlot,value:SemanticAnalysis)=>void; compact?:boolean }) {
   const [analysis, setAnalysis] = useState<SemanticAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const statusCallback=useRef(onStatusChange);
+  useEffect(()=>{statusCallback.current=onStatusChange;},[onStatusChange]);
+  useEffect(()=>{if(analysis)statusCallback.current?.(slot,analysis);},[analysis,slot]);
   const submitting = useRef(false);
   const polls = useRef(0);
   const readyCallback = useRef(onReady);
@@ -50,6 +54,7 @@ export function SemanticAnalysisPanel({ projectId, slot, onReady }: { projectId:
     : analysis?.error_code === "STALE_INPUT" ? "Evidence changed"
     : analysis?.status === "unavailable" && !analysis.snapshot_id ? "Ready for creative review"
     : analysis ? {pending:"Review in progress",ready:"Creative review ready",failed:"Review needs attention",unavailable:"Review unavailable"}[analysis.status] : "Loading review status";
+  if(compact)return <article className="review-slot" aria-label={`${slot} semantic analysis`}><span className={`review-dot review-${analysis?.status??"loading"}`}/><div><strong>{slot==="content_1"?"Content 1":"Content 2"}</strong><p role="status">{state}</p>{error&&<p role="alert" className="review-error">{error}</p>}</div><button type="button" className="icon-button" disabled={busy} onClick={()=>void refresh()} aria-label={`Refresh ${slot==="content_1"?"Content 1":"Content 2"} review`}><Icon name="refresh" size={16}/></button></article>;
   return <section className="ui-panel p-4" aria-label={`${slot} semantic analysis`}>
     <h3 className="font-semibold">{slot === "content_1" ? "Content 1" : "Content 2"} / Creative review</h3>
     <p className="mt-2 font-medium" role="status">{state}</p>
