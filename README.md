@@ -1,729 +1,527 @@
 # CreatorLens AI
 
-[![Backend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml)
-[![Frontend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml)
-[![Docker Build CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml/badge.svg?branch=main)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml)
+[![Backend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/frontend-ci.yml)
+[![Docker Build CI](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml/badge.svg?branch=Dev-Staging)](https://github.com/DiloJan-26/CreatorLens-AI/actions/workflows/docker-build.yml)
 
-### Evidence-grounded, multi-cloud RAG intelligence for short-form content
+### Evidence-grounded creator intelligence with hybrid RAG, explainable analytics and LLMOps
 
-CreatorLens AI analyzes stored YouTube, Instagram, or Facebook content comparisons; new admitted extraction currently supports bounded public YouTube videos. The engine turns confirmed metadata, transcripts, creative structure, and engagement signals into defensible creator insights. It combines deterministic analytics with hybrid retrieval and structured LLM reasoning so every factual conclusion remains traceable to source evidence.
+CreatorLens AI is an authenticated content-intelligence platform that compares two YouTube videos using public metrics and transcript evidence. It combines **Retrieval-Augmented Generation (RAG)** with **deterministic scoring and recommendations**, giving creators traceable findings and a cited AI Assistant for deeper analysis.
 
-> Built as a production-style AI engineering case study: asynchronous ingestion, vector retrieval, constrained generation, evaluation, LLM observability, and a cost-controlled multi-cloud deployment.
+> Built with Python, FastAPI, LangChain, Gemini, FastEmbed, Qdrant, PostgreSQL and Next.js; deployed across Render, Azure Container Apps and Vercel.
+
+[**Open CreatorLens AI**](https://creator-lens-ai.vercel.app/)
 
 ---
 
 ## Executive summary
 
-Most content-analysis demos send a transcript to an LLM and display unverified prose. CreatorLens AI treats the problem as an evidence system.
+CreatorLens AI connects the full AI application lifecycle: evidence ingestion, validation, embedding, retrieval, generation, evaluation and observability.
 
-The platform normalizes two public content URLs, runs extraction asynchronously, records confirmed metadata and timed transcript evidence, builds typed retrieval chunks, indexes them in Qdrant, and routes each question through the appropriate retrieval strategy. Metric questions bypass vector search when structured data can answer them directly; comparison questions balance evidence across both contents; hook questions prioritize early transcript segments. Gemini produces internally structured answers that are validated, citation-checked, and streamed to the UI.
+A Celery worker extracts metadata and native captions, validates language and timestamps, persists versioned evidence, and indexes typed chunks in Qdrant. The deterministic engine calculates independent performance signals and produces evidence-triggered recommendations. Both the Insights page and the Assistant consume these same results.
 
-The same workflow is observable end to end through persisted retrieval and LLM runs, LangSmith traces, token and latency telemetry, regression datasets, and a deployed evaluation dashboard.
+The RAG pipeline routes factual questions directly to structured data and uses hybrid retrieval for deeper explanations. Gemini generates schema-constrained answers through LangChain; backend validation checks citations, numerical claims and recommendation identity before SSE delivery. Google OAuth through Supabase, project ownership, durable quotas and provider admission govern access and execution.
 
 ## Project status
 
-**This checkout includes the V2 intelligence engine and a local authentication/ownership integration.** The new account migration, hosted Google OAuth flow and coordinated deployment have not yet passed live acceptance. Local offline checks are distinct from production verification. Private API access always requires Google/Supabase authentication and ownership. External providers stay suspended by the default-on emergency stop until separately approved account, pricing and budget acceptance.
+**Implemented:** authenticated creator workspace, asynchronous analysis, deterministic insights, streaming RAG Assistant, evaluation and LLM observability.
 
-| Delivery area | Accepted state |
+| Delivery area | Implementation |
 | --- | --- |
-| Product experience | Implemented analysis, evidence, structured chat, evaluation, LLMOps and account views; current-checkout cloud acceptance pending |
-| Backend platform | FastAPI APIs, durable PostgreSQL state, hybrid retrieval, structured generation, and observability |
-| Async ingestion | Redis-backed Celery processing on Azure Container Apps with persisted progress and graceful partial readiness |
-| Quality engineering | Offline backend/frontend regressions, synthetic authentication/security tests, deterministic evaluation and disposable-PostgreSQL CI gates; see current local report |
-| Delivery controls | Required backend, frontend, evaluation, and Docker checks enforced on production pull requests |
-| Protection acceptance | Successful changes are admitted; intentional backend and frontend failures are confirmed to block merging |
+| Product | Google sign-in, private projects, comparison, insights, evidence and chat |
+| Intelligence | Independent metrics, opening observations and prioritized experiments |
+| RAG | Five query modes, hybrid retrieval, deterministic reranking and grounded generation |
+| Backend | FastAPI services, PostgreSQL repositories, durable jobs and usage accounting |
+| Quality | Unit/integration suites, versioned offline evaluation and PostgreSQL migration checks |
+| Cloud delivery | Docker, GitHub Actions, Render API, Azure worker and Vercel frontend |
 
-## Authenticated application access
-
-Supabase manages Google OAuth and sessions; FastAPI verifies ES256 access JWTs against configured public JWKS. Application profiles, nullable project ownership, five lifetime analysis credits and durable operation reservations stay in PostgreSQL. Historical ownerless projects remain quarantined. No service-role key or client-supplied owner is used.
-
-Google/Supabase authentication is mandatory in every API environment. Configure the trusted Supabase URL, issuer and JWKS; missing verification fails closed. There are no demo/access-mode or authentication enable switches. `PROVIDER_EMERGENCY_STOP=true` suspends billable execution without hiding owned existing results. Releasing it still requires durable quotas, supported providers, bounded requests and user/global budgets. Only bounded YouTube/Supadata extraction is approved for new provider work; legacy Apify/Deepgram and new Instagram/Facebook extraction remain blocked. Supadata extraction uses the existing API key; provider-plan attestations and a manually configured credit pool are not required. Optional pricing metadata never blocks extraction when expired or unavailable, and unknown charges remain unknown. Gemini retains its existing model-pricing admission checks.
-
-The recommended initial deployment needs **10 Render values, 7 Azure worker values and 4 public Vercel values**, including the explicit default-on provider stop on both servers. Approved product limits are central defaults, not required dashboard overrides. See `docs/CreatorLens-Intelligence-v2/Deployment-Environment-Matrix.md` and `Production-Configuration-Simplification.md`. Source migration head remains `20261115_0014`; final-source PostgreSQL CI and real OAuth acceptance remain required. No cloud deployment or actual environment-file modification was performed.
-
-Landing-page Sign in and workspace entry buttons start Google OAuth directly, with no app sign-in dialog. First-time and returning users share the same flow. Signed-in users see a profile menu with their name, Google photo or initials, account allowance and Sign out.
-
-From `frontend/`, run `npm run test:auth` for mocked SDK/transport checks and `npm run test:ui` for presentation contracts. These do not prove live Google login or browser acceptance. The detailed local handoff is in `docs/CreatorLens-Intelligence-v2/Phase-10C-Authentication-Implementation.md`; `docs/` remains ignored unless you explicitly choose to track selected documents.
+Recorded validation results and release-verification boundaries are listed under [Validation evidence](#validation-evidence).
 
 ## Engineering highlights
 
 | Capability | Implementation signal |
 | --- | --- |
-| Evidence-grounded RAG | Typed metadata, description, hook, and transcript chunks with backend-owned citation labels |
-| Retrieval intelligence | Query routing, semantic + keyword hybrid scoring, source boosts, deterministic reranking, and slot balancing |
-| Structured generation | Pydantic answer contracts, versioned YAML prompts, citation validation, and defensive JSON fallback parsing |
-| Deterministic reasoning | Confirmed metric comparisons and creator insight scores execute without depending on LLM inference |
-| Asynchronous processing | Celery ingestion worker on Azure Container Apps with Redis Cloud as broker/result backend |
-| Durable state | PostgreSQL repositories, Alembic migrations, persisted jobs, retrieval runs, evaluations, chats, and LLM telemetry |
-| RAG evaluation | RAGAS + DeepEval contracts, deterministic rubrics, forbidden-claim checks, and curated regression fixtures |
-| LLMOps | Nested LangSmith traces plus model, prompt, token, latency, source-balance, fallback, and error telemetry |
-| Cost-aware architecture | Local FastEmbed embeddings, content-hash reuse, cached extraction artifacts, bounded evaluation, and explicit unavailable-cost handling |
-| Multi-cloud operations | Vercel, Render, Neon, Redis Cloud, Qdrant Cloud, Azure Container Apps, ACR, and Log Analytics |
+| Evidence-grounded RAG | Metadata, description, opening and transcript chunks with stable source identities and revision-aware citations |
+| Hybrid retrieval | FastEmbed/Qdrant similarity combined with lexical overlap, source relevance and two-video balancing in the [reranker](backend/app/rag/reranker.py) |
+| Structured LLM generation | Versioned YAML prompts and [Pydantic answer schemas](backend/app/llm/structured_outputs.py) for metric, comparison and recommendation responses |
+| Grounding and safety | [Claim validation](backend/app/llm/assistant_grounding.py) against canonical values, citation ownership and recommendation targets; retrieved text treated as untrusted data |
+| Explainable decision systems | [Deterministic intelligence](backend/app/insights/observed_intelligence.py) with independent eligibility, rational tie arithmetic and evidence-bound recommendation rules |
+| Authentication and authorization | Supabase Google OAuth, [ES256 JWT verification](backend/app/core/identity.py), trusted issuer/audience checks and project-level ownership |
+| Distributed execution | Celery jobs, PostgreSQL [dispatch outbox](backend/app/workers/dispatch_outbox.py), stable task identities and idempotent provider admission |
+| Evaluation engineering | RAGAS retrieval metrics, DeepEval test cases, deterministic rubrics and separate false-accept/false-reject regressions |
+| LLMOps | LangSmith traces, model/prompt attribution, token accounting and [effective-date cost estimation](backend/app/llm/cost_estimation.py) |
+| Cost-aware processing | Cached extraction, reusable embeddings, bounded provider requests and durable quota/budget reservations |
 
 ## Product capabilities
 
-- Compare any supported Content 1 / Content 2 platform combination.
-- Extract confirmed public metrics without estimating unavailable values.
-- Recover transcripts through a layered caption and speech-to-text pipeline.
-- Score public performance, creator-size efficiency, creative structure, and evidence confidence.
-- Compare hooks using timestamped evidence from the opening seconds.
-- Ask metric, comparison, transcript, or recommendation questions through streaming chat.
-- Inspect evidence chunks, retrieval behavior, citations, and structured answers.
-- Review persisted evaluation runs and case-level quality gates.
-- Inspect LLM tokens, retrieval/generation latency, prompt versions, source balance, and trace coverage.
+- Compare observed reach, like rate, comment rate and current-audience efficiency independently.
+- Review opening and description observations with source excerpts and evidence revisions.
+- Get prioritized, testable recommendations tied to the correct video.
+- Ask metric, explanation, transcript and improvement questions through cited streaming chat.
+- Manage private analyses and inspect account usage through an authenticated workspace.
+- Inspect evaluation and operational telemetry through authorized engineering views.
 
-Supported sources:
-
-| Platform | Inputs | Evidence strategy |
+| Source | Current role | Boundary |
 | --- | --- | --- |
-| YouTube | Shorts, watch URLs, and `youtu.be` URLs | Public metadata, captions, Supadata/Apify fallback, and audio transcription when required |
-| Instagram | Reels, posts, and public video URLs | Public extraction with Deepgram transcription when public audio is available |
-| Facebook | Reels, watch URLs, and public video posts | Public extraction with Deepgram transcription when public audio is available |
-
-## Goal-aware comparison
-
-The existing insight-summary endpoint accepts `?objective=balanced|reach|engagement|creative_quality` and returns the canonical `goal_comparison` contract under `goal-comparison-1.0.0`. It includes the selected decision, all four objective decisions, six independent dimensional leaders, stable content IDs, supporting values, evidence references and explicit eligibility. Winner selection is deterministic and performs no Gemini inference.
-
-Reach and Engagement work without semantic analysis. Balanced and Creative Quality require compatible current semantic snapshots. Cross-platform metric comparisons remain descriptive without a winner; semantic creative comparison uses a shared textual rubric with matching versions and coverage. Heuristic tie tolerances are explicit and do not represent statistical confidence. Existing `comparison` fields remain labeled legacy for later consumer migration. No Phase 4 cloud deployment was performed.
-
-## Evidence-grounded creator recommendations
-
-The insight summary adds `creator_recommendations` under `creator-recommendations-1.0.0`. It consumes the selected `goal_comparison` decision and current validated semantic snapshots. Fixed rules identify supported individual weaknesses, attach owned excerpts/revisions, and propose specific manual experiments. A weaker count or unavailable metric alone is not a creative defect. Winning videos can receive advice; ties never select a default target.
-
-Recommendations expose stable project/content IDs, observed labels, trigger rules, evidence provenance, priority breakdowns, actions, experiments and limitations. Ordinal priority combines severity, evidence support, objective relevance and actionability; overlapping interventions merge without a priority bonus. At most five actions are returned. Reach/efficiency remain descriptive where actionable creative evidence is absent; eligible Engagement can support a controlled interaction experiment without asserting a creative cause.
-
-The Insights UI presents V2 actions and supporting evidence, with legacy advice in a labeled disclosure. Ordinary GET requests perform no inference, refresh, queue submission or recommendation persistence. The Assistant now consumes these canonical contracts for decisions and supported experiments; legacy advice is not used as a V2 fallback. No live rollout or new migration is included in this change.
-
-## Intelligence evaluation
-
-The existing evaluation service now includes `creatorlens_intelligence_v2` (133 offline cases) and `creatorlens_intelligence_ci_v2` (23 critical cases), version `2.0.0`, alongside the unchanged legacy 20-case core and five-case smoke datasets. Reports separate deterministic contracts, mocked-model behavior, synthetic retrieval, critical gates, exploratory failures and explicit skips. They preserve actual outputs, expected contracts, failure reasons, methodology and dataset fingerprints in the existing history tables.
-
-The initial full baseline contains three visible exploratory failures: a forged recommendation-priority validation gap, a suppressed valid reach paraphrase, and an accepted indirect sentiment claim. These findings were retained in the historical baseline and subsequently remediated through canonical metric-claim validation, source-aware sentiment safeguards and full deterministic recommendation verification. The post-remediation baseline is **119 passed, 0 failed and 14 skipped**, with strict execution passing and the original dataset expectations unchanged. Independent human semantic review, multilingual reference quality and live Gemini/Qdrant acceptance remain pending. No combined semantic-accuracy percentage is reported.
-
-Run offline without provider credentials from `backend/`:
-
-```powershell
-.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_ci_v2
-.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2
-```
-
-Default V2 CLI success means all curated critical contracts passed. Add `--strict` to fail on exploratory findings too. Reports and the read-only dashboard always retain failures/skips. CI publishes bounded JSON artifacts; it does not invoke a paid judge or live providers. See `backend/app/evaluations/fixtures/ANNOTATION-GUIDE.md` before approving reference labels.
-
-## Canonical RAG Assistant
-
-The Assistant resolves Balanced, Reach, Engagement or Creative Quality from the question and optional selected objective. Deterministic metric, comparison, insight and supported-recommendation requests read the same canonical intelligence contracts as Insights, without Gemini or vector retrieval. Missing Balanced evidence still permits eligible Reach and Engagement observations.
-
-Deeper questions reuse the existing five-mode retrieval pipeline and Gemini client. Current project/content ownership, SQL source text, revisions and timestamp ranges are checked before evidence enters the prompt. Structured output is checked against canonical winners, metric values, recommendation IDs, targets and priorities; malformed or rejected output falls back to available canonical facts. Qualitative explanations remain explicitly evidence-limited, and citation matching is not claimed to prove semantic entailment.
-
-The existing SSE/history/telemetry flow remains intact. The chat UI exposes the selected objective and evidence status instead of numerical model confidence. Prompt-injection defenses treat retrieved material as untrusted data; offline mocked regressions cover these boundaries, not live model robustness. Cloud rollout remains deferred.
-
-## Semantic creative analysis
-
-An optional, explicitly queued Gemini operation now extracts versioned creative labels from validated transcript and description evidence. `POST /api/projects/{project_id}/semantic/{slot}?allow_inference=true` queues the existing Celery worker; GET only reads compatible persisted snapshots. This operation can incur Gemini charges and is deferred to the coordinated release for live acceptance.
-
-Strict validation binds feature references to content identity, source excerpts, timestamps and evidence revision. Fixed deterministic rules map accepted labels into `semantic-creative-1.0.0`; Gemini supplies no scores or winners. Insight responses expose `semantic_analysis` and nullable `semantic_scoring` separately from legacy and Phase 2 results. A new additive semantic-snapshot migration is included. Offline mocks verify the implementation; live Gemini and PostgreSQL migration acceptance remain outstanding.
-
-## Versioned deterministic scoring
-
-The insight summary API now returns `content_1.scoring` and `content_2.scoring` under policy `creator-insight-2.0.0`. These objects preserve unavailable scores as null, expose metric definitions, sample sufficiency, feature contributions and calculation coverage, and separate evidence assessment from quality. Engagement scoring requires complete platform-defined interactions and at least 1,000 views. These thresholds and weights are uncalibrated heuristics.
-
-Existing `scores` and comparison winner fields retain `legacy-1.0.0` for client, recommendation and Assistant compatibility. The original formulas documented below describe that legacy policy. They are not authoritative V2 decisions. The Insights view labels both versions; The scoring objects alone do not select winners; `goal_comparison` now supplies objective-specific decisions when eligible. In V2, reach and engagement are separate; public performance requires both; current-audience efficiency is nullable; overall requires performance and creative evidence and renormalizes eligible weights 0.35/0.30/0.25 without a confidence bonus. No cloud rollout of this upgrade has been performed.
+| Public YouTube videos | Active bounded extraction using Supadata native transcripts and metadata | Videos up to the configured duration limit; missing fields remain explicit |
+| YouTube Data API v3 | Optional enrichment of missing public statistics, publication date and subscriber count | Requires a configured API key, quota and provider admission |
+| Instagram/Facebook and older extraction adapters | Historical compatibility in stored data and source code | New production extraction is not enabled by their presence |
 
 ## Scope Justification
 
 ### What problem does CreatorLens AI solve?
 
-Creators and marketing teams can usually see **what** happened—views, likes, comments, or watch-page metadata—but those numbers do not explain **why one creative worked better, which evidence supports that conclusion, or what should change next**. Generic LLM analysis has the opposite problem: it can produce fluent recommendations, but without a controlled evidence layer it may invent metrics, overlook missing data, or favor whichever transcript fragment happens to appear first.
+Creators can see views and likes, but deciding what to change requires connecting those numbers to the content itself. Generic AI feedback can sound convincing while mixing up videos, overlooking missing data or inventing explanations.
 
-CreatorLens AI closes that gap by turning two public content items into a comparable evidence model:
+CreatorLens AI turns public evidence into an inspectable analysis:
 
 ```text
-confirmed performance signals
-        +
-creative evidence from hooks, captions, CTAs, and transcripts
-        +
-creator-size and metadata-confidence context
-        ↓
-traceable comparison, explanation, and next-action recommendations
+Confirmed metrics + validated transcripts and descriptions
+                           |
+          Independent comparisons and supported observations
+                           |
+          Prioritized experiments + cited RAG explanations
 ```
 
-It is not another social-media dashboard and it is not an unconstrained “ask an LLM” wrapper. It is a decision-support system for explaining relative creative performance from the public evidence that is actually available.
+The result distinguishes observed performance from proposed creative changes. Every finding retains its supporting value or excerpt, and every recommendation identifies the video it concerns.
 
 ### Who needs it?
 
-| User | Practical need | CreatorLens AI outcome |
-| --- | --- | --- |
-| Individual creator | Understand why one post outperformed another | Hook, structure, CTA, audience, and performance comparison |
-| Social media strategist | Review multiple creative directions consistently | Repeatable evidence and score framework instead of subjective feedback alone |
-| Brand or growth team | Compare campaign creatives across channels | Normalized cross-platform evidence with provenance and limitations |
-| Agency analyst | Explain recommendations to a client | Citation-backed findings and inspectable source material |
-| Content lead | Turn a successful post into a learning reference | Transferable patterns and prioritized improvements for the weaker content |
-| AI/ML reviewer | Inspect whether an AI answer is grounded | Retrieval traces, structured output, evaluation results, and explicit missing evidence |
+| User | Practical outcome |
+| --- | --- |
+| Creator | Compare two videos and choose a supported experiment for the next version |
+| Content strategist | Review reach, response and messaging as separate dimensions |
 
 ### Real-world use cases
 
-1. **Creative postmortem:** compare a strong and weak post after publication to identify differences in hook clarity, positioning, CTA, and confirmed performance.
-2. **Cross-platform adaptation:** compare how related ideas performed on YouTube, Instagram, or Facebook before adapting the next version.
-3. **Content iteration:** use a proven Content 1 as the evidence-backed reference for improving Content 2.
-4. **Competitive research:** compare public competitor content without requiring access to private analytics, while clearly respecting the limits of public data.
-5. **Client reporting:** replace unsupported opinions with traceable claims, citations, confidence notes, and missing-data warnings.
-6. **RAG quality demonstration:** show how retrieval, structured generation, evaluation, and observability work in a realistic AI product rather than a toy chatbot.
-
-The product performs request-driven analysis and streams answers once evidence is ready. It is not a continuous social-listening or real-time platform firehose.
+1. Compare two explanations of the same topic using public response signals and opening evidence.
+2. Review whether the subject and learning takeaway appear early in an educational video.
+3. Test a more specific introduction or description without claiming a guaranteed performance uplift.
+4. Demonstrate grounded RAG with deterministic bypass, source attribution and observable model execution.
 
 ### Why compare two videos instead of scoring only one?
 
-A single content score can describe one item, but it lacks a reference point. A score of `7/10` does not by itself reveal which creative difference matters or whether a recommendation is specific to that content. Pairwise comparison creates a practical counterfactual-style review: **what is present in the stronger example that is absent or weaker in the other?**
+Pairwise review gives a useful reference while keeping the dimensions separate. One video can lead in lifetime views and another in like rate. The two-slot design also makes retrieval balance, content identity and recommendation attribution testable.
 
-The two-slot design enables CreatorLens AI to:
-
-- compare like-for-like evidence rather than return generic best practices;
-- distinguish raw reach from creator-size-adjusted efficiency;
-- identify hook, CTA, caption, and problem-solution differences;
-- balance retrieval so both contents appear in the LLM context;
-- produce a supported winner, tie, or `insufficient_evidence` result;
-- generate recommendations for Content 2 using Content 1 as a concrete reference.
-
-The deterministic scoring functions can technically evaluate one content item, and the system already degrades safely when only one item is available. The primary product workflow intentionally requires two URLs because comparative diagnosis—not isolated grading—is the differentiated use case. A future single-content mode could reuse the same scoring engine against historical, category, or creator-specific benchmarks, but no such benchmark dataset is claimed today.
+The comparison is observational: different publication dates, audiences and collection times prevent causal conclusions.
 
 ### What makes the scope distinctive?
 
-| Common approach | CreatorLens AI approach |
+| Engineering choice | Why it matters |
 | --- | --- |
-| Send raw transcript to an LLM | Build typed, timestamped, source-aware evidence first |
-| Ask the model to score quality | Calculate core scores with versioned deterministic rules |
-| Use vector similarity for every question | Route metric questions directly to structured metadata |
-| Retrieve whichever chunks rank highest | Add keyword relevance, source boosts, and two-slot balance |
-| Display plausible prose | Validate structured output and whitelist citations |
-| Hide incomplete extraction | Preserve `Unavailable`, confidence notes, and limitations |
-| Evaluate manually during demos | Run curated RAGAS/DeepEval regression cases and persist results |
-| Treat tracing as an afterthought | Trace retrieval → prompt → LLM → citations and persist operational telemetry |
+| Shared intelligence contract | The UI and Assistant use the same calculations, leaders and recommendation targets |
+| Query-specific execution | Direct factual answers avoid unnecessary retrieval and model calls |
+| Independent metric eligibility | Missing comments or subscriber counts do not suppress a valid Reach or Like Rate result |
+| Source-aware retrieval | Evidence selection considers the question, source type and both content identities |
+| Versioned evidence and policies | Stored findings can be traced to their inputs and reproduced |
+| Quality and operational telemetry | Retrieval behavior, grounding failures, token usage and estimated cost are inspectable |
 
 ### Scope boundaries
 
-- Public metrics are snapshots and may differ from private creator analytics or later platform values.
-- Cross-platform metrics are not assumed to be perfectly equivalent; platform and source provenance remain visible.
-- The system provides evidence-grounded diagnostic signals, not causal proof or guaranteed predictions of virality.
-- Missing fields reduce confidence and are never converted into estimated values.
-- Recommendations are decision support for a human creator or strategist, not autonomous publishing decisions.
+The active extraction workflow supports bounded public YouTube videos. Public counts describe observed activity, not retention, audience sentiment, revenue or causal effects. Opening rules identify textual patterns rather than measure overall creativity. The current dictionary policy supports declared English evidence; multilingual generation quality is not claimed from those rules.
 
 ## CreatorLens AI Logic
 
-CreatorLens AI uses a **hybrid deterministic + retrieval + generative architecture**. The LLM is deliberately placed near the end of the pipeline, after evidence collection, scoring, and retrieval.
-
 ```mermaid
 flowchart TD
-    URLS[Two public content URLs] --> EXTRACT[Extract confirmed metadata + transcripts]
-    EXTRACT --> SNAPSHOT[(Versioned evidence snapshots)]
-    SNAPSHOT --> RULES[Deterministic insight engine]
-    SNAPSHOT --> CHUNKS[Typed evidence chunks]
-    CHUNKS --> VECTOR[FastEmbed + Qdrant]
+    SIGNIN[Google sign-in through Supabase] --> AUTH[Verified identity and project ownership]
+    AUTH --> INGEST[Bounded asynchronous extraction]
+    INGEST --> DATA[(Versioned metrics and transcript evidence)]
+    DATA --> RULES[Deterministic insights and recommendations]
+    DATA --> INDEX[Typed chunks and FastEmbed embeddings]
+    INDEX --> QDRANT[(Qdrant)]
     QUESTION[User question] --> ROUTER[Intent and retrieval-mode router]
-    ROUTER -->|metric question| DIRECT[Structured metadata answer]
-    ROUTER -->|reasoning question| HYBRID[Hybrid search + deterministic reranking]
-    VECTOR --> HYBRID
-    RULES --> CONTEXT[Evidence context]
-    HYBRID --> CONTEXT
-    CONTEXT --> LLM[Gemini synthesis]
-    LLM --> VALIDATE[Pydantic schema + citation validation]
-    DIRECT --> RESPONSE[Structured answer + readable stream]
-    VALIDATE --> RESPONSE
+    RULES --> CONTEXT[Canonical intelligence context]
+    ROUTER -->|Metric or supported direct answer| DIRECT[Deterministic response]
+    ROUTER -->|Deeper explanation| SEARCH[Hybrid retrieval and reranking]
+    QDRANT --> SEARCH
+    SEARCH --> CONTEXT
+    CONTEXT --> GEMINI[Gemini grounded synthesis]
+    GEMINI --> CHECK[Structured output and grounding checks]
+    DIRECT --> SSE[SSE answer and evidence]
+    CHECK --> SSE
 ```
 
 ### What is deterministic?
 
-The following behavior does **not** depend on an LLM:
+Metric normalization, score calculation, comparison eligibility, tie rules, textual observations, recommendation triggers and priorities all execute without Gemini. They are exposed through `summary.intelligence` under `observed-intelligence-1.0.0` and `opening-messaging-1.0.0`.
 
-- URL normalization, platform detection, extraction orchestration, and content hashing;
-- engagement-rate calculation from confirmed values;
-- hook pattern detection and hook classification;
-- caption, CTA, audience, problem-solution, performance, efficiency, and confidence scores;
-- overall Creator Insight Score;
-- deterministic winner/tie selection for the Creator Insight Summary;
-- query routing for direct metric questions;
-- keyword-overlap scoring, source boosts, and slot-balance bonuses;
-- citation-label construction and citation allow-list validation;
-- missing-evidence and forbidden-claim evaluation rules.
-
-For the same stored evidence and the same code version, these outputs are repeatable.
+Identical evidence and policy inputs produce identical results. Historical scoring and semantic-analysis contracts remain compatibility data; they do not silently determine current findings.
 
 ### How are the creator scores calculated?
 
-All component scores are bounded from `0` to `10`.
+Let **V** be confirmed views, **L** likes, **C** comments and **S** current subscribers.
 
-| Score | Technique |
-| --- | --- |
-| Hook clarity | Inspects transcript segments beginning within the first eight seconds, then detects questions, statistics, problems, benefits, audience relevance, specificity, concise openings, and weak generic intros |
-| Caption strength | Rule-based topic, audience, problem/benefit, CTA/question, and hashtag signals |
-| CTA strength | Counts explicit action terms and question prompts, then applies bounded thresholds |
-| Audience specificity | Detects named audiences, problems, topic clarity, relevant hashtags, and specific subjects |
-| Problem-solution clarity | Combines hook classification with problem, solution, transformation, and benefit patterns |
-| Creative structure | Weighted combination of the five creative signals |
-| Public performance | Threshold bands for confirmed views, interactions, and engagement rate |
-| Creator efficiency | Views and interactions normalized by confirmed follower/subscriber count |
-| Metadata completeness | Availability ratio across transcript, metric, creator, hashtag, date, and duration fields; reported as evidence context rather than creative quality |
-| Engagement confidence | Availability of confirmed views, interactions, and engagement rate—not creative quality |
+| Signal | Equation | Required inputs |
+| --- | --- | --- |
+| Reach | `V` | Confirmed view count |
+| Like rate (%) | `100 * L / V` | Known likes and `V > 0` |
+| Comment rate (%) | `100 * C / V` | Known comments and `V > 0` |
+| Combined interaction rate (%) | `100 * (L + C) / V` | Both interaction fields and `V > 0`; contextual only |
+| Audience efficiency | `V / S` | Known views and `S > 0` |
 
-Creative structure is calculated as:
+The backend also exposes three secondary scores on a 0-10 scale:
 
 ```text
-creative_structure_score =
-    0.30 × hook_clarity
-  + 0.25 × problem_solution_clarity
-  + 0.20 × caption_strength
-  + 0.15 × cta_strength
-  + 0.10 × audience_specificity
+reach_score              = min(10, 10 * ln(1 + V) / ln(10,000,001))
+like_response_score      = min(10, 2 * like_rate_percent)
+public_performance_score = (reach_score + like_response_score) / 2
 ```
 
-The overall deterministic score is:
+The logarithmic reach transform compresses large count differences, reaching its cap at ten million views. Like response scales the observed percentage to a cap at 5%. It requires at least 1,000 views and consistent counts (`L <= V`). Public performance averages the two only when both are eligible. These anchors are documented heuristics, not population-calibrated predictions.
 
-```text
-overall_score =
-    0.35 × public_performance_score
-  + 0.30 × creator_efficiency_score
-  + 0.25 × creative_structure_score
-  + 0.10 × engagement_confidence
-```
-
-For non-Facebook content, confirmed engagement rate is calculated when possible as:
-
-```text
-engagement_rate = ((likes + comments) / views) × 100
-```
-
-Platform-specific interaction handling is used where reactions or shares are the available public signals. If the denominator or interaction evidence is unavailable, the rate remains unavailable.
+Missing inputs remain null; confirmed zero remains zero. There is no universal overall score and no numerical creativity score in the current policy.
 
 ### How is the comparison winner selected?
 
-The deterministic comparison prioritizes the strongest mutually available evidence:
+| Dimension | Decision rule |
+| --- | --- |
+| Reach | Higher confirmed views; exact equality is a tie |
+| Like rate | Both videos need at least 1,000 views and valid likes; differences within 0.10 percentage points are tied |
+| Comment rate | Descriptive values and difference; no winner policy |
+| Audience efficiency | Higher views per current subscriber when both inputs are eligible; exact equality is a tie |
+| Opening and messaging | Individual supported observations; no overall creative winner |
 
-1. compare confirmed engagement rate when both contents have it;
-2. otherwise compare confirmed views when both have views;
-3. otherwise compare confirmed interactions when both have them;
-4. otherwise report that the metric winner is unavailable.
+Rate-tie comparisons use rational arithmetic to avoid floating-point boundary errors. The current comparison policy requires two distinct, owned YouTube content identities. The sample threshold and tolerance are safeguards, not statistical significance tests.
 
-Hook, creative-structure, and overall scores within one point are treated as a tie. Creator efficiency also has an explicit closeness threshold. This avoids presenting tiny score differences as meaningful victories.
+For example, 485 likes on 34,021 views gives a **1.43% like rate**. That result remains calculable when the comment count is missing.
 
 ### What is the specialized retrieval technique?
 
-CreatorLens AI does not use plain vector search. The query router first chooses a mode, then applicable candidates are reranked with:
+Candidates are reranked using:
 
 ```text
-final_score =
-    0.55 × semantic_score
-  + 0.25 × keyword_overlap_score
-  + 0.10 × source_type_boost
-  + 0.10 × slot_balance_bonus
+retrieval_score = 0.55 * semantic_similarity
+                + 0.25 * keyword_overlap
+                + 0.10 * source_type_boost
+                + 0.10 * slot_balance_bonus
 ```
 
-- `semantic_score` captures meaning through FastEmbed vectors and Qdrant.
-- `keyword_overlap_score` preserves exact terms that embeddings may blur.
-- `source_type_boost` favors metadata, hook, or transcript evidence appropriate to the question.
-- `slot_balance_bonus` prevents one content item from monopolizing a comparison.
+- **Semantic similarity:** FastEmbed vectors retrieve passages with related meaning from Qdrant.
+- **Keyword overlap:** matched meaningful query terms divided by total meaningful query terms preserves exact subject relevance.
+- **Source-type boost:** favors the evidence the question requires, such as metadata for metrics or opening speech for hook review.
+- **Slot-balance bonus:** favors an unrepresented video when assembling a comparative context.
 
-This is why a metric question, hook question, and broad strategy question do not all receive the same retrieval treatment.
-
-### What is the LLM used for?
-
-Gemini is used for tasks where natural-language synthesis adds value:
-
-- explain why supported differences may matter;
-- summarize multi-source evidence into a readable comparison;
-- generate prioritized recommendations grounded in retrieved evidence;
-- answer deep transcript or strategy questions;
-- produce schema-validated comparison and recommendation objects for the UI.
-
-Direct metric answers are constructed deterministically from structured metadata. Gemini is **not** responsible for extracting public metrics, calculating the core scores, choosing retrieval weights, creating allowed citation labels, or filling missing evidence. Its output must conform to Pydantic schemas, its citation labels must match backend evidence, and invalid JSON falls back safely. The configured low temperature reduces unnecessary variation but does not make generative language perfectly deterministic.
+The reranker selects a bounded evidence set using these fixed weights. It runs without an additional model or paid reranking call.
 
 ### Can scores or answers change every time?
 
-| Output | Stable for identical inputs? | When it can change |
-| --- | --- | --- |
-| Stored public metrics | Yes, for the stored snapshot | Re-ingestion after the platform updates its public counts or extraction source |
-| Engagement and Creator Insight scores | Yes | Evidence snapshot, scoring code, thresholds, or data availability changes |
-| Deterministic winner/tie | Yes | Comparable metrics or deterministic scores change |
-| Retrieval ranking | Normally yes for the same query/index/model | Query, indexed evidence, embedding model, filters, or collection state changes |
-| Direct metric answer | Yes; it bypasses the LLM | Underlying confirmed metadata changes |
-| LLM comparison/recommendation wording | Not guaranteed to be identical | Model sampling, provider/model version, prompt version, or retrieved context changes |
-| LLM confidence field | Model-generated but schema-bounded | Evidence context or model response changes; it is not the deterministic score |
-
-Therefore, the numerical creator scores do **not** randomly change on each request. The generated explanation may be phrased differently, but it remains constrained by the same evidence, response schema, citation allow-list, and missing-evidence rules.
+| Output | Reproducibility |
+| --- | --- |
+| Metrics, scores, decisions and recommendations | Stable for the same evidence, selected objective and policy |
+| Retrieval | Depends on query, index state, embedding model and retrieval policy |
+| Gemini wording | May vary; canonical facts and targets remain constrained |
+| Refreshed analysis | Can change when source snapshots or policy versions change |
 
 ## System architecture
 
 ```mermaid
 flowchart LR
-    USER[Creator / Analyst] --> FE[Next.js + TypeScript<br/>Vercel]
-    FE --> API[FastAPI API<br/>Render]
-
+    UI[Next.js on Vercel] --> AUTH[Supabase Google OAuth]
+    UI --> API[FastAPI on Render]
     API --> PG[(Neon PostgreSQL)]
-    API --> REDIS[(Redis Cloud<br/>Celery broker + result backend)]
-    API --> QDRANT[(Qdrant Cloud)]
-    API --> GEMINI[Gemini via LangChain]
-
-    REDIS --> WORKER[Celery Worker<br/>Azure Container Apps]
-    ACR[Azure Container Registry] -. managed-identity image pull .-> WORKER
-    WORKER --> LOGS[Azure Log Analytics]
-
-    WORKER --> EXTRACT[Platform extraction]
-    EXTRACT --> PG
-    EXTRACT --> CHUNK[Evidence chunk builder]
-    CHUNK --> EMBED[FastEmbed BGE embeddings]
-    EMBED --> QDRANT
-
-    API --> RETRIEVE[Hybrid retrieval + reranking]
-    RETRIEVE --> PG
-    RETRIEVE --> QDRANT
-    RETRIEVE --> PROMPT[Versioned prompt + structured context]
-    PROMPT --> GEMINI
-    GEMINI --> VALIDATE[Pydantic + citation validation]
-    VALIDATE --> SSE[SSE structured answer + tokens + citations]
-    SSE --> FE
-
-    API --> EVAL[RAGAS + DeepEval]
-    EVAL --> PG
-    API --> TRACE[LangSmith nested traces]
-    API --> TELEMETRY[LLM + cost telemetry]
-    TELEMETRY --> PG
+    API --> REDIS[(TLS Redis)]
+    REDIS --> WORKER[Celery on Azure Container Apps]
+    ACR[Azure Container Registry] --> WORKER
+    WORKER --> SOURCE[Supadata and YouTube Data API]
+    WORKER --> PG
+    WORKER --> EMBED[FastEmbed]
+    EMBED --> Q[(Qdrant Cloud)]
+    API --> Q
+    API --> LLM[Gemini via LangChain]
+    API --> TRACE[LangSmith]
+    API --> OPS[Persisted evaluation and telemetry]
+    OPS --> PG
+    API --> SSE[SSE responses]
+    SSE --> UI
 ```
 
 ### Deployment topology
 
 | Responsibility | Runtime |
 | --- | --- |
-| User experience | Next.js application on Vercel |
-| Synchronous API and streaming | FastAPI container on Render |
-| Durable relational state | Neon PostgreSQL |
-| Background task transport | Direct Redis Cloud connection shared by API and worker |
-| Long-running extraction/indexing | No-ingress Celery worker on Azure Container Apps Consumption |
-| Private worker images | Azure Container Registry with managed identity and scoped `AcrPull` |
-| Worker diagnostics | Azure Log Analytics |
-| Vector evidence | Qdrant Cloud |
-| Model tracing | LangSmith Developer workspace |
+| Frontend and OAuth callback | Next.js on Vercel |
+| Authorized API and SSE | FastAPI on Render |
+| Durable application state | Neon PostgreSQL |
+| Broker, result backend and shared request limits | TLS Redis shared by API and worker |
+| Extraction and indexing | No-ingress Celery worker on Azure Container Apps |
+| Worker image and diagnostics | Azure Container Registry and Log Analytics |
+| Retrieval and tracing | Qdrant Cloud and LangSmith |
 
-The Docker image is role-aware: `SERVICE_ROLE=web` runs migrations before Uvicorn, while `SERVICE_ROLE=worker` starts the Celery worker. This keeps the API and worker reproducible from one image while preserving separate runtime responsibilities.
+One Dockerfile supports separate web and worker roles. Web startup runs Alembic before Uvicorn; worker startup runs Celery. Matching source revisions and shared configuration keep both services compatible.
 
 ## Evidence ingestion pipeline
 
 ```mermaid
 sequenceDiagram
-    participant UI as Next.js UI
+    participant UI as Authenticated UI
     participant API as FastAPI
     participant DB as PostgreSQL
-    participant R as Redis Cloud
-    participant W as Azure Celery Worker
-    participant X as Extractors
+    participant R as Redis
+    participant W as Celery worker
+    participant X as Extraction providers
     participant Q as Qdrant
-
-    UI->>API: Create comparison project
-    API->>DB: Persist project + content slots
-    UI->>API: Start ingestion
-    API->>DB: Create durable job
-    API->>R: Publish Celery task
+    UI->>API: Create owned project and request analysis
+    API->>DB: Reserve quota and persist job
+    API->>R: Publish admitted task
     R->>W: Deliver task
-    W->>X: Detect platform and extract evidence
-    X-->>W: Metadata + transcript segments
-    W->>DB: Persist evidence and progress
-    W->>W: Build typed chunks + local embeddings
-    W->>Q: Upsert vectors and payloads
-    W->>DB: Mark READY or PARTIAL_READY
-    UI->>API: Poll persisted progress
-    API-->>UI: Stage, percentage, and diagnostics
+    W->>X: Bounded metadata and native transcript requests
+    X-->>W: Available evidence and provenance
+    W->>DB: Persist validated snapshot and progress
+    W->>W: Build chunks and embeddings
+    W->>Q: Index revision-aware evidence
+    W->>DB: Finalize readiness and operation accounting
+    UI->>API: Read status and canonical insights
 ```
 
 ### Extraction is deliberately layered
 
-Public social platforms are inconsistent and cloud-hosted requests are frequently restricted. CreatorLens AI therefore treats transcript recovery as a fallback graph rather than a single API call:
+Supadata supplies metadata and native transcript evidence. Optional YouTube Data API enrichment fills supported gaps using bounded `videos` and `channels` requests. Count groups are updated coherently rather than silently combining incompatible snapshots; previous values and field provenance remain inspectable.
 
-```text
-platform captions
-    → Supadata or Apify transcript fallback where applicable
-    → yt-dlp media/audio fallback
-    → Deepgram multilingual transcription
-    → explicit transcript-unavailable state
-```
-
-Transcript completeness is checked against known duration. A short partial transcript is not silently treated as complete, and a missing transcript produces a valid metadata-only `PARTIAL_READY` project rather than a failed or fabricated analysis.
+Extraction artifacts and embeddings are cached. Missing, partial or invalid captions remain explicit, with language and timestamp validation before textual analysis. The active path does not automatically fall back to media downloading, generated transcription, Apify or Deepgram.
 
 ## Retrieval and RAG design
 
 ### Typed evidence index
 
-| Source type | Purpose |
+| Source type | Retrieval purpose |
 | --- | --- |
-| `metadata` | Confirmed metrics, creator identity, duration, upload date, availability, and provenance |
-| `description` | Caption framing, calls to action, hashtags, and creator-authored context |
-| `hook` | Opening transcript segment used for first-seconds analysis |
-| `transcript` | Timed semantic evidence for deeper reasoning |
+| Metadata | Metrics, title, creator, duration, publication context and provenance |
+| Description | Creator-authored framing and topic context |
+| Hook | Eligible opening-window transcript evidence |
+| Transcript | Broader explanation and topic evidence |
 
-Every indexed chunk carries project isolation, content slot, platform, source type, timing, creator/title context, a stable content hash, and a backend-generated citation label.
+Chunks carry project/content identity, stable slot, source type, evidence revision and timestamps where available. Retrieval and citation validation preserve those boundaries.
 
 ### Query-aware retrieval
 
-The router selects one of five retrieval modes:
+The existing router retains five modes:
 
-```text
-metric_direct
-hook_focused
-balanced_compare
-transcript_deep
-strategy_recommendation
-```
+| Mode | Strategy |
+| --- | --- |
+| `metric_direct` | Read authoritative structured values without generation |
+| `hook_focused` | Prioritize eligible opening evidence |
+| `balanced_compare` | Balance retrieved evidence across both videos |
+| `transcript_deep` | Retrieve relevant narrative passages |
+| `strategy_recommendation` | Ground explanations in supported recommendation objects |
 
-Metric questions use structured PostgreSQL metadata and do not depend on vector similarity. Other modes retrieve Qdrant candidates and apply the deterministic scoring contract:
-
-```text
-final_score =
-    0.55 × semantic_score
-  + 0.25 × keyword_overlap_score
-  + 0.10 × source_type_boost
-  + 0.10 × slot_balance_bonus
-```
-
-Balanced comparison ensures both `content_1` and `content_2` contribute evidence instead of allowing one content item to dominate the context window.
+`balanced_compare` is a retrieval mode, not a universal winner formula. Explicit question intent can override the selected UI dimension. The context adapter checks evidence consistency before supplying canonical decisions and recommendation targets.
 
 ### Structured generation boundary
 
-Gemini never defines the response contract. The backend selects a versioned prompt and validates the model output against one of three Pydantic structures:
+The backend defines the answer contract before invoking Gemini. Pydantic models distinguish three response types:
 
-- metric answer
-- comparison answer
-- recommendation answer
+| Answer type | Validated content |
+| --- | --- |
+| Metric | Named values, content slot, confirmed/unavailable status and source citation |
+| Comparison | Objective, canonical decision, supporting reasons, evidence and limitations |
+| Recommendation | Authoritative recommendation ID, target, priority, experiment and supporting evidence |
 
-A comparison result follows a predictable internal shape:
+Post-generation checks bind claims to current project/content identities and evidence revisions. Numerical assertions and winner labels must match canonical results; generated recommendations cannot reassign targets or priority. Hypothetical drafts retain an explicit hypothesis status.
 
-```json
-{
-  "answer_type": "comparison",
-  "winner": "content_1 | content_2 | tie | insufficient_evidence",
-  "confidence": 0.0,
-  "key_reasons": [],
-  "evidence": [],
-  "limitations": [],
-  "recommendations": []
-}
-```
+Transcripts and descriptions enter prompts as untrusted evidence. Malformed JSON, provider failures and rejected claims use safe fallback responses. Citation-label validation is one check within this boundary, not a substitute for semantic entailment.
 
-Model-generated citation labels are accepted only when they match the backend evidence set. Invalid JSON is handled by a defensive parser and safe fallback response, while the SSE stream preserves a readable Markdown answer for compatibility.
+The SSE response carries structured answers, readable text, citations and completion events. Persisted conversation history reuses these contracts. Compatibility confidence fields are not displayed as calibrated probabilities.
 
 ## Deterministic creator intelligence
 
-The Creator Insight Summary does not call the LLM and does not claim to predict virality. It produces explainable review signals from confirmed evidence:
+The textual rubric normalizes terms and uses word boundaries. It reviews an eligible first-eight-second opening, or an explicitly labeled first-40-word fallback without invented timing.
 
-| Signal | Inputs |
+| Observation | Evidence-triggered experiment |
 | --- | --- |
-| Public performance | Views, interactions, and engagement rate |
-| Creator efficiency | Performance relative to confirmed follower/subscriber count |
-| Creative structure | Hook, CTA, audience specificity, caption, and problem-solution framing |
-| Evidence confidence | Metric availability and extraction completeness |
+| Configured generic greeting at the start | Test the topic before the greeting/background |
+| Title topic terms not detected in sufficiently complete opening evidence | Test a first sentence naming the subject |
+| Configured learning-takeaway phrase not detected | For an explanation, test one sentence stating what the viewer can learn |
+| Title topic terms not detected in the first 600 description characters | Test a more specific first description sentence |
+
+Topic matching requires `min(2, number_of_title_anchor_terms)` normalized term overlaps. Absence of a pattern is a bounded lexical observation, not proof of weak messaging. Missing or stale evidence cannot create an absence-based recommendation.
+
+Recommendation priority is reproducible:
 
 ```text
-Overall Creator Insight Score
-  = 35% public performance
-  + 30% creator-size efficiency
-  + 25% creative structure
-  + 10% evidence confidence
+priority = evidence_support + objective_relevance + actionability
+           each contribution is bounded from 0 to 2
+
+High: >= 5     Medium: >= 3     Low: < 3
 ```
 
-Separating deterministic analytics from generative reasoning makes the platform easier to test, explain, and trust.
+Complete evidence contributes 2; a supported local positive observation contributes 1. Relevance contributes 2 for structure review or applicable Reach opening/description experiments, otherwise 1. Current actionable templates contribute 2. Recommendations are deduplicated by video and intervention, ordered stably, and limited to three with representation for both targets where supported.
+
+Each recommendation retains its ID, target content, trigger, evidence, revision, priority breakdown, experiment and limitation. Losing on a metric never independently triggers a creative defect.
 
 ## Evaluation and quality engineering
 
-CreatorLens AI includes a first-class RAG evaluation subsystem rather than treating quality as a manual demo check.
+Evaluation covers retrieval, deterministic decisions, recommendation grounding and Assistant behavior using versioned datasets and offline fixtures.
 
-| Asset | Coverage |
+| Evaluation component | What it measures |
 | --- | --- |
-| `creatorlens_core_v1` | 20 metric, comparison, and recommendation regression cases |
-| `creatorlens_ci_smoke_v1` | Five deterministic cases designed for bounded CI execution |
-| Stable project fixtures | Known metadata, transcript, source, and missing-evidence conditions |
-| Rubric checks | Citation presence, both-slot comparison, forbidden claims, limitations, and missing-metric compliance |
-| RAGAS | Non-LLM context precision and recall through a compatibility boundary |
-| DeepEval | Test-case contracts and regression orchestration |
+| RAGAS | Non-LLM context precision and recall against reference contexts |
+| DeepEval | `LLMTestCase` construction integrated with deterministic project rubrics |
+| Grounding regressions | Incorrect counts/winners, cross-content citations, unsupported causal claims and forged priorities |
+| False-rejection checks | Supported paraphrases and valid answers that should remain accepted |
+| Integration contracts | Evidence freshness, ownership, recommendation identity, deterministic bypass and SSE behavior |
 
-The deployed evaluation dashboard exposes persisted runs, aggregate quality signals, historical comparisons, and case-level rubric results. Lexical faithfulness/relevance signals are explicitly labeled as lexical metrics and are not misrepresented as paid LLM-judge scores.
+| Dataset | Recorded offline result |
+| --- | --- |
+| `creatorlens_ci_smoke_v1` | 5/5 passed |
+| `creatorlens_core_v1` | 20/20 passed |
+| `creatorlens_intelligence_ci_v2` | 23/23 passed |
+| `creatorlens_intelligence_v2` | 119 passed, 0 failed, 14 skipped; 96/96 critical contracts passed |
 
-The accepted v1.1 core regression run recorded **20/20 passing cases**, with citation presence and missing-evidence compliance enforced as quality gates.
+Reports preserve dataset/evaluator versions, failures and skips. Lexical faithfulness/relevance are labeled as proxies; mocked responses and unreviewed semantic references are not presented as live model accuracy. Historical policies remain reproducible, while current intelligence and enrichment have dedicated unit/API regressions.
 
 ## LLMOps and observability
 
-
-The local observability upgrade separates deterministic responses, RAG generation and semantic extraction. It records provider-reported usage categories, exact model identity where reported, thinking/cache usage, invocation counts and independent request timings. Whole-scope latency samples exclude deterministic zeros from Gemini means and preserve unknown historical invocation counts.
-
-A reviewed, versioned registry supports the exact `gemini-3.5-flash-lite` Standard paid-tier reference: $0.30 input, $2.50 output including thinking, and $0.03 cached input per million tokens. The 6,803-input/946-output fixture estimates **$0.0044059**, not an invoice. Unknown models/tiers remain unpriced; partial totals and legacy unverified estimates are labeled explicitly. See [Google's official pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
-
-Configuration now allowlists exact Gemini Developer API model IDs: `gemini-3.5-flash-lite` (intended model), `gemini-3.6-flash`, and `gemini-3.8-flash`. Production API and worker inference require an explicit matching `LLM_MODEL`; automatic model substitution is disabled. Local/test defaults use Flash-Lite. No deployed setting was changed.
-
-The registry retains a historical snapshot and selects Standard reference rates using the UTC inference-start timestamp. Gemini 3.6/3.8 entries distinguish the verified November 14?December 31, 2026 period from the documented January 1, 2027 increase. Other API tiers and Vertex AI remain unpriced. Exact component amounts survive storage and aggregation; cached input and thinking tokens are counted once. Changing models creates distinct semantic snapshot keys and requires authorized compatibility acceptance, rather than treating cached labels from another model as current.
-
-Cost estimates are observational, not a spending cap. Public inference authorization, rate limiting and hard spending controls remain release requirements; offline tests do not establish live model availability or billed charges.
-
-The read-only dashboard presents pricing coverage, per-operation cost provenance and timing sample counts. This implementation introduces additive migration `20261113_0011`; cloud deployment remains deferred to the coordinated release. Optional `LLM_ESTIMATE_SERVICE_TIER=standard` selects a reference estimate, not an assertion about account billing. No paid evaluator or live inference was used for verification.
-
-Each RAG interaction creates an auditable operational record.
-
 ```mermaid
 flowchart LR
-    ROOT[creatorlens.rag_response] --> RET[creatorlens.retrieval]
-    ROOT --> PR[creatorlens.prompt]
-    ROOT --> LLM[creatorlens.llm]
-    LLM --> GEM[Gemini generation]
-    ROOT --> CIT[creatorlens.citations]
+    REQUEST[RAG request] --> RET[Retrieval trace]
+    REQUEST --> PROMPT[Prompt identity]
+    REQUEST --> MODEL[Provider invocation]
+    REQUEST --> CHECK[Grounding and citations]
+    MODEL --> USAGE[Token and latency telemetry]
+    USAGE --> COST[Versioned cost estimate]
+    CHECK --> STORE[(Persisted operational history)]
+    COST --> STORE
 ```
 
-Tracked signals include:
+Recorded metadata includes provider/model identity, prompt version, token categories, retrieval/generation latency, cache behavior, source balance, correlation identifiers and failures. Deterministic answers are not counted as model invocations or given artificial token usage.
 
-- model, provider, prompt name, and prompt version
-- input, output, and total tokens
-- retrieval and LLM latency
-- retrieved chunk count and source balance
-- transcript provider and fallback usage
-- cache hit/miss and embedding reuse when observable
-- LangSmith trace ID, retrieval-run ID, session ID, and error code
-- estimated cost when model pricing is configured; otherwise an explicit unavailable state
-
-The LLMOps dashboard is read-only and never triggers model calls. It exposes recent runs, reported token mix, separate latency populations, trace coverage, retrieval balance, and reliability signals from persisted telemetry.
+Pricing is Decimal-safe and selected by model, tier and inference date. Cached input and thinking tokens are accounted for explicitly; unknown or partial costs remain labeled. Historical estimates are preserved, and estimated charges are distinct from provider invoices or hard spending caps.
 
 ## Persistence model
 
 PostgreSQL is the system of record for:
 
 ```text
-projects and content items
-metadata snapshots and metric sources
-transcript segments and evidence chunks
-ingestion jobs
-chat sessions and messages
-retrieval runs
-evaluation datasets, runs, and case results
-LLM runs and cost events
+users, project ownership and account entitlements
+analysis reservations, provider operations and dispatch outbox
+content metadata, transcript segments and evidence revisions
+ingestion jobs, retrieval runs and indexed-chunk identities
+chat sessions, messages and structured answers
+evaluation datasets, runs and case results
+LLM runs, token usage and cost events
 ```
 
-SQLAlchemy repositories keep persistence out of API routes, while Alembic provides repeatable schema evolution. URL normalization and content hashing allow reusable extraction artifacts and embedding-aware deduplication without weakening project-level isolation.
+SQLAlchemy repositories separate database access from HTTP and application logic; Alembic versions schema evolution. Transactions, row locking and stable operation identities support durable admission and accounting. Changing the initial free allowance does not overwrite an existing user's grant history.
+
+Content hashing and embedding compatibility metadata support artifact reuse while retaining project ownership and evidence provenance.
 
 ## Evidence integrity rules
 
-- Missing views, likes, comments, followers, duration, or transcript evidence remain unavailable.
-- The system does not estimate absent public metrics.
-- Factual claims require backend-provided evidence and valid citation labels.
-- Metadata availability affects confidence, not creative quality.
-- Heuristic insight scores are review signals, not guaranteed performance predictions.
-- Metric-source provenance and transcript-provider notes remain attached to the evidence.
-- Partial extraction degrades gracefully to evidence-limited analysis.
+- Unknown metrics remain unknown; confirmed zero is preserved.
+- A missing field blocks only calculations that actually require it.
+- Every cited source belongs to the correct project, content and evidence revision.
+- Untimed evidence never receives fabricated timestamps.
+- Pattern absence is not equivalent to poor creative quality.
+- Public interactions do not establish sentiment, retention or causal effects.
+- Insights and chat share canonical facts, identities and recommendation priorities.
 
 ## Technology stack
 
-| Layer | Technology |
+| Layer | Technologies |
 | --- | --- |
-| Frontend | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4 |
-| API | Python 3.11, FastAPI, Pydantic, SSE |
-| Persistence | PostgreSQL, SQLAlchemy, Alembic, Neon |
-| Async processing | Celery, Redis Cloud, Azure Container Apps |
-| Containers and registry | Multi-stage Docker, Azure Container Registry |
-| Embeddings | FastEmbed with `BAAI/bge-small-en-v1.5` |
-| Vector database | Qdrant Cloud |
-| LLM orchestration | LangChain + Gemini |
-| Structured output | Pydantic schemas + YAML prompt registry |
-| Evaluation | RAGAS, DeepEval, deterministic rubric checks |
-| Observability | LangSmith, persisted LLM/retrieval runs, Azure Log Analytics |
-| Delivery | Vercel, Render, GitHub Actions CI, protected production promotion, and worker-image workflows |
+| Languages | Python 3.11, TypeScript 5 |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
+| API and streaming | FastAPI, Pydantic, sse-starlette, HTTPX |
+| Authentication | Supabase Auth, Google OAuth, PyJWT |
+| Database and migrations | PostgreSQL, Neon, SQLAlchemy, Alembic, Psycopg |
+| Background processing | Celery, Redis |
+| LLM orchestration | LangChain, langchain-google-genai, Gemini Developer API |
+| Embeddings | FastEmbed, BAAI/bge-small-en-v1.5 |
+| Vector database | Qdrant Cloud, qdrant-client |
+| Data providers | Supadata, YouTube Data API v3 |
+| Evaluation and testing | RAGAS, DeepEval, Pytest, RapidFuzz |
+| Prompt configuration | YAML, PyYAML |
+| Observability | LangSmith, Azure Log Analytics |
+| Containers and registry | Docker, Azure Container Registry |
+| Cloud hosting | Render, Azure Container Apps, Vercel |
+| CI and frontend validation | GitHub Actions, ESLint, TypeScript |
 
 ### Redis deployment note
 
-The initial queue design used Upstash. It was replaced after Celery polling exhausted the free command allowance. Dev-Staging now uses a direct Redis Cloud Essentials connection shared by Render and Azure.
-
-The current provider-issued endpoint is non-TLS and is accepted only for the portfolio Dev-Staging environment. A production promotion requires a TLS-enabled Redis service and secret rotation. Connection values are platform secrets and are never committed or printed.
+The API and worker share a TLS Redis connection through `REDIS_URL`. Celery uses a direct Redis connection, not a REST endpoint. Broker polling and request-limit accounting consume commands even at low application traffic, so provider command quotas are an operational capacity constraint.
 
 ## Repository map
 
 ```text
 CreatorLens-AI/
-├── backend/
-│   ├── app/api/                 # FastAPI routes
-│   ├── app/db/models/           # SQLAlchemy persistence models
-│   ├── app/db/repositories/     # Repository boundary
-│   ├── app/evaluations/         # Datasets, fixtures, rubrics, runners
-│   ├── app/extractors/          # YouTube, Instagram, Facebook
-│   ├── app/insights/            # Deterministic creator scoring
-│   ├── app/llm/                 # Prompts, schemas, tracing, citations
-│   ├── app/rag/                 # Chunking, retrieval, reranking, chat
-│   ├── app/services/            # Application and provider services
-│   ├── app/workers/             # Celery jobs and runtime
-│   ├── alembic/                 # Versioned schema migrations
-│   └── tests/                   # Unit and integration coverage
-├── frontend/
-│   └── src/
-│       ├── app/                 # Product routes
-│       ├── components/          # Analysis, chat, evaluation, LLMOps UI
-│       ├── lib/                 # API/SSE client
-│       └── types/               # Frontend contracts
-└── .github/workflows/           # CI quality gates and worker-image delivery
+|-- backend/
+|   |-- app/api/                  # Authorized HTTP and SSE routes
+|   |-- app/core/                 # Configuration, JWT, ownership and admission
+|   |-- app/db/                   # Models, repositories and sessions
+|   |-- app/extraction/           # Bounded providers and metadata enrichment
+|   |-- app/insights/             # Deterministic metrics and recommendations
+|   |-- app/rag/                  # Context, chunking, retrieval and reranking
+|   |-- app/llm/                  # Prompts, schemas, grounding and pricing
+|   |-- app/evaluations/          # Datasets, fixtures and offline runners
+|   |-- app/services/            # Application, accounting and chat services
+|   |-- app/workers/             # Celery tasks and durable dispatch
+|   |-- alembic/                 # Database migrations
+|   `-- tests/                   # Unit and integration regressions
+|-- frontend/
+|   |-- src/app/                 # Landing, OAuth and workspace routes
+|   |-- src/components/          # Comparison, insights, chat and dashboards
+|   |-- src/lib/                 # Auth, API and SSE clients
+|   `-- src/types/               # Frontend contracts
+`-- .github/workflows/           # Quality gates and worker-image builds
 ```
 
 ## Validation evidence
 
-The latest accepted validation baseline includes:
+Latest recorded local checks include **897 unit tests passed**, **93 integration tests passed with 3 skipped**, legacy and V2 offline evaluation, Python compilation, frontend UI/auth contract checks, ESLint, TypeScript and a production build using synthetic HTTPS API configuration.
 
-- backend compile/import validation
-- **114 backend unit tests**
-- **8 backend integration tests**
-- deterministic five-case and 20-case evaluation runs
-- Alembic upgrade validation through migration head
-- frontend ESLint, TypeScript, and optimized Next.js production build
-- GitHub-hosted backend, frontend, evaluation-smoke, and Docker-image checks on `main`
-- enforced production pull requests with confirmed backend and frontend failure rejection
-- deployed ingestion acceptance across Render → Redis Cloud → Azure Container Apps → Neon/Qdrant
-- deployed structured-chat, LangSmith trace, evaluation-dashboard, and LLMOps-dashboard acceptance
-- final deployed application smoke acceptance after production promotion
+The integration skips require disposable PostgreSQL execution in CI. These are recorded engineering checks, not a claim of complete browser, provider or production acceptance.
 
-Representative non-runtime checks:
+Representative commands, using the existing backend virtual environment:
 
 ```powershell
-# Backend
-cd backend
-python -m compileall app tests
-python -m pytest tests/unit -q
-python -m pytest tests/integration -q
-python -m app.evaluations.regression_runner --dataset creatorlens_ci_smoke_v1 --no-persist
-python -m alembic -x database=test upgrade head
+# Backend: run from backend/
+.\.venv\Scripts\python.exe -m pytest tests/unit -q
+.\.venv\Scripts\python.exe -m pytest tests/integration -q
+.\.venv\Scripts\python.exe -m compileall app tests
+.\.venv\Scripts\python.exe -m app.evaluations.regression_runner --dataset creatorlens_ci_smoke_v1 --no-persist
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_core_v1
+.\.venv\Scripts\python.exe -m app.evaluations.offline_runner --dataset creatorlens_intelligence_v2 --strict
 
-# Frontend
-cd ../frontend
+# Frontend: run from frontend/
 npm ci
+npm run test:auth
+npm run test:ui
 npm run lint
 npx tsc --noEmit
 npm run build
-
-# Container
-cd ..
-docker build -t creatorlens-backend ./backend
 ```
 
 ### CI checks
 
-| Workflow | Required production check | Validation scope |
-| --- | --- | --- |
-| Backend CI | `Backend compile, tests, and migrations` | Compile, unit tests, integration tests, and Alembic against disposable PostgreSQL 16 |
-| Backend CI | `Deterministic RAG evaluation smoke` | Five-case offline regression subset with no model or external-service calls |
-| Frontend CI | `Frontend lint, typecheck, and build` | ESLint, TypeScript, and optimized Next.js build |
-| Docker Build CI | `Backend Docker image build` | Multi-stage backend image build without registry push |
+| Workflow | Scope |
+| --- | --- |
+| Backend CI | Compilation, unit/integration tests, disposable PostgreSQL migrations, legacy and V2 offline evaluation |
+| Frontend CI | Auth/UI contracts, lint, TypeScript and production build with synthetic public configuration |
+| Docker Build CI | Backend container build |
+| Worker image workflow | Manually requested, commit-tagged image publication to Azure Container Registry |
 
-The CI workflows use GitHub-hosted Ubuntu runners with read-only repository permissions. They do not consume Gemini, LangSmith, Neon, Qdrant, Redis, Render, Vercel, or Azure credentials. PostgreSQL credentials declared in CI belong only to the disposable service container.
+Standard test/evaluation jobs use offline fixtures and do not require production credentials or paid inference. Worker-image publication is a separate authorized delivery workflow.
 
 ### Reliability status
 
-The planned V2 reliability scope is implemented and accepted. GitHub protects `main` as the production branch and requires pull-request promotion from `Dev-Staging`. Backend compilation/tests/migrations, deterministic RAG evaluation, frontend lint/type/build validation, and backend Docker construction are mandatory checks. Positive merge acceptance and intentional backend/frontend failure rejection have both been verified. The deployed application was smoke-tested after promotion and remained operational.
+Private API access requires verified identity and resource ownership. Durable account policies provide five lifetime analyses for new users, one concurrent analysis per user and three generative Assistant admissions per completed analysis. Stored results and deterministic answers remain available without new model generation.
+
+Provider execution passes separate operation, reservation, pricing, budget and emergency-stop checks. Limits and credentials use validated configuration in [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example). Backend secrets are never browser configuration.
+
+Offline tests establish regression behavior; live OAuth, provider availability, browser workflows and cloud capacity require release-specific acceptance.
 
 ## Design principles
 
 ```text
 Evidence before inference.
-Deterministic logic before generative logic.
+Independent signals before universal rankings.
+Deterministic findings before generated explanations.
 Structured contracts before prose.
-Graceful degradation before fabricated completeness.
-Observable systems before opaque demos.
-Cost controls before accidental scale.
+Ownership and accounting before provider execution.
+Measured limitations before unsupported accuracy claims.
 ```
 
 ## License
 
-This repository is provided for portfolio review and technical evaluation. See [LICENSE](LICENSE) for usage terms.
+Proprietary source-available project for portfolio review and technical evaluation. See [LICENSE](LICENSE) for permissions and restrictions.
