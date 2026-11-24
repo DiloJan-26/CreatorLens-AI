@@ -235,7 +235,7 @@ export function CreatorChatPanel({
   return (
     <section className="chat-panel" aria-label="Evidence-grounded conversation">
       <div className="chat-top flex-wrap">
-          <div className="objective-tabs" role="group" aria-label="Chat objective">{([['reach','Reach'],['engagement','Engagement'],['creative_quality','Creative quality']] as const).map(([id,label])=><button type="button" key={id} aria-pressed={objective===id} disabled={isStreaming} onClick={()=>{setObjective(id);if(projectId)setComparisonObjective(projectId,id);}}>{label}</button>)}</div>
+          <div className="objective-tabs" role="group" aria-label="Chat objective">{([['reach','Reach'],['engagement','Like rate'],['creative_quality','Opening & messaging']] as const).map(([id,label])=><button type="button" key={id} aria-pressed={objective===id} disabled={isStreaming} onClick={()=>{setObjective(id);if(projectId)setComparisonObjective(projectId,id);}}>{label}</button>)}</div>
         <span className="platform-label">
           <Icon name="shield" size={16} />
           AI Assistant

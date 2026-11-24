@@ -201,7 +201,7 @@ def provider_status():
     require_principal()
     settings=get_settings()
     available={}
-    for name,kind in (("provider_calls_enabled","semantic"),("extraction_available","extraction")):
+    for name,kind in (("provider_calls_enabled","assistant"),("extraction_available","extraction")):
         try:paid_configuration(settings,kind);available[name]=True
         except (HTTPException,ValueError):available[name]=False
     return {"provider_emergency_stop":settings.provider_emergency_stop,**available}

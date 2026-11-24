@@ -7,7 +7,7 @@ import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
 import Link from "next/link";
 import { GoalComparisonPanel } from "./GoalComparisonPanel";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   type AnalysisProgressStep,
@@ -29,9 +29,6 @@ import {
   getProject,
   getProjectIngestionStatus,
   startProjectIngestion,
-  requestSemanticAnalysis,
-  getSemanticAnalysis,
-  getProviderStatus,
 } from "@/lib/api";
 import {
   clearActiveProjectId,
@@ -97,22 +94,6 @@ export function ComparisonWorkspace() {
   const [insightSummary, setInsightSummary] =
     useState<CreatorInsightSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [creativeBusyFor,setCreativeBusyFor]=useState<string|null>(null);
-  const creativeRequests=useRef(new Set<string>());
-  async function runCreativeReview(){
-    const id=projectDetail?.project_id;if(!id||creativeRequests.current.has(id))return;
-    creativeRequests.current.add(id);setCreativeBusyFor(id);setError(null);
-    const failures:string[]=[];
-    try{
-      const access=await getProviderStatus();
-      if(!access.provider_calls_enabled){setError("Creative review is currently paused. Your existing results remain available.");return;}
-      for(const slot of ["content_1","content_2"] as const){
-        try{const current=await getSemanticAnalysis(id,slot);if(!["ready","pending"].includes(current.status))await requestSemanticAnalysis(id,slot,current.status==="failed");window.dispatchEvent(new CustomEvent("creatorlens_semantic_queued",{detail:{projectId:id,slot}}));}
-        catch(e){failures.push(`${slot==="content_1"?"Content 1":"Content 2"}: ${getErrorMessage(e)}`);}
-      }
-      if(failures.length)setError(`Creative review: ${failures.join(" ")}`);
-    }catch(e){setError(getErrorMessage(e));}finally{creativeRequests.current.delete(id);setCreativeBusyFor(current=>current===id?null:current);}
-  }
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
   const [ingestionStatus, setIngestionStatus] =
     useState<IngestionStatusResponse | null>(null);
@@ -170,7 +151,7 @@ export function ComparisonWorkspace() {
     try {
       const [detail, summary, latestIngestion] = await Promise.all([
         getProject(activeProjectId),
-        getCreatorInsightSummary(activeProjectId,"engagement").catch(() => null),
+        getCreatorInsightSummary(activeProjectId,"reach").catch(() => null),
         getProjectIngestionStatus(activeProjectId).catch(() => null),
       ]);
 
@@ -265,7 +246,7 @@ export function ComparisonWorkspace() {
 
         const [detail, summary] = await Promise.all([
           getProject(ingestion.projectId),
-          getCreatorInsightSummary(ingestion.projectId,"engagement").catch(() => null),
+          getCreatorInsightSummary(ingestion.projectId,"reach").catch(() => null),
         ]);
 
         if (controller.signal.aborted) {
@@ -554,13 +535,11 @@ export function ComparisonWorkspace() {
             <div className="content-pair">
               <ContentCard
                 label="Content 1"
-                hookScore={insightSummary?.content_1?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_1")}
                 isPending={isSubmitting}
               />
               <ContentCard
                 label="Content 2"
-                hookScore={insightSummary?.content_2?.semantic_scoring?.creative_structure.components?.find(part => part.feature === "verbal_hook_clarity")?.score}
                 item={contentItem(projectDetail, "content_2")}
                 isPending={isSubmitting}
               />
@@ -574,8 +553,6 @@ export function ComparisonWorkspace() {
           >
             <CreatorInsightSummaryPanel
               key={projectDetail?.project_id}
-              onReview={runCreativeReview}
-              reviewBusy={creativeBusyFor===projectDetail?.project_id}
               projectId={projectDetail?.project_id ?? null}
               indexReady={indexReady}
               initialSummary={insightSummary}

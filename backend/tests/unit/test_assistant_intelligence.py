@@ -1,4 +1,4 @@
-"""Offline canonical chat reasoning, grounding and revision regressions."""
+"""Historical context policy regressions. Current policy has independent observed-intelligence tests."""
 from copy import deepcopy
 import json
 import pytest
@@ -21,6 +21,9 @@ def configure(monkeypatch,a=None,b=None):
     a=a or make_subject('content_1',views=34021,likes=485,comments=8)
     b=b or make_subject('content_2',views=1527222,likes=18876,comments=308)
     project=dict(id=PROJECT,content_items=[a[0],b[0]])
+    # Replay the archived summary contract explicitly; current policy has separate tests.
+    original_summary=insight_service.get_creator_insight_summary
+    monkeypatch.setattr(ic,'get_creator_insight_summary',lambda *args,**kwargs:original_summary(*args,**kwargs).model_copy(update={'intelligence':None}))
     monkeypatch.setattr(ic,'get_project_detail_record',lambda project_id:deepcopy(project))
     monkeypatch.setattr(context_builder,'get_project_detail_record',lambda project_id:deepcopy(project))
     monkeypatch.setattr(insight_service,'get_transcript_segments',lambda **kwargs:deepcopy(SEGMENTS))
@@ -35,7 +38,7 @@ def configure(monkeypatch,a=None,b=None):
 
 def pack(monkeypatch,question='Which video has more views?',selected=None,a=None,b=None):
     configure(monkeypatch,a,b)
-    return ic.build_intelligence_context(PROJECT,question,selected)
+    return ic.build_intelligence_context(PROJECT,question,selected,policy='historical')
 
 
 def answer(context,question):

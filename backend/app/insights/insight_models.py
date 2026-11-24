@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from app.insights.observed_intelligence import ObservedIntelligence
 from app.insights.scoring_models import CreatorScoring
 from app.insights.comparison_models import ComparisonDecision
 from app.insights.recommendation_models import CreatorRecommendationBundle
@@ -63,6 +64,7 @@ class ComparisonInsight(BaseModel):
 
 
 class CreatorInsightSummaryResponse(BaseModel):
+    intelligence: ObservedIntelligence | None = None
     creator_recommendations: CreatorRecommendationBundle | None = None
     goal_comparison: ComparisonDecision | None = None
     project_id: str

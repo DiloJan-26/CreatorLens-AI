@@ -18,6 +18,8 @@ def owned_task(kind):
     def decorate(function):
         @wraps(function)
         def execute(*args,**kwargs):
+            if kind == "semantic":
+                raise Reject("Semantic generation is retired; preserve historical snapshots and reconcile pending reservations.", requeue=False)
             identifier=kwargs.get("snapshot_id" if kind=="semantic" else "job_id") or args[-1]
             operation=None
             with database_session() as session:

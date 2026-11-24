@@ -50,7 +50,7 @@ const render = (component, props) => renderToStaticMarkup(React.createElement(co
 const panel = render(GoalComparisonPanel, { summary });
 assert(panel.includes("Unavailable"));
 assert(panel.includes("0"));
-assert(panel.includes("Creative quality") && panel.includes("Engagement") && panel.includes("Reach"));
+assert(panel.includes("Opening &amp; messaging") && panel.includes("Like rate") && panel.includes("Reach"));
 assert(!panel.includes("<select") && !panel.includes("<details") && !panel.includes(">Balanced<"));
 assert(panel.includes('aria-pressed="true"'));
 assert(render(ExecutiveInsightSnapshot, { summary }).includes("Content 2 leads under reach"));
@@ -75,8 +75,11 @@ assert(chatSource.includes('!message.structuredAnswer'),'Structured answers must
 console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach default, three objective buttons, objective controls without dropdowns, completed-progress removal and chat objective transport.");
 
 const {CreatorInsightSummaryPanel}=load(path.join(sourceRoot,"components/CreatorInsightSummaryPanel.tsx"));
-const insights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",initialSummary:summary});
-for(const title of ["Run AI creative review","Side-by-side assessment","What each video does well","The opening, under the lens"])assert(insights.includes(title));
-assert(insights.includes("disabled"));assert(!insights.includes("AI connection diagnostic"));
-assert(!insights.includes("legacy-1.0.0"));
-console.log("Insights flow contracts passed: explicit disabled-by-default AI action, distinct sections, missing scores stay unavailable, no diagnostic inference control.");
+const observedSummary={...summary,intelligence:{policy_version:"observed-intelligence-1.0.0",contents:[{content_id:"a",slot:"content_1",title:"Synthetic A",values:{views:0,like_rate:null},observations:[],evidence:[],limitations:["No transcript"]},{content_id:"b",slot:"content_2",title:"Synthetic B",values:{views:10000,like_rate:1},observations:[],evidence:[],limitations:[]}],decisions:{reach:{dimension:"reach",status:"eligible",outcome:"content_2",winner_slot:"content_2",values:{content_1:0,content_2:10000},units:"views",explanation:"Observed views"},like_rate:{dimension:"like_rate",status:"insufficient_evidence",outcome:"insufficient_evidence",values:{content_1:null,content_2:1},units:"percent",missing_inputs:["Views must be positive"]}},recommendations:[]}};
+const insights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",initialSummary:observedSummary});
+for(const title of ["Your performance signals","Opening &amp; messaging structure","What to try next"])assert(insights.includes(title));
+assert(!insights.includes("Run AI creative review"));assert(!insights.includes("AI connection diagnostic"));
+assert(!insights.includes("legacy-1.0.0"));assert(!insights.includes("<details"));assert(insights.includes("\u2014")&&insights.includes("0"));
+assert(render(GoalComparisonPanel,{summary:observedSummary}).includes("Content 2 leads reach"));
+assert(!render(GoalComparisonPanel,{summary:observedSummary,objective:"creative_quality"}).includes("Content 1 leads"));
+console.log("Current Insights contracts passed: independent metrics, confirmed zero versus missing, source-based structure observations, no AI-generation action or universal winner.");
