@@ -17,7 +17,9 @@ def snapshot_fingerprint(project):
     return hash_payload({'project_id':project.get('id') or project.get('project_id'), 'contents':project.get('content_items',[])})
 
 
-def build_intelligence_context(project_id, question, objective=None):
+def build_intelligence_context(project_id, question, objective=None, *, policy="current"):
+    if policy not in {"current", "historical"}:
+        raise ValueError("Unsupported context policy.")
     selected=resolve_comparison_objective(question,objective)
     for _attempt in range(2):
         project=deepcopy(get_project_detail_record(project_id))
@@ -47,8 +49,15 @@ def build_intelligence_context(project_id, question, objective=None):
                             source_type=source['source_type'],evidence_id=source['id'],evidence_revision=identity.transcript_revision,
                             start_time=source['start_time'],end_time=source['end_time'],
                             citation_label=f'{content.label} / {content.platform} / {source["source_type"]} / {source["id"][:12]}',text=source['text']))
-            return dict(policy_version=CONTEXT_POLICY,status='ready',project_id=project_id,selected_objective=selected.value,
-                snapshot_fingerprint=fingerprint,summary=summary.model_dump(mode='json'),
+            current_summary=summary.model_dump(mode='json')
+            selected_value=selected.value
+            if policy == 'historical':
+                current_summary.pop('intelligence', None)
+            if current_summary.get('intelligence') and policy == 'current':
+                from app.rag.observed_context import project_current_context
+                selected_value,current_summary,citations=project_current_context(current_summary,selected_value,question)
+            return dict(policy_version=current_summary.get('intelligence',{}).get('policy_version',CONTEXT_POLICY) if current_summary.get('intelligence') else CONTEXT_POLICY,status='ready',project_id=project_id,selected_objective=selected_value,
+                snapshot_fingerprint=fingerprint,summary=current_summary,
                 content_evidence={i['slot']:dict(quality=i.get('transcript_evidence') or {},duration=i.get('duration_seconds')) for i in project.get('content_items',[]) if i.get('slot') in {'content_1','content_2'}},
                 citations=[c.model_dump(mode='json') for c in citations],limitations=[])
     return dict(policy_version=CONTEXT_POLICY,status='evidence_changed',project_id=project_id,selected_objective=selected.value,
@@ -70,6 +79,8 @@ def recommendation_items(context, question, citations):
     for r in bundle.get('recommendations',[]):
         if target and r['target_slot']!=target:continue
         refs=[e['evidence_id'] for e in r['evidence']]
+        if context['summary'].get('intelligence') and not set(refs).issubset(labels):
+            continue
         metric_label=next((c.citation_label for c in citations if c.content_id==r['target_content_id'] and c.source_type=='metadata'),None)
         items.append(RecommendationItem(recommendation_id=r['id'],target_content_id=r['target_content_id'],target_slot=r['target_slot'],
             objective=context['selected_objective'],recommendation=r['recommended_change'],rationale=r['rationale'],priority=r['priority']['label'],
@@ -84,6 +95,9 @@ def canonical_answer(context, question, intent, citations=None):
         return MetricAnswer(summary='Evidence changed while assembling the answer; please retry.',objective=objective,evidence_status='evidence_changed',limitations=context['limitations'])
     summary=context['summary'];decision=summary['goal_comparison']
     citations=citations if citations is not None else [Citation.model_validate(c) for c in context['citations']]
+    if summary.get('intelligence'):
+        from app.rag.observed_context import observed_answer
+        return observed_answer(context,question,intent,citations)
     evidence=evidence_items(citations)
     limitations=list(dict.fromkeys([*decision['limitations'],*decision['missing_evidence'],*context.get('limitations',[])]))
     text=question.lower()
@@ -163,6 +177,8 @@ def canonical_answer(context, question, intent, citations=None):
 def compact_prompt_context(context, question):
     if context['status']!='ready':return json.dumps(context)
     summary=context['summary'];decision=summary['goal_comparison'];target,_=parse_target_reference_slots(question)
+    if summary.get('intelligence'):
+        return json.dumps(dict(policy=context['policy_version'],objective=context['selected_objective'],intelligence=summary['intelligence']),ensure_ascii=False)
     contents={}
     for slot in ('content_1','content_2'):
         content=summary.get(slot)

@@ -205,3 +205,22 @@ def test_partial_status_without_usable_evidence_cannot_consume_credit(db_session
     with pytest.raises(HTTPException) as error:complete_owned_analysis(db_session,a,p,False)
     assert error.value.status_code==409
     assert balance(db_session,a.user_id)["completed"]==0 and balance(db_session,a.user_id)["reserved"]==1
+
+
+def test_deterministic_completion_without_semantic_review_is_idempotent(db_session,monkeypatch):
+    from app.db.models.project import Project
+    from app.db.repositories.content_item_repository import ContentItemRepository
+    from app.db.repositories.metadata_repository import MetadataRepository
+    from app.models.video import VideoMetadata
+    from app.services.account_usage import complete_owned_analysis
+    from app.services import semantic_service
+    a=account(db_session);p=project(db_session,a);r,_=reserve(db_session,a,p,"deterministic-completion")
+    db_session.get(Project,p).status="partial_ready"
+    for slot in ('content_1','content_2'):
+        content=ContentItemRepository(db_session).upsert(project_id=p,slot=slot,platform="youtube",url="https://youtu.be/"+slot,extraction_status="partial",transcript_available=False,transcript_segment_count=0)
+        MetadataRepository(db_session).create_snapshot(content_item=content,metadata=VideoMetadata(platform="youtube",slot=slot,url="https://youtu.be/"+slot,views=1000,extraction_status="partial"))
+    monkeypatch.setattr(semantic_service,"get_semantic_analysis",lambda *a:(_ for _ in ()).throw(AssertionError("No semantic dependency")))
+    first=complete_owned_analysis(db_session,a,p,False)
+    second=complete_owned_analysis(db_session,a,p,False)
+    assert first.id==second.id and second.state=='completed' and second.completion_mode=='deterministic'
+    assert balance(db_session,a.user_id)['completed']==1

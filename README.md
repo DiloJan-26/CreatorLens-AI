@@ -10,8 +10,6 @@ CreatorLens AI analyzes stored YouTube, Instagram, or Facebook content compariso
 
 > Built as a production-style AI engineering case study: asynchronous ingestion, vector retrieval, constrained generation, evaluation, LLM observability, and a cost-controlled multi-cloud deployment.
 
-[**Open CreatorLens AI →**](https://creator-lens-ai.vercel.app/)
-
 ---
 
 ## Executive summary
@@ -729,13 +727,3 @@ Cost controls before accidental scale.
 ## License
 
 This repository is provided for portfolio review and technical evaluation. See [LICENSE](LICENSE) for usage terms.
-
-### Project Origin & Attribution
-
-CreatorLens AI was independently implemented as part of a technical assessment based on a project concept presented.
-
-The underlying project idea was not originated by me and may have been provided to other candidates.
-
-The implementation presented in this repository represents my own independently developed engineering work, except for clearly identified third-party components and dependencies.
-
-No exclusive ownership is claimed over the original project concept, assessment requirements, project name, or independently developed implementations by others.

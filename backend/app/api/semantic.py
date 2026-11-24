@@ -22,5 +22,5 @@ def read_semantic(project_id: str, slot: str):
 @router.post('/{slot}', status_code=202, description='Explicitly queue optional Gemini analysis; may incur provider charges. No inference occurs in GET.')
 def queue_semantic(project_id: str, slot: str, allow_inference: bool = False, retry_failed: bool = False, recover_stale: bool = False):
     if not allow_inference:
-        raise HTTPException(422, 'Explicit allow_inference=true is required to queue Gemini analysis.')
-    return _call(queue_semantic_analysis, project_id, slot, retry_failed=retry_failed, recover_stale=recover_stale)
+        raise HTTPException(422, 'Explicit inference authorization is required; creative generation is retired.')
+    raise HTTPException(410, 'Creative inference has been retired. Insights use deterministic evidence; generated explanations are available in Assistant chat.')

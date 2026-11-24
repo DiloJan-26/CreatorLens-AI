@@ -55,7 +55,7 @@ def settle(session,reservation_id,target,*,completion_mode=None,verified_no_acti
     if target == "needs_reconciliation":
         reservation.state=target
     elif target == "completed":
-        if completion_mode not in {"semantic","metrics_only"}: raise HTTPException(409,"An explicit completion mode is required.")
+        if completion_mode not in {"semantic","metrics_only","deterministic"}: raise HTTPException(409,"An explicit completion mode is required.")
         if session.scalar(select(ProviderOperation.id).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.state.in_(["admitted","running","needs_reconciliation"]))):
             raise HTTPException(409,"Provider work must settle before completion.")
         entitlement.reserved-=1;entitlement.consumed+=1
@@ -98,21 +98,15 @@ def complete_owned_analysis(session,principal,project_id,metrics_only):
         validated_transcript=bool(item.transcript_available and item.transcript_segment_count>0 and evidence.get("policy_version")==EVIDENCE_POLICY_VERSION and evidence.get("status") in {"valid","partial"})
         if not confirmed_views and not validated_transcript:
             raise HTTPException(409,"Each content needs usable validated transcript evidence or confirmed public views; a partial status alone cannot complete an analysis.")
-    from app.services.semantic_service import get_semantic_analysis
-    semantic=[get_semantic_analysis(project_id,item.slot) for item in items] if not metrics_only else []
-    if not metrics_only and any(result["status"] not in {"ready","unavailable"} or result["status"]=="unavailable" and result.get("error_code")!="EVIDENCE_UNAVAILABLE" for result in semantic):
-        raise HTTPException(409,"Semantic analysis is not complete. Review metrics-only completion if sufficient metrics exist.")
+    # Full completion now uses deterministic evidence; historical modes remain stored.
+    # Retain the explicit metrics-only requirement for older clients.
     if metrics_only:
         for item in items:
-            snapshot=snapshots[item.id]
-            raw=snapshot.raw_payload if snapshot else {}
+            raw=snapshots[item.id].raw_payload if snapshots[item.id] else {}
             views=raw.get("views")
-            from math import isfinite
             if isinstance(views,bool) or not isinstance(views,(int,float)) or not isfinite(views) or views<0 or int(views)!=views:
                 raise HTTPException(409,"Metrics-only completion requires confirmed views for both contents.")
-    elif any(not item.transcript_available for item in items) and not all(result["status"]=="unavailable" and result.get("error_code")=="EVIDENCE_UNAVAILABLE" for result in semantic):
-        raise HTTPException(409,"Validated transcript evidence is required for semantic completion.")
     operations=session.scalars(select(ProviderOperation).where(ProviderOperation.reservation_id==reservation.id)).all()
     if any(op.state in {"admitted","running","needs_reconciliation"} for op in operations):
         raise HTTPException(409,"Provider operations must settle before analysis completion.")
-    return settle(session,reservation.id,"completed",completion_mode="metrics_only" if metrics_only else "semantic")
+    return settle(session,reservation.id,"completed",completion_mode="metrics_only" if metrics_only else "deterministic")

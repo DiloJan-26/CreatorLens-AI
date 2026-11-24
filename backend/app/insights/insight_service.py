@@ -44,13 +44,14 @@ def get_creator_insight_summary(project_id: str, objective: ComparisonObjective 
         for item in project.get("content_items", [])
         if isinstance(item, dict)
     ]
+    transcript_snapshot = {item["slot"]: get_transcript_segments(project_id=project_id, platform=item["platform"], slot=item["slot"]) for item in content_items}
     content_1 = _content_by_slot(content_items, "content_1")
     content_2 = _content_by_slot(content_items, "content_2")
     content_1_insight = (
-        _build_content_insight(project_id, content_1) if content_1 else None
+        _build_content_insight(project_id, content_1, transcript_snapshot["content_1"]) if content_1 else None
     )
     content_2_insight = (
-        _build_content_insight(project_id, content_2) if content_2 else None
+        _build_content_insight(project_id, content_2, transcript_snapshot["content_2"]) if content_2 else None
     )
     comparison = _build_comparison(
         content_1=content_1,
@@ -63,28 +64,31 @@ def get_creator_insight_summary(project_id: str, objective: ComparisonObjective 
     creator_recommendations = build_creator_recommendations(project_id, goal_comparison,
         [(content_1, content_1_insight), (content_2, content_2_insight)])
 
+    from app.insights.observed_intelligence import build_observed_intelligence
+    intelligence = build_observed_intelligence(project_id, content_items,
+        transcript_snapshot, objective)
+
     return CreatorInsightSummaryResponse(
+        intelligence=intelligence,
         project_id=project_id,
         content_1=content_1_insight,
         content_2=content_2_insight,
         comparison=comparison,
         goal_comparison=goal_comparison,
         creator_recommendations=creator_recommendations,
-        notes=_summary_notes(content_1_insight, content_2_insight) + ["scores and comparison winner fields use legacy-1.0.0. Use content.scoring for creator-insight-2.0.0; Authoritative objective decisions are in goal_comparison; legacy winners are not V2 decisions."],
+        notes=_summary_notes(content_1_insight, content_2_insight) + ["Current Insights and Assistant decisions use intelligence / observed-intelligence-1.0.0. scores, scoring, comparison, goal_comparison and creator_recommendations preserve historical policy contracts; they do not override current decisions."],
     )
 
 
 def _build_content_insight(
     project_id: str,
     content_item: dict[str, Any],
+    transcript_segments: list[dict] | None = None,
 ) -> ContentInsight:
     slot = str(content_item.get("slot") or "")
     platform = str(content_item.get("platform") or "")
-    transcript_segments = get_transcript_segments(
-        project_id=project_id,
-        platform=platform,
-        slot=slot,
-    )
+    if transcript_segments is None:
+        transcript_segments = get_transcript_segments(project_id=project_id, platform=platform, slot=slot)
     hook_analysis = analyze_hook(content_item, transcript_segments)
     metadata_score, available_metadata, missing_metadata = (
         calculate_metadata_completeness(content_item)

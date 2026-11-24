@@ -128,6 +128,11 @@ def extract(project_id, slot, platform, url):
             "upload_date": payload.get("createdAt"),
             "subscriber_count": public_count(extra.get("subscriberCount",author.get("subscriberCount")))}
 
+    field_provenance = {}
+    if any(info.get(k) is None for k in ("view_count","like_count","comment_count","subscriber_count","upload_date")):
+        from app.extraction.youtube_enrichment import enrich
+        info, field_provenance = enrich(project_id, canonical, info, settings)
+
     metadata = normalize_metadata(platform=platform, url=url, slot=slot, info=info,
                                   transcript_available=bool(segments), transcript_segment_count=len(segments),
                                   transcript_language=transcript.get("lang"), transcript_source="supadata_platform_captions" if segments else "unavailable",
@@ -138,8 +143,9 @@ def extract(project_id, slot, platform, url):
         "requested_languages": [settings.transcript_language] if settings.transcript_language != "multi" else settings.transcript_fallback_language_list[:1],
         "caption_kind": "translated" if transcript.get("isTranslated") is True else "unknown",
         "audio_language_verified": False, "selection_reason": "bounded_native_preferred_language_with_provider_fallback",
-        "extraction_policy": POLICY_VERSION, "metadata_mapping_version": METADATA_MAPPING_VERSION,
-        "metric_availability": {name: "available" if count(name) is not None else "unavailable" if stats.get(name) is None else "invalid" for name in ("views", "likes", "comments", "shares")}, "source_url_fingerprint": accounting.source_key("source", canonical)}}
+        "extraction_policy": POLICY_VERSION, "metadata_mapping_version": METADATA_MAPPING_VERSION, "field_provenance": field_provenance,
+        "metric_availability": {name: "available" if info.get({"views":"view_count","likes":"like_count","comments":"comment_count","shares":"share_count"}[name]) is not None else "unavailable" if stats.get(name) is None else "invalid" for name in ("views", "likes", "comments", "shares")},
+        "primary_metric_availability": {name: "available" if count(name) is not None else "unavailable" if stats.get(name) is None else "invalid" for name in ("views", "likes", "comments", "shares")}, "source_url_fingerprint": accounting.source_key("source", canonical)}}
     result = validate_extraction(VideoExtractionResult(metadata=metadata, transcript_segments=segments))
     return result
 

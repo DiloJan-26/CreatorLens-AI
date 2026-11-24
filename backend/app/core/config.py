@@ -15,6 +15,8 @@ class Settings(BaseSettings):
         hide_input_in_errors=True,
     )
 
+    youtube_metadata_enrichment_enabled: bool = Field(default=True, alias="YOUTUBE_METADATA_ENRICHMENT_ENABLED")
+    youtube_enrichment_daily_units: int = Field(default=100, alias="YOUTUBE_ENRICHMENT_DAILY_UNITS", ge=1, le=10000)
     service_role: Literal["web", "worker"] = Field(default="web", alias="SERVICE_ROLE")
     environment: str = Field(default="local", alias="ENVIRONMENT")
     provider_emergency_stop: bool = Field(default=True, alias="PROVIDER_EMERGENCY_STOP")

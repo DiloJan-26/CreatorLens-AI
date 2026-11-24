@@ -1,7 +1,7 @@
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.core.config import get_settings
@@ -115,7 +115,7 @@ def llm_health() -> LLMHealthResponse:
 async def llm_generation_test(
     payload: LLMGenerationTestRequest,
 ) -> LLMGenerationTestResponse:
-    return await run_llm_generation_test(payload.prompt)
+    raise HTTPException(410, 'Generated responses are available only through authenticated project Assistant chat.')
 
 
 @router.post(
@@ -126,10 +126,7 @@ async def llm_generation_test(
 def llm_stream_generation_test(
     payload: LLMGenerationTestRequest,
 ) -> StreamingResponse:
-    return StreamingResponse(
-        _stream_llm_generation_test(payload.prompt),
-        media_type="text/event-stream",
-    )
+    raise HTTPException(410, 'Generated responses are available only through authenticated project Assistant chat.')
 
 
 async def _stream_llm_generation_test(prompt: str) -> AsyncIterator[str]:
