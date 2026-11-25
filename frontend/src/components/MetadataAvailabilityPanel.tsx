@@ -1,220 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
+import { useEffect, useState } from "react";
 import { getMetadataAvailability } from "@/lib/api";
+import type { ContentItem, MetadataAvailabilityResponse } from "@/types/project";
+import { Icon, Notice } from "./ui";
 import { PlatformIcon } from "./PlatformIcon";
-import type {
-  ContentPlatform,
-  MetadataAvailabilityItem,
-  MetadataAvailabilityResponse,
-} from "@/types/project";
 
-type MetadataAvailabilityPanelProps = {
-  projectId: string | null;
-};
-
-export function MetadataAvailabilityPanel({
-  projectId,
-}: MetadataAvailabilityPanelProps) {
-  const [summary, setSummary] = useState<MetadataAvailabilityResponse | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(false);
+const fieldLabel = (field: string) => ({"follower_count/subscriber_count": "Audience size", "likes/reactions": "Likes / reactions", "duration_seconds": "Duration", "upload_date": "Published"}[field] ?? field.replace(/_/g, " "));
+export function MetadataAvailabilityPanel({projectId, contents = []}: {projectId: string | null; contents?: ContentItem[]}) {
+  const [data, setData] = useState<MetadataAvailabilityResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const activeSummary =
-    projectId && summary?.project_id === projectId ? summary : null;
-
-  const loadSummary = useCallback(async (activeProjectId: string) => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      setSummary(await getMetadataAvailability(activeProjectId));
-    } catch (caughtError) {
-      setSummary(null);
-      setError(getErrorMessage(caughtError));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!projectId) {
-      return;
-    }
-
-    const loadTimer = window.setTimeout(() => {
-      void loadSummary(projectId);
-    }, 0);
-
-    return () => window.clearTimeout(loadTimer);
-  }, [loadSummary, projectId]);
-
-  return (
-    <section className="workspace-panel rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
-            Confirmed Public Metrics
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">
-            Metadata Availability
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            CreatorLens AI pulls public metadata when available and marks
-            missing fields as unavailable instead of estimating them.
-          </p>
-        </div>
-        <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-          Unavailable fields are not estimated
-        </span>
-      </div>
-
-      {error ? (
-        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-          {error}
-        </p>
-      ) : null}
-
-      {activeSummary ? (
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {activeSummary.items.map((item) => (
-            <AvailabilityCard key={item.slot} item={item} />
-          ))}
-        </div>
-      ) : !isLoading ? (
-        <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Metadata availability appears after extraction.
-        </p>
-      ) : (
-        <p className="mt-4 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
-          Loading metadata availability...
-        </p>
-      )}
-    </section>
-  );
-}
-
-function AvailabilityCard({ item }: { item: MetadataAvailabilityItem }) {
-  return (
-    <article
-      className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3"
-      data-content-slot={item.slot}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="platform-label text-slate-950">
-            <PlatformIcon platform={item.platform} size={18} />
-            {slotLabel(item.slot)} - {platformLabel(item.platform)}
-          </h3>
-          <p className="mt-1 break-all text-xs text-slate-500">{item.url}</p>
-        </div>
-        <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
-          {metadataStatus(item)}
-        </span>
-      </div>
-
-      <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        {item.available_fields.length} available and{" "}
-        {item.missing_fields.length} missing across checked public metadata
-        fields.
-      </p>
-
-      <FieldList
-        title="Available fields"
-        fields={item.available_fields}
-        tone="available"
-      />
-      <FieldList
-        title="Missing fields"
-        fields={item.missing_fields}
-        tone="missing"
-      />
-
-      <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-600">
-        {item.note}
-      </p>
-    </article>
-  );
-}
-
-function FieldList({
-  title,
-  fields,
-  tone,
-}: {
-  title: string;
-  fields: string[];
-  tone: "available" | "missing";
-}) {
-  return (
-    <div className="mt-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-        {title}
-      </p>
-      {fields.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {fields.map((field) => (
-            <span
-              key={field}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${fieldClass(tone)}`}
-            >
-              {fieldLabel(field)}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-slate-600">Unavailable</p>
-      )}
-    </div>
-  );
-}
-
-function fieldClass(tone: "available" | "missing"): string {
-  if (tone === "available") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  }
-
-  return "border-amber-200 bg-amber-50 text-amber-900";
-}
-
-function metadataStatus(item: MetadataAvailabilityItem): string {
-  if (item.completeness_score >= 85) {
-    return "Complete";
-  }
-
-  if (item.completeness_score >= 50) {
-    return "Partial";
-  }
-
-  return "Limited";
-}
-
-function slotLabel(slot: string): string {
-  return slot === "content_2" ? "Content 2" : "Content 1";
-}
-
-function platformLabel(platform: ContentPlatform): string {
-  if (platform === "youtube") {
-    return "YouTube";
-  }
-
-  if (platform === "instagram") {
-    return "Instagram";
-  }
-
-  return "Facebook";
-}
-
-function fieldLabel(field: string): string {
-  return field.replace(/_/g, " ");
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Could not load metadata availability.";
+    let active = true;
+    if (projectId) getMetadataAvailability(projectId).then(response => {
+      if (response.project_id !== projectId) throw new Error("Sources do not match this comparison.");
+      if (active) {setData(response); setError(null);}
+    }).catch(error => {if (active) setError(error instanceof Error ? error.message : "Could not load source coverage.");});
+    return () => {active = false;};
+  }, [projectId, attempt]);
+  const current = data?.project_id === projectId ? data : null;
+  return <section className="ui-panel evidence-coverage">
+    <div className="evidence-section-heading"><span className="evidence-icon"><Icon name="shield" size={21}/></span><div><h2>Source coverage</h2><p className="muted">What is available for each video.</p></div></div>
+    {error ? <Notice tone="error">{error} <button className="source-link" onClick={() => setAttempt(n => n + 1)}>Retry</button></Notice> : !current && <p className="muted" role="status">Loading source coverage...</p>}
+    {current && <div className="evidence-coverage-grid">{current.items.filter(item => contents.some(content => content.slot === item.slot && content.platform === item.platform)).map(item => {
+      const content = contents.find(content => content.slot === item.slot);
+      const complete = item.available_fields.length > 0 && item.missing_fields.length === 0;
+      return <article key={item.slot} className="evidence-coverage-card" data-content-slot={item.slot}>
+        <div className="evidence-passage-heading"><span className="evidence-source-label"><PlatformIcon platform={item.platform}/>{item.slot === "content_1" ? "Content 1" : "Content 2"}</span><span className={`evidence-status ${complete ? "is-ready" : ""}`}>{complete ? "All checked fields" : item.missing_fields.length ? "Partial coverage" : "Not assessed"}</span></div>
+        <h3>{content?.title ?? "Video source"}</h3>
+        <div className="evidence-fields"><p className="evidence-field-label">Available <span>{item.available_fields.length}</span></p><div>{item.available_fields.length ? item.available_fields.map(field => <span className="evidence-field is-available" key={field}><Icon name="check" size={13}/>{fieldLabel(field)}</span>) : <span className="muted">No confirmed fields</span>}</div></div>
+        {item.missing_fields.length > 0 && <div className="evidence-fields"><p className="evidence-field-label">Not available <span>{item.missing_fields.length}</span></p><div>{item.missing_fields.map(field => <span className="evidence-field" key={field}>{fieldLabel(field)}</span>)}</div></div>}
+        <div className="evidence-provenance">{content?.metric_source_note && <p><strong>Metrics</strong> {content.metric_source_note}</p>}{content?.transcript_source_note && <p><strong>Captions</strong> {content.transcript_source_note}</p>}</div>
+        {content?.url && /^https?:\/\//i.test(content.url) && <a className="source-link" href={content.url} target="_blank" rel="noopener noreferrer">Original video <Icon name="external" size={14}/></a>}
+      </article>;
+    })}</div>}
+  </section>;
 }

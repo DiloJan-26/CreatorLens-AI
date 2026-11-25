@@ -21,7 +21,7 @@ import { CreatorInsightSummaryPanel } from "@/components/CreatorInsightSummaryPa
 import { IngestionProgressPanel } from "@/components/IngestionProgressPanel";
 
 import { PageHeading, Notice, Icon, EmptyState } from "./ui";
-import { TranscriptPreviewPanel } from "@/components/TranscriptPreviewPanel";
+import { EvidenceSystemDetails } from "@/components/EvidenceSystemDetails";
 import { VideoUrlForm } from "@/components/VideoUrlForm";
 import {
   createProject,
@@ -60,9 +60,10 @@ export function ComparisonWorkspace() {
   useEffect(() => {
     const sync = () => {
       const raw = window.location.hash.slice(1);
-      const hash = raw === "transcript" ? "evidence" : raw;
+      const hash = raw === "transcript" ? "overview" : raw;
+      if (raw === "transcript") window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#overview`);
       setActiveTab(
-        ["overview", "insights", "evidence", "transcript", "chat"].includes(
+        ["overview", "insights", "evidence", "chat"].includes(
           hash,
         )
           ? hash
@@ -508,7 +509,6 @@ export function ComparisonWorkspace() {
               ["overview", "Overview"],
               ["insights", "Insights"],
               ["evidence", "Evidence"],
-              ["transcript", "Transcript"],
               ["chat", "Ask AI"],
             ].map(([id, label]) => (
               <a
@@ -560,8 +560,9 @@ export function ComparisonWorkspace() {
             />
             {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail?.project_id??null}/>}
           </section>
-          <section id="evidence" hidden={activeTab!=="evidence"} className="section-panel ui-panel"><h2 className="text-xl">Comparison sources</h2><div className="grid gap-4 sm:grid-cols-2 mt-4">{projectDetail?.content_items.map(item=><article key={item.slot} className="rounded-lg border border-slate-200 p-4"><p className="eyebrow">{item.slot==="content_1"?"Content 1":"Content 2"}</p><h3 className="font-semibold mt-2">{item.title??"Untitled video"}</h3><p className="muted text-sm mt-2">{item.metric_source_note??"Public metadata"}</p><p className="muted text-sm mt-2">{item.transcript_source_note??"Caption source unavailable"}</p><a className="source-link mt-3" href={/^https?:\/\//i.test(item.url)?item.url:undefined} target="_blank" rel="noopener noreferrer">Original video <Icon name="external" size={14}/></a></article>)}</div></section>
-          <section id="transcript" hidden={activeTab!=="transcript"} className="section-panel"><div className="grid gap-5 xl:grid-cols-2">{(["content_1","content_2"] as const).map((slot,i)=><TranscriptPreviewPanel key={slot} projectId={projectDetail?.project_id??null} item={contentItem(projectDetail,slot)} label={i===0?"Content 1":"Content 2"}/>)}</div></section>
+          {activeTab === "evidence" && projectDetail && <section id="evidence" className="section-panel">
+            <EvidenceSystemDetails key={`${projectDetail.project_id}-${indexReady}`} projectId={projectDetail.project_id} indexReady={indexReady} contents={projectDetail.content_items}/>
+          </section>}
           <section
             id="chat"
             hidden={activeTab !== "chat"}

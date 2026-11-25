@@ -161,7 +161,20 @@ export type RetrievedChunk = {
   text: string;
 };
 
+export type StoredEvidenceChunk = Omit<RetrievedChunk, "score"> & {
+  chunk_id: string;
+  project_id: string;
+  evidence_revision?: string | null;
+};
+
+export type EvidenceChunkListResponse = {
+  project_id: string;
+  total_chunks: number;
+  chunks: StoredEvidenceChunk[];
+};
+
 export type RetrieveResponse = {
+  evidence_limitations?: string[];
   project_id: string;
   query: string;
   applied_platform?: ContentPlatform | null;
