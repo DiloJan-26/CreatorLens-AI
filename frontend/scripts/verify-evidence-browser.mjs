@@ -22,16 +22,27 @@ import React from 'react';import {createRoot} from 'react-dom/client';
 import {EvidenceSystemDetails} from '${components}/EvidenceSystemDetails';
 import {TranscriptPreviewPanel} from '${components}/TranscriptPreviewPanel';
 const contents=[1,2].map(n=>({id:'video-'+n,slot:'content_'+n,platform:'youtube',title:n===1?'How dopamine works':'Dopamine in two minutes',url:'https://youtube.com/watch?v=fixture'+n,transcript_available:n===1,transcript_segment_count:n===1?125:0,transcript_language:'en',metric_source_note:'Synthetic public metadata',transcript_source_note:'Synthetic native captions'}));
-const chunk=(n,type,text)=>({project_id:'fixture-project',chunk_id:'chunk-'+n+'-'+type,content_id:'video-'+n,slot:'content_'+n,platform:'youtube',source_type:type,citation_label:'Content '+n+' / YouTube / '+type,text,title:contents[n-1].title,start_time:type==='hook'?0:null,end_time:type==='hook'?7:null,score:.8});
+const chunk=(n,type,text)=>({project_id:'fixture-project',chunk_id:'chunk-'+n+'-'+type,content_id:'video-'+n,slot:'content_'+n,platform:'youtube',source_type:type,citation_label:'Content '+n+' / YouTube / '+type,text,title:contents[n-1].title,start_time:type==='hook'?0:null,end_time:type==='hook'?7:null,score:.8,match_details:{rank:n,vector_match:true,semantic_similarity:.8,keyword_overlap:.25,matching_terms:['dopamine'],contributions:{semantic:.44,keyword:.0625,source:.1,balance:0}}});
 const chunks=[chunk(1,'hook','Dopamine is involved in motivation.'),chunk(2,'metadata','Views: 1000. Likes: 0.'),chunk(1,'description','An educational explanation.')];
 const calls=[];window.fixture={calls,mode:'normal',async api(name,...args){calls.push({name,args:args.slice(0,2)});
  if(name==='getProjectEvidenceChunks')return {project_id:'fixture-project',total_chunks:3,chunks};
  if(name==='getMetadataAvailability')return {project_id:'fixture-project',items:contents.map((item,i)=>({...item,available_fields:['views','likes','transcript'],missing_fields:i?['comments']:[],completeness_score:90}))};
  if(name==='retrieveProjectChunks'){
+  if(args[1].purpose!=='evidence_search')throw Error('Evidence purpose is required');
+  const response=rows=>{
+   const results=rows.map((c,i)=>{
+    const matching_terms=['dopamine','views'].filter(term=>args[1].query.toLowerCase().includes(term)&&c.text.toLowerCase().includes(term));
+    const keyword=matching_terms.length?.0625:0;
+    return {...c,score:.54+keyword,match_details:{rank:i+1,vector_match:true,semantic_similarity:.8,keyword_overlap:matching_terms.length?.25:0,matching_terms,contributions:{semantic:.44,keyword,source:.1,balance:0}}};
+   });
+   return {project_id:'fixture-project',query:args[1].query,results,retrieval_mode:args[1].query.includes('views')?'metric_direct':'transcript_deep',retrieval_run_id:'synthetic-trace',retrieval_latency_ms:12,diagnostics:{embedding_model:'fixture-bge',embedding_version:'1',strategy:'Qdrant vector search + deterministic hybrid reranking',eligible_candidates:results.length,returned_by_slot:{content_1:results.filter(c=>c.slot==='content_1').length,content_2:results.filter(c=>c.slot==='content_2').length}}};
+  };
+  if(window.fixture.mode==='empty')return response([]);
+
   if(window.fixture.mode==='failure')throw Error('Synthetic vector store unavailable');
   if(window.fixture.mode==='wrong-content')return {project_id:'fixture-project',query:args[1].query,results:[{...chunks[0],content_id:'video-2'}]};
   if(window.fixture.mode==='deferred')return await new Promise(resolve=>window.fixture.resolve=()=>resolve({project_id:'fixture-project',query:args[1].query,results:[chunks[0]]}));
-  return {project_id:'fixture-project',query:args[1].query,results:chunks.filter(c=>(!args[1].slot||c.slot===args[1].slot)&&(!args[1].source_type||c.source_type===args[1].source_type))};
+  return response(chunks.filter(c=>(!args[1].slot||c.slot===args[1].slot)&&(!args[1].source_type||c.source_type===args[1].source_type))));
  }
  if(name==='getTranscriptPreview')return {project_id:'fixture-project',slot:'content_1',platform:'youtube',transcript_available:true,transcript_segment_count:125,transcript_source:'Synthetic captions',segments:[{segment_index:0,text:'Source text remains source text.',start_time:null,end_time:null}]};
  throw Error('Unexpected API call: '+name);
@@ -57,7 +68,11 @@ try {
  await page.getByLabel('Content',{exact:true}).selectOption('content_2');assert.equal(await page.locator('.evidence-passage').count(),1);
  await page.getByLabel('Evidence query').fill('confirmed views');await page.getByRole('button',{name:'Search evidence',exact:true}).click();
  await page.getByRole('heading',{name:'Results for "confirmed views"',exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),1);
+ await page.getByText('fixture-bge',{exact:false}).waitFor();await page.getByText('12 ms',{exact:true}).waitFor();
+ assert.equal(await page.evaluate(()=>window.fixture.calls.find(c=>c.name==='retrieveProjectChunks').args[1].purpose),'evidence_search');
+ await page.screenshot({path:path.join(temp,'retrieval-desktop.png'),fullPage:true});
  await page.getByRole('button',{name:'Browse all sources'}).click();await page.getByLabel('Content',{exact:true}).selectOption('all');
+ await page.evaluate(()=>window.fixture.mode='empty');await page.getByRole('button',{name:'Search evidence',exact:true}).click();await page.getByText('No eligible indexed passages matched this search. Try another phrase or source type.',{exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),0);
  await page.evaluate(()=>window.fixture.mode='wrong-content');await page.getByRole('button',{name:'Search evidence',exact:true}).click();
  await page.getByText('Returned evidence does not match the selected sources.',{exact:true}).waitFor();
  await page.evaluate(()=>window.fixture.mode='failure');await page.getByRole('button',{name:'Search evidence',exact:true}).click();await page.getByText('Synthetic vector store unavailable',{exact:true}).waitFor();
@@ -66,8 +81,8 @@ try {
  assert.equal(await page.locator('.evidence-passage[data-content-slot="content_1"]').count(),0);
  await page.goto(origin+'?pending');await page.getByText('Search not ready',{exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),3);assert(await page.getByRole('button',{name:'Search evidence',exact:true}).isDisabled());
  await page.goto(origin);await page.getByText('3 stored passages',{exact:true}).waitFor();await page.setViewportSize({width:390,height:844});
- assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.screenshot({path:path.join(temp,'evidence-mobile.png'),fullPage:true});
+ await page.getByLabel('Evidence query').fill('How is dopamine introduced?');await page.getByRole('button',{name:'Search evidence',exact:true}).click();await page.getByText('fixture-bge',{exact:false}).waitFor();assert(await page.locator('mark').count()>0);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.screenshot({path:path.join(temp,'evidence-mobile.png'),fullPage:true});
  await page.goto(origin+'/transcript-fixture');await page.getByRole('button',{name:'Read transcript'}).click();await page.getByText('Source text remains source text.',{exact:true}).waitFor();await page.getByText('Showing 1 of 125 segments.',{exact:true}).waitFor();assert.equal(await page.locator('li > span').count(),0);
  assert.equal(await page.evaluate(()=>window.fixture.calls.find(c=>c.name==='getTranscriptPreview').args[1].slot),'content_1');assert.deepEqual(errors,[]);
- console.log('PASS: 12 offline browser scenarios: source loading, coverage, timestamps, content filters, vector search, wrong identity rejection, provider error, stale response cancellation, pending index, mobile overflow, transcript reading and truncation disclosure.');console.log('Screenshots: '+temp);
+ console.log('PASS: offline Evidence browser scenarios (including empty vector results, explicit search purpose, model/latency/rank diagnostics and safe term highlighting): source loading, coverage, timestamps, content filters, vector search, wrong identity rejection, provider error, stale response cancellation, pending index, mobile overflow, transcript reading and truncation disclosure.');console.log('Screenshots: '+temp);
 } finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}

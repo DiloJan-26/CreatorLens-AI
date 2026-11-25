@@ -56,6 +56,10 @@ class HybridCandidate:
     evidence_revision: str | None = None
 
 
+def matching_query_terms(query: str, text: str) -> list[str]:
+    return sorted(_meaningful_tokens(query).intersection(_meaningful_tokens(text)))
+
+
 def keyword_overlap_score(query: str, text: str) -> float:
     query_tokens = _meaningful_tokens(query)
     if not query_tokens:

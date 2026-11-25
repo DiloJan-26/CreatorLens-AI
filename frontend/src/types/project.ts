@@ -139,6 +139,7 @@ export type IndexProjectResponse = {
 };
 
 export type RetrieveProjectChunksRequest = {
+  purpose?: "assistant" | "evidence_search";
   query: string;
   top_k?: number;
   platform?: ContentPlatform | null;
@@ -146,7 +147,30 @@ export type RetrieveProjectChunksRequest = {
   source_type?: "metadata" | "description" | "hook" | "transcript" | null;
 };
 
+export type RetrievalMatchDetails = {
+  rank: number;
+  vector_match: boolean;
+  semantic_similarity: number;
+  keyword_overlap: number;
+  matching_terms: string[];
+  contributions: Record<string, number>;
+};
+
+export type RetrievalDiagnostics = {
+  policy_version: string;
+  embedding_model: string;
+  embedding_version: string;
+  strategy: string;
+  vector_matches: number;
+  eligible_candidates: number;
+  returned_by_slot: Record<string, number>;
+  weights: Record<string, number>;
+};
+
 export type RetrievedChunk = {
+  match_details?: RetrievalMatchDetails | null;
+  chunk_id?: string | null;
+  evidence_revision?: string | null;
   content_id?: string | null;
   slot?: string | null;
   platform: string;
@@ -174,6 +198,11 @@ export type EvidenceChunkListResponse = {
 };
 
 export type RetrieveResponse = {
+  purpose?: "assistant" | "evidence_search";
+  diagnostics?: RetrievalDiagnostics | null;
+  retrieval_mode?: string;
+  retrieval_run_id?: string | null;
+  retrieval_latency_ms?: number | null;
   evidence_limitations?: string[];
   project_id: string;
   query: string;

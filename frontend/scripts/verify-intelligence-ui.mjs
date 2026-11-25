@@ -102,7 +102,7 @@ assert(sourceHtml.includes("&lt;script&gt;not executable&lt;/script&gt;"));
 assert(!sourceHtml.includes("<script>")&&!sourceHtml.includes("<details"));
 assert(!render(EvidencePassage,{chunk:{...passage,start_time:null,end_time:null}}).includes("0:00"));
 const explorer=render(RetrievalTestPanel,{projectId:"project-a",indexReady:true,contents:contentItems,initialChunks:[passage,{...passage,content_id:"another-project-video"}]});
-assert(explorer.includes("Search supporting evidence")&&explorer.includes("Source passages"));
+assert(explorer.includes("Retrieve supporting evidence")&&explorer.includes("Browse stored evidence"));
 assert.equal((explorer.match(/class="evidence-passage"/g)||[]).length,1);
 assert(!explorer.includes("Rebuild")&&!explorer.includes("confidence"));
 const workspace=fs.readFileSync(path.join(sourceRoot,"components/ComparisonWorkspace.tsx"),"utf8");
@@ -115,3 +115,15 @@ const contentCardSource=fs.readFileSync(path.join(sourceRoot,"components/Content
 assert(contentCardSource.includes("Content details & provenance")&&contentCardSource.includes('label="Transcript"'));
 assert(workspace.includes('activeTab === "evidence" && projectDetail'));
 console.log("Evidence UI contracts passed: owned source filtering, escaped excerpts, honest timestamps, visible citations, read-only explorer, no separate transcript view and preserved content provenance.");
+
+const {RetrievalSummary,EvidenceText}=load(path.join(sourceRoot,"components/RetrievalTestPanel.tsx"));
+const diagnostic={embedding_model:"fixture-embedding",embedding_version:"1",strategy:"Qdrant vector search + deterministic hybrid reranking",eligible_candidates:2,returned_by_slot:{content_1:1,content_2:1}};
+const traceHtml=render(RetrievalSummary,{response:{diagnostics:diagnostic,retrieval_mode:"metric_direct",retrieval_latency_ms:0,retrieval_run_id:"trace-1"}});
+assert(traceHtml.includes("fixture-embedding")&&traceHtml.includes("0 ms")&&traceHtml.includes("Metric evidence"));
+assert(traceHtml.includes("Content 1: 1 / Content 2: 1")&&!traceHtml.includes("% confidence"));
+const highlighted=render(EvidenceText,{text:"Dopamine <script>source</script>",terms:["dopamine"]});
+assert(highlighted.includes("<mark>Dopamine</mark>")&&highlighted.includes("&lt;script&gt;source&lt;/script&gt;"));
+const retrievalSource=fs.readFileSync(path.join(sourceRoot,"components/RetrievalTestPanel.tsx"),"utf8");
+assert(retrievalSource.includes('purpose: "evidence_search"'));
+assert(!retrievalSource.includes("streamChatResponse")&&!retrievalSource.includes("requestSemanticAnalysis"));
+console.log("Retrieval explorer contracts passed: explicit search purpose, actual model/trace diagnostics, honest ranking scores and safely highlighted source text; no generation action.");
