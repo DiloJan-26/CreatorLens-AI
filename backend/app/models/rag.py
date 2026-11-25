@@ -92,6 +92,7 @@ class RagChunkListResponse(BaseModel):
 
 
 class RetrieveRequest(BaseModel):
+    purpose: Literal["assistant", "evidence_search"] = "assistant"
     query: str
     top_k: int = 6
     platform: RagPlatform | None = None
@@ -100,7 +101,28 @@ class RetrieveRequest(BaseModel):
     retrieval_mode: RetrievalMode | None = None
 
 
+class RetrievalMatchDetails(BaseModel):
+    rank: int
+    vector_match: bool
+    semantic_similarity: float
+    keyword_overlap: float
+    matching_terms: list[str] = Field(default_factory=list)
+    contributions: dict[str, float] = Field(default_factory=dict)
+
+
+class RetrievalDiagnostics(BaseModel):
+    policy_version: str = "evidence-retrieval-1.0.0"
+    embedding_model: str
+    embedding_version: str
+    strategy: str = "Qdrant vector search + deterministic hybrid reranking"
+    vector_matches: int
+    eligible_candidates: int
+    returned_by_slot: dict[str, int] = Field(default_factory=dict)
+    weights: dict[str, float] = Field(default_factory=dict)
+
+
 class RetrievedChunk(BaseModel):
+    match_details: RetrievalMatchDetails | None = None
     evidence_revision: str | None = None
     chunk_id: str | None = None
     content_id: str | None = None
@@ -118,6 +140,8 @@ class RetrievedChunk(BaseModel):
 
 
 class RetrieveResponse(BaseModel):
+    purpose: Literal["assistant", "evidence_search"] = "assistant"
+    diagnostics: RetrievalDiagnostics | None = None
     evidence_limitations: list[str] = Field(default_factory=list)
     project_id: str
     query: str
