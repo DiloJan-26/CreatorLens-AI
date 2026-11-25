@@ -2,6 +2,7 @@ import { authorizedHeaders,ApiError,sessionExpired } from "./auth-transport";
 import { getComparisonObjective } from "./app-session";
 import type { ComparisonObjective, SemanticAnalysis, ProviderStatus } from "@/types/project";
 import type {
+  EvidenceChunkListResponse,
   ChatCitation,
   ChatHistoryResponse,
   ChatStreamRequest,
@@ -204,16 +205,20 @@ export async function indexProject(
   });
 }
 
+export async function getProjectEvidenceChunks(projectId: string, signal?: AbortSignal): Promise<EvidenceChunkListResponse> {
+  return request<EvidenceChunkListResponse>(`/api/projects/${encodeURIComponent(projectId)}/chunks`, { signal });
+}
+
 export async function retrieveProjectChunks(
   projectId: string,
   payload: RetrieveProjectChunksRequest,
+  signal?: AbortSignal,
 ): Promise<RetrieveResponse> {
   return request<RetrieveResponse>(`/api/projects/${projectId}/retrieve`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   });
 }
 

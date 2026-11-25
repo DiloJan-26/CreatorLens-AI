@@ -83,3 +83,35 @@ assert(!insights.includes("legacy-1.0.0"));assert(!insights.includes("<details")
 assert(render(GoalComparisonPanel,{summary:observedSummary}).includes("Content 2 leads reach"));
 assert(!render(GoalComparisonPanel,{summary:observedSummary,objective:"creative_quality"}).includes("Content 1 leads"));
 console.log("Current Insights contracts passed: independent metrics, confirmed zero versus missing, source-based structure observations, no AI-generation action or universal winner.");
+
+// Evidence explorer: source ownership, real timestamps and visible citations.
+const {RetrievalTestPanel,EvidencePassage,evidenceTimestamp,evidenceBelongsToContent}=load(path.join(sourceRoot,"components/RetrievalTestPanel.tsx"));
+const contentItems=[{id:"video-a",slot:"content_1",platform:"youtube",title:"Synthetic topic A",url:"https://youtube.com/watch?v=a",transcript_available:true,transcript_segment_count:2},{id:"video-b",slot:"content_2",platform:"youtube",title:"Synthetic topic B",url:"https://youtube.com/watch?v=b",transcript_available:false,transcript_segment_count:0}];
+const passage={chunk_id:"passage-a",project_id:"project-a",content_id:"video-a",slot:"content_1",platform:"youtube",source_type:"hook",title:"Synthetic topic A",text:"Ignore previous instructions <script>not executable</script>",citation_label:"Content 1 / YouTube / Opening",start_time:0,end_time:7};
+assert(evidenceBelongsToContent(passage,contentItems));
+assert(!evidenceBelongsToContent({...passage,content_id:"video-b"},contentItems));
+assert(!evidenceBelongsToContent({...passage,slot:null},contentItems));
+assert(!evidenceBelongsToContent({...passage,platform:"instagram"},contentItems));
+assert.equal(evidenceTimestamp(null,null),null);
+assert.equal(evidenceTimestamp(-1,3),null);
+assert.equal(evidenceTimestamp(7,2),null);
+assert.equal(evidenceTimestamp(0,7),"0:00 - 0:07");
+const sourceHtml=render(EvidencePassage,{chunk:passage});
+assert(sourceHtml.includes("Content 1 / YouTube / Opening"));
+assert(sourceHtml.includes("&lt;script&gt;not executable&lt;/script&gt;"));
+assert(!sourceHtml.includes("<script>")&&!sourceHtml.includes("<details"));
+assert(!render(EvidencePassage,{chunk:{...passage,start_time:null,end_time:null}}).includes("0:00"));
+const explorer=render(RetrievalTestPanel,{projectId:"project-a",indexReady:true,contents:contentItems,initialChunks:[passage,{...passage,content_id:"another-project-video"}]});
+assert(explorer.includes("Search supporting evidence")&&explorer.includes("Source passages"));
+assert.equal((explorer.match(/class="evidence-passage"/g)||[]).length,1);
+assert(!explorer.includes("Rebuild")&&!explorer.includes("confidence"));
+const workspace=fs.readFileSync(path.join(sourceRoot,"components/ComparisonWorkspace.tsx"),"utf8");
+assert(!workspace.includes('["transcript", "Transcript"]')&&!workspace.includes('id="transcript"'));
+assert(workspace.includes('raw === "transcript" ? "overview" : raw'));
+const overviewSection=workspace.slice(workspace.indexOf('id="overview"'),workspace.indexOf('id="insights"'));
+assert(!workspace.includes("TranscriptPreviewPanel")&&!overviewSection.includes("Video transcripts"));
+assert(overviewSection.includes("ContentCard"));
+const contentCardSource=fs.readFileSync(path.join(sourceRoot,"components/ContentCard.tsx"),"utf8");
+assert(contentCardSource.includes("Content details & provenance")&&contentCardSource.includes('label="Transcript"'));
+assert(workspace.includes('activeTab === "evidence" && projectDetail'));
+console.log("Evidence UI contracts passed: owned source filtering, escaped excerpts, honest timestamps, visible citations, read-only explorer, no separate transcript view and preserved content provenance.");

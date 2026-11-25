@@ -43,8 +43,11 @@ export function TranscriptPreviewPanel({
           slot: item?.slot ?? null,
           platform: item?.platform ?? null,
         },
-        5,
+        100,
       );
+      if (transcriptPreview.project_id !== projectId || transcriptPreview.slot !== item?.slot || transcriptPreview.platform !== item?.platform) {
+        throw new Error("Transcript does not match this video.");
+      }
       setPreview(transcriptPreview);
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -65,18 +68,17 @@ export function TranscriptPreviewPanel({
             {item && <PlatformIcon platform={item.platform} />}
             {label} {item ? `- ${platformLabel(item.platform)}` : ""}
           </p>
-          <h2 className="mt-2 text-base font-semibold text-slate-950">
-            Caption excerpts
-          </h2>
+          <h3 className="mt-2 text-base font-semibold text-slate-950">{item?.title ?? "Transcript"}</h3>
+          <p className="muted text-sm mt-2">{item?.transcript_available ? `${item.transcript_segment_count} caption segments` : "Captions unavailable"}{item?.transcript_language ? ` / ${item.transcript_language}` : ""}</p>
 
         </div>
         <button
           type="button"
           onClick={handleLoadPreview}
-          disabled={isLoading || !projectId || !item}
+          disabled={isLoading || !projectId || !item || !item.transcript_available}
           className="inline-flex h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isLoading ? "Loading..." : "Read captions"}
+          {isLoading ? "Loading..." : preview ? "Refresh transcript" : "Read transcript"}
         </button>
       </div>
 
@@ -88,6 +90,8 @@ export function TranscriptPreviewPanel({
 
       {preview ? (
         <div className="mt-4">
+          {preview.transcript_source && <p className="muted text-sm">Source: {preview.transcript_source}</p>}
+          {preview.transcript_segment_count > preview.segments.length && <p className="muted text-sm">Showing {preview.segments.length} of {preview.transcript_segment_count} segments.</p>}
           {!preview.transcript_available || preview.segments.length === 0 ? (
             <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               Transcript unavailable for this content item.

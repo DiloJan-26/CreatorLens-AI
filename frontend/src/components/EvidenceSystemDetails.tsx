@@ -1,47 +1,38 @@
 "use client";
 
-import type { IndexProjectResponse } from "@/types/project";
+import { useEffect, useState } from "react";
+import { getProjectEvidenceChunks } from "@/lib/api";
+import type { ContentItem, StoredEvidenceChunk } from "@/types/project";
+import { RetrievalTestPanel, evidenceBelongsToContent } from "./RetrievalTestPanel";
+import { MetadataAvailabilityPanel } from "./MetadataAvailabilityPanel";
+import { Icon, Notice } from "./ui";
 
-import { RagIndexPanel } from "./RagIndexPanel";
-import { RetrievalTestPanel } from "./RetrievalTestPanel";
-
-type EvidenceSystemDetailsProps = {
-  projectId: string | null;
-  indexResult: IndexProjectResponse | null;
-  indexReady: boolean;
-  defaultOpen?: boolean;
-  onIndexed: (result: IndexProjectResponse) => void;
-};
-
-export function EvidenceSystemDetails({
-  projectId,
-  indexResult,
-  indexReady,
-  defaultOpen = false,
-  onIndexed,
-}: EvidenceSystemDetailsProps) {
-  return (
-    <div className="grid gap-5">
-      <div>
-        <h2 className="text-xl">Explore supporting evidence</h2>
-        <p className="muted mt-2">
-          Search the available source passages. Results preserve content slot,
-          platform, source type and timestamps.
-        </p>
-      </div>
-      <RetrievalTestPanel projectId={projectId} indexReady={indexReady} />
-      <details open={defaultOpen} className="ui-panel">
-        <summary>Advanced / Evidence index controls</summary>
-        <p className="muted text-sm mb-4">
-          Index status: {indexReady ? "Ready" : "Not ready"}. Indexing changes
-          the available evidence and is an explicit action.
-        </p>
-        <RagIndexPanel
-          projectId={projectId}
-          initialResult={indexResult}
-          onIndexed={onIndexed}
-        />
-      </details>
+export function EvidenceSystemDetails({ projectId, indexReady, contents }: {
+  projectId: string; indexReady: boolean; contents: ContentItem[];
+}) {
+  const [library, setLibrary] = useState<StoredEvidenceChunk[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    getProjectEvidenceChunks(projectId, controller.signal).then(data => {
+      if (data.project_id !== projectId) throw new Error("Evidence does not match this comparison.");
+      if (!controller.signal.aborted) {
+        setLibrary(data.chunks.filter(chunk => chunk.project_id === projectId && evidenceBelongsToContent(chunk, contents))); setError(null);
+      }
+    }).catch(error => {
+      if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "Could not load evidence.");
+    });
+    return () => controller.abort();
+  }, [projectId, attempt, contents]);
+  return <div className="evidence-explorer">
+    <div className="evidence-library-status">
+      <span className="evidence-icon"><Icon name="evidence" size={22}/></span>
+      <div><h2>Evidence library</h2><p className="muted">{library ? `${library.length} stored passages` : error ? "Source passages could not be loaded" : "Loading source passages..."}</p></div>
+      <span className={`evidence-status ${indexReady ? "is-ready" : ""}`}>{indexReady ? "Search ready" : "Search not ready"}</span>
     </div>
-  );
+    {error && <Notice tone="error">{error} <button className="source-link" onClick={() => setAttempt(n => n + 1)}>Retry</button></Notice>}
+    <RetrievalTestPanel projectId={projectId} indexReady={indexReady} contents={contents} initialChunks={library ?? []}/>
+    <MetadataAvailabilityPanel projectId={projectId} contents={contents}/>
+  </div>;
 }
