@@ -72,7 +72,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
   );
   const navigation = (
     <nav aria-label="Workspace navigation">
-      <Link href="/workspace" className="rail-link" aria-current={pathname==="/workspace"?"page":undefined} onClick={()=>setDrawer(false)}><Icon name="home"/>Your analyses</Link>
+      <Link href="/workspace" className="rail-link" aria-current={pathname==="/workspace"?"page":undefined} onClick={()=>setDrawer(false)}><Icon name="home"/>Analyses</Link>
       <p className="nav-group-label">Workspace</p>
       {creatorLinks.map((l) => (
         <Link
@@ -135,7 +135,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
             </nav>
             <div className="header-actions">
               {account ? <AccountMenu/> : <WorkspaceEntry className="button-secondary public-signin">Sign in</WorkspaceEntry>}
-              <WorkspaceEntry className="button-primary public-getstarted">Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
+              <WorkspaceEntry className="button-primary public-getstarted" signedInLabel={<>Go to Workspace <Icon name="arrow" size={16}/></>}>Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
               <button
                 className="icon-button public-menu"
                 onClick={() => setDrawer(true)}
@@ -172,7 +172,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
               <span className="muted" aria-hidden="true">
                 /
               </span>
-              <span className="truncate">{active?.label ?? (pathname==="/workspace"?"Your analyses":"CreatorLens")}</span>
+              <span className="truncate">{active?.label ?? (pathname==="/workspace"?"Analyses":"CreatorLens")}</span>
             </div>
             <div className="header-actions">
               <AccountMenu />
@@ -198,7 +198,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
           {publicPage && (
             <div className="drawer-actions">
               <AccountMenu/>
-              <WorkspaceEntry>Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
+              <WorkspaceEntry signedInLabel={<>Go to Workspace <Icon name="arrow" size={16}/></>}>Get started <Icon name="arrow" size={16}/></WorkspaceEntry>
             </div>
           )}
           {homeLink}

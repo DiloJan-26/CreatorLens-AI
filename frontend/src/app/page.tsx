@@ -22,7 +22,7 @@ export default function Home() {
               evidence and a cited AI assistant powered by RAG.
             </p>
             <div className="hero-actions">
-              <WorkspaceEntry className="button-primary" >
+              <WorkspaceEntry className="button-primary" signedInLabel={<>Go to Workspace <Icon name="arrow" size={18}/></>}>
                 Try CreatorLens <Icon name="arrow" size={18} />
               </WorkspaceEntry>
               <a className="button-secondary" href="#how-it-works">

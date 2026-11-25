@@ -133,3 +133,34 @@ for(const file of ["app/page.tsx","components/WorkspaceCTA.tsx","components/Land
   const source=fs.readFileSync(path.join(root,file),"utf8");assert(source.includes("WorkspaceEntry"));assert(!/href="\/analyze"/.test(source));
 }
 console.log("Direct OAuth contracts passed: trusted callback, Google-only identity, account chooser, duplicate suppression, recoverable errors and shared public entry actions without sign-in dialogs.");
+
+// Homepage entry actions reflect verified account restoration, not button-specific auth paths.
+const accountExports=load(path.join(root,"components/AccountProvider.tsx"));
+const originalUseAccount=accountExports.useAccount;
+let entryState={account:null,loading:false};
+accountExports.useAccount=()=>entryState;
+const {WorkspaceEntry}=load(path.join(root,"components/WorkspaceEntry.tsx"));
+const entryMarkup=(label, signedInLabel)=>renderToStaticMarkup(React.createElement(WorkspaceEntry,{signedInLabel},label));
+for(const label of ["Get started","Try CreatorLens","Compare two videos"]) {
+  const html=entryMarkup(label,label==="Compare two videos"?undefined:"Go to Workspace");
+  assert(html.includes("<button")&&html.includes(label)&&!html.includes('href="/workspace"'));
+}
+entryState={account:{id:"synthetic-signed-in"},loading:false};
+for(const label of ["Get started","Try CreatorLens"]) {
+  const html=entryMarkup(label,"Go to Workspace");
+  assert(html.includes('href="/workspace"')&&html.includes("Go to Workspace")&&!html.includes(label)&&!html.includes("<button"));
+}
+assert(entryMarkup("Compare two videos").includes("Compare two videos"));
+entryState={account:null,loading:true};
+const restoringEntry=entryMarkup("Get started","Go to Workspace");
+assert(restoringEntry.includes("disabled")&&restoringEntry.includes("Restoring session...")&&!restoringEntry.includes("Get started"));
+entryState={account:null,loading:false};assert(entryMarkup("Get started","Go to Workspace").includes("Get started"));
+accountExports.useAccount=originalUseAccount;
+const navbarSource=fs.readFileSync(path.join(root,"components/AppNavbar.tsx"),"utf8");
+const homeSource=fs.readFileSync(path.join(root,"app/page.tsx"),"utf8");
+assert.equal((navbarSource.match(/signedInLabel=/g)||[]).length,2,'Desktop and mobile entries need the same session-aware label');
+assert(homeSource.includes('signedInLabel={<>Go to Workspace'));
+assert(homeSource.includes('Compare two videos <Icon'));
+assert(!navbarSource.includes("Your analyses"));
+assert(fs.readFileSync(path.join(root,"components/AccountProvider.tsx"),"utf8").includes('>Workspace</Link>'));
+console.log("Landing session contracts passed: signed-out Google entries, signed-in Workspace links, session-restoration state, logout labels and generic navigation. OAuth callback remains fixed to /workspace.");
