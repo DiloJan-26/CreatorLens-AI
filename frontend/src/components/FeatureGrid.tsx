@@ -1,7 +1,7 @@
 const FEATURES = [
   {
     title: "Cross-platform comparison",
-    text: "Compare YouTube vs Instagram, Instagram vs Facebook, YouTube vs YouTube, and more.",
+    text: "Review public video evidence across YouTube, Instagram and Facebook.",
   },
   {
     title: "Hook intelligence",

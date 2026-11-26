@@ -3,15 +3,15 @@ import { SectionHeader } from "./SectionHeader";
 const PLATFORMS = [
   {
     name: "YouTube Shorts",
-    detail: "Public Shorts and watch URLs with captions when available.",
+    detail: "Shorts and watch URLs; public metadata and native captions.",
   },
   {
     name: "Instagram Reels",
-    detail: "Best-effort public metadata, captions, hashtags, and audio transcription.",
+    detail: "Public Reels and posts with source-linked video evidence.",
   },
   {
     name: "Facebook Reels",
-    detail: "Best-effort public Reels, watch URLs, and post video extraction.",
+    detail: "Public Reels, watch URLs and video posts.",
   },
 ];
 
@@ -20,9 +20,9 @@ export function SupportedPlatforms() {
     <section className="border-b border-slate-200 bg-slate-50 py-16">
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <SectionHeader
-          eyebrow="Supported platforms"
+          eyebrow="Platform coverage"
           title="Built for the short-form channels creators actually compare."
-          text="CreatorLens AI keeps cross-platform comparisons clear with Content 1 and Content 2 labels, platform names, and confirmed public metric boundaries."
+          text="Evidence availability depends on public access and enabled extraction providers."
         />
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">

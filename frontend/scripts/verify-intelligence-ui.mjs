@@ -50,7 +50,7 @@ const render = (component, props) => renderToStaticMarkup(React.createElement(co
 const panel = render(GoalComparisonPanel, { summary });
 assert(panel.includes("Unavailable"));
 assert(panel.includes("0"));
-assert(panel.includes("Opening &amp; messaging") && panel.includes("Like rate") && panel.includes("Reach"));
+assert(panel.includes("Hook &amp; Message Insights") && panel.includes("Like rate") && panel.includes("Reach"));
 assert(!panel.includes("<select") && !panel.includes("<details") && !panel.includes(">Balanced<"));
 assert(panel.includes('aria-pressed="true"'));
 assert(render(ExecutiveInsightSnapshot, { summary }).includes("Content 2 leads under reach"));
@@ -77,7 +77,7 @@ console.log("Creator UI contracts passed: canonical outcomes, null/zero, Reach d
 const {CreatorInsightSummaryPanel}=load(path.join(sourceRoot,"components/CreatorInsightSummaryPanel.tsx"));
 const observedSummary={...summary,intelligence:{policy_version:"observed-intelligence-1.0.0",contents:[{content_id:"a",slot:"content_1",title:"Synthetic A",values:{views:0,like_rate:null},observations:[],evidence:[],limitations:["No transcript"]},{content_id:"b",slot:"content_2",title:"Synthetic B",values:{views:10000,like_rate:1},observations:[],evidence:[],limitations:[]}],decisions:{reach:{dimension:"reach",status:"eligible",outcome:"content_2",winner_slot:"content_2",values:{content_1:0,content_2:10000},units:"views",explanation:"Observed views"},like_rate:{dimension:"like_rate",status:"insufficient_evidence",outcome:"insufficient_evidence",values:{content_1:null,content_2:1},units:"percent",missing_inputs:["Views must be positive"]}},recommendations:[]}};
 const insights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",initialSummary:observedSummary});
-for(const title of ["Your performance signals","Opening &amp; messaging structure","What to try next"])assert(insights.includes(title));
+for(const title of ["Your performance signals","Hook &amp; Message Insights"])assert(insights.includes(title));
 assert(!insights.includes("Run AI creative review"));assert(!insights.includes("AI connection diagnostic"));
 assert(!insights.includes("legacy-1.0.0"));assert(!insights.includes("<details"));assert(insights.includes("\u2014")&&insights.includes("0"));
 assert(render(GoalComparisonPanel,{summary:observedSummary}).includes("Content 2 leads reach"));
@@ -127,3 +127,23 @@ const retrievalSource=fs.readFileSync(path.join(sourceRoot,"components/Retrieval
 assert(retrievalSource.includes('purpose: "evidence_search"'));
 assert(!retrievalSource.includes("streamChatResponse")&&!retrievalSource.includes("requestSemanticAnalysis"));
 console.log("Retrieval explorer contracts passed: explicit search purpose, actual model/trace diagnostics, honest ranking scores and safely highlighted source text; no generation action.");
+
+
+// New source-scoped Hook & Message cards, including the partial-caption safeguard.
+const {hookMessageFixture}=await import('./hook-message-fixture.mjs');
+const {HookMessageInsights}=load(path.join(sourceRoot,'components/HookMessageInsights.tsx'));
+const hookFixture=hookMessageFixture();
+const hookHtml=render(HookMessageInsights,hookFixture);
+assert(hookHtml.includes('Hook &amp; Message Insights'));
+assert(hookHtml.includes('Partial review')&&hookHtml.includes('Inspected speech 0-5s'));
+assert(hookHtml.includes('cannot establish whether title terms appear throughout'));
+assert(hookHtml.includes('Matching segment: 0-8s.'));
+assert.equal((hookHtml.match(/data-recommendation-id="experiment-a"/g)||[]).length,1);
+assert.equal((hookHtml.match(/<blockquote>/g)||[]).length,2,'One excerpt per owned source, without repeated recommendations');
+assert(!hookHtml.includes('<details')&&!hookHtml.includes('<select')&&!hookHtml.includes('No title-derived topic terms matched'));
+assert(hookHtml.includes('href="/analyze#evidence"'));
+const swapped=structuredClone(hookFixture);swapped.recommendations[0].target_content_id='video-2';
+assert(!render(HookMessageInsights,swapped).includes('data-recommendation-id="experiment-a"'));
+const injected=structuredClone(hookFixture);injected.contents[0].hook_message.assessments[1].excerpt='<script>untrusted source</script>';
+const safe=render(HookMessageInsights,injected);assert(safe.includes('&lt;script&gt;')&&!safe.includes('<script>'));
+console.log('Hook & Message UI contracts passed: explicit partial scope, owned findings, short escaped excerpts, segment-level timing, one supported experiment and no dropdowns or inference.');

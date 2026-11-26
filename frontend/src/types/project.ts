@@ -679,8 +679,37 @@ export type SemanticAnalysis = {
 export type ProviderStatus = { provider_emergency_stop: boolean; provider_calls_enabled: boolean; extraction_available: boolean };
 
 export type ObservedEvidence = {evidence_id:string; project_id:string; content_id:string; slot:ContentSlot; platform:string; source_type:string; text:string; evidence_revision:string; start_time:number|null; end_time:number|null};
-export type StructureObservation = {id:string;rule_id:string;policy_version:string;matched:boolean;observation:string;measured:Record<string,unknown>;evidence_ids:string[];evidence_quality:string;limitation:string};
-export type ObservedContent = {content_id:string;slot:ContentSlot;title:string|null;creator:string|null;platform:string;input_revision:string;observed_at:string|null;publication_date:string|null;values:Record<string,number|null>;scores:Record<string,number|null>;observations:StructureObservation[];evidence:ObservedEvidence[];limitations:string[]};
+export type HookMessageScope = {
+  kind: "timed" | "word_passage" | "description" | "unavailable";
+  label: string;
+  coverage: "complete" | "partial" | "word_limited" | "unavailable";
+  requested_end: number | null;
+  actual_ranges: [number, number][];
+  word_count: number;
+};
+export type StructureObservation = {
+  id:string;rule_id:string;policy_version:string;matched:boolean;observation:string;
+  measured:Record<string,unknown>;evidence_ids:string[];evidence_quality:string;limitation:string;
+};
+export type HookMessageAssessment = Omit<StructureObservation,"matched"> & {
+  matched: boolean | null;
+  status: "detected" | "not_detected" | "not_assessable";
+  title: string;
+  scope: HookMessageScope;
+  excerpt: string | null;
+  excerpt_start: number | null;
+  excerpt_end: number | null;
+  action_eligible: boolean;
+};
+export type HookMessageAnalysis = {
+  policy_version: string;
+  status: "assessed" | "partial" | "not_assessable";
+  topic_candidates: string[];
+  opening_scope: HookMessageScope;
+  assessments: HookMessageAssessment[];
+  limitations: string[];
+};
+export type ObservedContent = {content_id:string;slot:ContentSlot;title:string|null;creator:string|null;platform:string;input_revision:string;observed_at:string|null;publication_date:string|null;values:Record<string,number|null>;scores:Record<string,number|null>;observations:StructureObservation[];hook_message?:HookMessageAnalysis;evidence:ObservedEvidence[];limitations:string[]};
 export type ObservedDecision = {dimension:string;policy_version:string;status:string;outcome:string;winner_slot:ContentSlot|null;winner_content_id:string|null;values:Record<string,number|null>;difference:number|null;units:string;explanation:string;missing_inputs:string[];limitations:string[]};
 export type ObservedRecommendation = {id:string;policy_version:string;target_content_id:string;target_slot:ContentSlot;category:string;title:string;observation:string;trigger_rule:string;evidence_ids:string[];action:string;experiment:string;rationale:string;limitation:string;priority:{label:string;score:number;evidence_support:number;objective_relevance:number;actionability:number}};
 export type ObservedIntelligence = {policy_version:string;text_policy_version:string;project_id:string;snapshot_revision:string;contents:ObservedContent[];decisions:Record<string,ObservedDecision>;recommendations:ObservedRecommendation[];limitations:string[]};

@@ -18,7 +18,7 @@ def project_current_context(summary, selected, question):
     if selected_decision is None:
         selected_decision=dict(outcome='insufficient_evidence',winner_slot=None,winner_content_id=None,values={},difference=None,
             difference_content_1_minus_content_2=None,difference_units='none',units='none',
-            explanation='Opening and messaging are individual textual observations. No universal or creative-quality winner is inferred.',
+            explanation='Hook & Message Insights describe source-supported wording. No creative-quality winner is inferred.',
             eligibility=dict(status='insufficient_evidence',reasons=[],missing_evidence=[]),limitations=[])
     identities={i['slot']:dict(content_id=i['content_id'],project_id=data['project_id'],platform=i['platform'],metric_input_revision=i['input_revision'],
                 transcript_revision=i['transcript_revision']) for i in data['contents']}
@@ -60,8 +60,20 @@ def observed_answer(context, question, intent, citations):
         allowed={c.evidence_id for c in citations}
         observations=[f"Content {i['slot'][-1]}: "+o['observation'] for i in data['contents'] if not target_slot or i['slot']==target_slot for o in i['observations']
             if set(o['evidence_ids']).issubset(allowed) and (not window or o['rule_id']!='description_topic')]
+        coverage_notes=[]
+        for item in data['contents']:
+            if target_slot and item['slot']!=target_slot:continue
+            analysis=item.get('hook_message') or {}
+            scope=analysis.get('opening_scope') or {}
+            # An explicit shorter query must never inherit a longer or untimed passage.
+            if window and (scope.get('kind')=='word_passage' or any(end>window for _,end in scope.get('actual_ranges',[]))):continue
+            if scope.get('coverage') in {'partial','word_limited'}:
+                coverage_notes.append(f"Content {item['slot'][-1]}: {scope.get('label')}; this does not establish absence across the full opening window.")
+            elif scope.get('coverage')=='unavailable':
+                unknown=next((a for a in analysis.get('assessments',[]) if a['rule_id']=='opening_topic'),None)
+                if unknown:coverage_notes.append(f"Content {item['slot'][-1]}: "+unknown['observation'])
         return ComparisonAnswer(winner='insufficient_evidence', confidence=0, objective=objective, decision_status='insufficient_evidence',
-            evidence_status='source_observations', canonical_decision=decision, key_reasons=observations[:8] or [decision['explanation']],
+            evidence_status='source_observations', canonical_decision=decision, key_reasons=(coverage_notes+observations)[:8] or [decision['explanation']],
             recommendations=recommendations,evidence=evidence,limitations=data['limitations'])
     compare=bool(re.search(r'which|winner|wins|leads|higher|lower|difference|overall|balanced|compare|real winner',text)) or intent=='performance_reasoning'
     if compare:

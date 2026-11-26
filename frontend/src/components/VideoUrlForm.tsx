@@ -98,7 +98,7 @@ export function VideoUrlForm({
             ))}
           </p>
           <p className="muted text-xs mt-1">
-            Public videos only. Availability varies by platform.
+            Public videos. Extraction depends on enabled providers.
           </p>
         </div>
         <button

@@ -18,8 +18,8 @@ export default function Home() {
               <br className="hero-line-break" /> video worked better.
             </h1>
             <p className="hero-description">
-              Compare two public videos using confirmed metrics, transcript
-              evidence and a cited AI assistant powered by RAG.
+              Explore YouTube, Instagram and Facebook video evidence with confirmed
+              metrics, transcripts and a cited AI assistant powered by RAG.
             </p>
             <div className="hero-actions">
               <WorkspaceEntry className="button-primary" signedInLabel={<>Go to Workspace <Icon name="arrow" size={18}/></>}>
@@ -40,7 +40,6 @@ export default function Home() {
                       : "Facebook"}
                 </span>
               ))}
-              <span>Google sign-in / private workspace</span>
             </div>
           </div>
           <LandingComparisonPreview />

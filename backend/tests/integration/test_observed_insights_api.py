@@ -20,3 +20,15 @@ def test_no_semantic_inputs_are_used_by_current_findings(client):
     assert data['recommendations']==[]
     assert all(c['values']['subscribers'] is None for c in data['contents'])
     assert data['decisions']['like_rate']['status']=='eligible'
+
+
+def test_hook_message_unknowns_serialize_without_triggering_inference(client):
+    data=client.get('/api/projects/p/insights/summary?objective=creative_quality').json()['intelligence']
+    assert data['text_policy_version']=='hook-message-2.0.0'
+    for content in data['contents']:
+        analysis=content['hook_message']
+        assert analysis['status']=='not_assessable'
+        assert len(analysis['assessments'])==5
+        assert all(f['status']=='not_assessable' and f['matched'] is None for f in analysis['assessments'])
+        assert not any(f['action_eligible'] for f in analysis['assessments'])
+    assert data['recommendations']==[]
