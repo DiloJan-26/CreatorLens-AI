@@ -81,7 +81,7 @@ def test_observations_have_owned_excerpts_and_deduplicated_actions():
     refs={e['evidence_id']:e for e in content['evidence']}
     for ob in content['observations']:
         assert all(refs[eid]['content_id']=='content_1' for eid in ob['evidence_ids'])
-        assert ob['policy_version']=='opening-messaging-1.0.0'
+        assert ob['policy_version']=='hook-message-2.0.0'
     assert len([r for r in value.recommendations if r['category']=='opening'])<=1
     assert all(r['target_content_id']=='content_1' for r in value.recommendations)
     assert all(r['priority']['score']==sum(r['priority'][k] for k in ('evidence_support','objective_relevance','actionability')) for r in value.recommendations)
@@ -91,14 +91,18 @@ def test_boundary_crossing_uses_word_passage_without_fabricated_timing():
     value=pack(item(transcript_evidence=quality,duration_seconds=12),segments={'content_1':segments})
     refs=[e for e in value.contents[0]['evidence'] if e['source_type']=='transcript']
     assert refs and refs[0]['start_time'] is None and refs[0]['end_time'] is None
-    assert any('40-word' in o['observation'] for o in value.contents[0]['observations'])
+    assert value.contents[0]['hook_message']['opening_scope']['kind']=='word_passage'
+    assert '40-word' in value.contents[0]['hook_message']['opening_scope']['label']
 
 @pytest.mark.parametrize('language',['ta','hi','unknown',''])
 def test_unreviewed_language_does_not_get_english_classification(language):
     segments,quality=evidence()
     quality['provenance']['caption_track_language']=language
     value=pack(item(transcript_evidence=quality,transcript_language=language),segments={'content_1':segments})
-    assert not value.contents[0]['observations'] and not value.recommendations
+    analysis=value.contents[0]['hook_message']
+    assert all(a['status']=='not_assessable' for a in analysis['assessments'] if a['rule_id']!='description_topic')
+    assert all(o['rule_id']=='description_topic' for o in value.contents[0]['observations'])
+    assert not value.recommendations
 
 def test_word_boundaries_do_not_match_inside_other_words():
     segments,quality=evidence('Dopaminergic brainy concepts are discussed here.')
@@ -202,7 +206,8 @@ def test_caption_boundary_with_untimed_speech_never_fabricates_seconds():
     value=pack(item(transcript_evidence=quality),segments={'content_1':segments})
     ref=next(e for e in value.contents[0]['evidence'] if e['source_type']=='transcript')
     assert ref['start_time'] is None and ref['end_time'] is None
-    assert any('40-word' in o['observation'] for o in value.contents[0]['observations'])
+    assert value.contents[0]['hook_message']['opening_scope']['kind']=='word_passage'
+    assert '40-word' in value.contents[0]['hook_message']['opening_scope']['label']
 
 
 @pytest.mark.parametrize('mode',['direct','timeout'])

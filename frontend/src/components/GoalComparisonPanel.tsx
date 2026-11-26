@@ -6,7 +6,7 @@ import {comparisonValue,outcomeLabel} from "@/lib/intelligence-copy";
 import type {CreatorInsightSummaryResponse} from "@/types/project";
 import {Icon} from "./ui";
 import {ResultBanner} from "./ResultBanner";
-const OPTIONS=[["reach","Reach","trend"],["engagement","Like rate","target"],["creative_quality","Opening & messaging","bulb"]] as const;
+const OPTIONS=[["reach","Reach","trend"],["engagement","Like rate","target"],["creative_quality","Hook & Message Insights","bulb"]] as const;
 export function GoalComparisonPanel({summary,onChange,objective="reach"}:{summary:CreatorInsightSummaryResponse;onChange?:(value:CreatorInsightSummaryResponse)=>void;onCreativeReview?:()=>void;creativeBusy?:boolean;objective?:"reach"|"engagement"|"creative_quality"}){
  const [selected,setSelected]=useState(objective),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
  useEffect(()=>{if(!onChange)return;let active=true;const timer=setTimeout(()=>{setComparisonObjective(summary.project_id,selected);
@@ -19,9 +19,9 @@ export function GoalComparisonPanel({summary,onChange,objective="reach"}:{summar
  const leader=current?.winner_slot;
  return <section className="ui-panel outcome-panel" aria-label="Canonical comparison" aria-busy={busy}>
  <div className="objective-tabs" role="group" aria-label="Comparison objective">{OPTIONS.map(([id,label,icon])=><button type="button" key={id} aria-pressed={selected===id} disabled={busy} onClick={()=>setSelected(id)}><Icon name={icon} size={17}/>{label}</button>)}</div>
- <ResultBanner title={!current?"Explore opening & messaging":leader?`Content ${leader.slice(-1)} leads ${selected==="reach"?"reach":"like rate"}`:current.outcome==="tie"?"Within the comparison threshold":"Available evidence"} winner={Boolean(leader)} description={current?.explanation??"Inspect each video's wording and supported experiments in Insights."}/>
+ <ResultBanner title={!current?"Explore Hook & Message Insights":leader?`Content ${leader.slice(-1)} leads ${selected==="reach"?"reach":"like rate"}`:current.outcome==="tie"?"Within the comparison threshold":"Available evidence"} winner={Boolean(leader)} description={current?.explanation??"Review how each video introduces its topic and viewer takeaway in Insights."}/>
  {current&&<div className="outcome-values">{(["content_1","content_2"] as const).map((slot,index)=><div key={slot}><span>Content {index+1}</span><strong>{comparisonValue(current.values[slot],current.units)}</strong></div>)}</div>}
- <p className="muted text-sm mt-3">{current?.status==="insufficient_evidence"?current.missing_inputs.join(" "):selected==="reach"?"Observed lifetime views; publishing periods may differ.":selected==="engagement"?"Likes per recorded view; comments are assessed independently.":"Textual patterns describe structure, without a creativity score."}</p>
+ <p className="muted text-sm mt-3">{current?.status==="insufficient_evidence"?current.missing_inputs.join(" "):selected==="reach"?"Observed lifetime views; publishing periods may differ.":selected==="engagement"?"Likes per recorded view; comments are assessed independently.":"Source-supported findings and optional experiments; no creative-quality ranking."}</p>
  {error&&<p role="alert">{error}</p>}</section>;
  }
  const current=summary.goal_comparison,decision=current?.selected_objective===selected?current:current?.objective_decisions?.[selected];
