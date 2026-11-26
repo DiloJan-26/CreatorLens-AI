@@ -102,8 +102,9 @@ assert(sourceHtml.includes("&lt;script&gt;not executable&lt;/script&gt;"));
 assert(!sourceHtml.includes("<script>")&&!sourceHtml.includes("<details"));
 assert(!render(EvidencePassage,{chunk:{...passage,start_time:null,end_time:null}}).includes("0:00"));
 const explorer=render(RetrievalTestPanel,{projectId:"project-a",indexReady:true,contents:contentItems,initialChunks:[passage,{...passage,content_id:"another-project-video"}]});
-assert(explorer.includes("Retrieve supporting evidence")&&explorer.includes("Browse stored evidence"));
-assert.equal((explorer.match(/class="evidence-passage"/g)||[]).length,1);
+assert(explorer.includes("Retrieve supporting evidence")&&!explorer.includes("Browse stored evidence"));
+assert.equal((explorer.match(/class="evidence-passage"/g)||[]).length,0);
+assert(!explorer.includes("passages available")&&!explorer.includes("No stored passages"));
 assert(!explorer.includes("Rebuild")&&!explorer.includes("confidence"));
 const workspace=fs.readFileSync(path.join(sourceRoot,"components/ComparisonWorkspace.tsx"),"utf8");
 assert(!workspace.includes('["transcript", "Transcript"]')&&!workspace.includes('id="transcript"'));
@@ -147,3 +148,15 @@ assert(!render(HookMessageInsights,swapped).includes('data-recommendation-id="ex
 const injected=structuredClone(hookFixture);injected.contents[0].hook_message.assessments[1].excerpt='<script>untrusted source</script>';
 const safe=render(HookMessageInsights,injected);assert(safe.includes('&lt;script&gt;')&&!safe.includes('<script>'));
 console.log('Hook & Message UI contracts passed: explicit partial scope, owned findings, short escaped excerpts, segment-level timing, one supported experiment and no dropdowns or inference.');
+
+
+// Assistant entry points share the same direct route; no intermediate chat panel.
+const {EvidenceSystemDetails}=load(path.join(sourceRoot,'components/EvidenceSystemDetails.tsx'));
+const evidencePage=render(EvidenceSystemDetails,{projectId:'project-a',indexReady:true,contents:contentItems});
+assert(evidencePage.includes('Ask the Assistant')&&evidencePage.includes('href="/chat"'));
+assert(insights.includes('Ask the Assistant')&&insights.includes('href="/chat"'));
+assert(workspace.includes('id === "chat" ? (')&&workspace.includes('<Link key={id} href="/chat">'));
+assert(workspace.includes('router.replace("/chat")'));
+assert(!workspace.includes('id="chat"')&&!workspace.includes('Open AI Assistant'));
+assert(workspace.includes('showResponseCount={false}'));
+console.log('Assistant entry contracts passed: shared Insights/Evidence bar, direct Ask AI navigation, old chat-hash redirect and hidden Insights response count.');

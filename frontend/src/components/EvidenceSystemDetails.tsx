@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getProjectEvidenceChunks } from "@/lib/api";
 import type { ContentItem, StoredEvidenceChunk } from "@/types/project";
 import { RetrievalTestPanel, evidenceBelongsToContent } from "./RetrievalTestPanel";
+import { AssistantLinkBar } from "./AssistantLinkBar";
 import { MetadataAvailabilityPanel } from "./MetadataAvailabilityPanel";
 import { Icon, Notice } from "./ui";
 
@@ -32,7 +33,8 @@ export function EvidenceSystemDetails({ projectId, indexReady, contents }: {
       <span className={`evidence-status ${indexReady ? "is-ready" : ""}`}>{indexReady ? "Search ready" : "Search not ready"}</span>
     </div>
     {error && <Notice tone="error">{error} <button className="source-link" onClick={() => setAttempt(n => n + 1)}>Retry</button></Notice>}
-    <RetrievalTestPanel projectId={projectId} indexReady={indexReady} contents={contents} initialChunks={library ?? []}/>
+    <RetrievalTestPanel projectId={projectId} indexReady={indexReady} contents={contents}/>
     <MetadataAvailabilityPanel projectId={projectId} contents={contents}/>
+    <AssistantLinkBar/>
   </div>;
 }
