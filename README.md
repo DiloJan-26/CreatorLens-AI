@@ -6,7 +6,7 @@
 
 ### Evidence-grounded creator intelligence with hybrid RAG, explainable analytics and LLMOps
 
-CreatorLens AI is an authenticated content-intelligence platform that compares two YouTube videos using public metrics and transcript evidence. It combines **Retrieval-Augmented Generation (RAG)** with **deterministic scoring and recommendations**, giving creators traceable findings and a cited AI Assistant for deeper analysis.
+CreatorLens AI is an authenticated content-intelligence platform that reviews public video evidence from YouTube, Instagram and Facebook using confirmed metrics and transcripts. It combines **Retrieval-Augmented Generation (RAG)** with **deterministic scoring and recommendations**, giving creators traceable findings and a cited AI Assistant for deeper analysis.
 
 > Built with Python, FastAPI, LangChain, Gemini, FastEmbed, Qdrant, PostgreSQL and Next.js; deployed across Render, Azure Container Apps and Vercel.
 
@@ -61,11 +61,11 @@ Recorded validation results and release-verification boundaries are listed under
 - Manage private analyses and inspect account usage through an authenticated workspace.
 - Inspect evaluation and operational telemetry through authorized engineering views.
 
-| Source | Current role | Boundary |
+| Platform | Extraction integrations | Current availability |
 | --- | --- | --- |
-| Public YouTube videos | Active bounded extraction using Supadata native transcripts and metadata | Videos up to the configured duration limit; missing fields remain explicit |
-| YouTube Data API v3 | Optional enrichment of missing public statistics, publication date and subscriber count | Requires a configured API key, quota and provider admission |
-| Instagram/Facebook and older extraction adapters | Historical compatibility in stored data and source code | New production extraction is not enabled by their presence |
+| YouTube | Supadata metadata/native captions; YouTube Data API enrichment | Active bounded production path; public fields depend on source availability |
+| Instagram | yt-dlp public metadata/media; Deepgram audio transcription | Adapters implemented; new production extraction currently restricted |
+| Facebook | yt-dlp public metadata/media; Deepgram audio transcription | Adapters implemented; new production extraction currently restricted |
 
 ## Scope Justification
 
@@ -118,7 +118,7 @@ The comparison is observational: different publication dates, audiences and coll
 
 ### Scope boundaries
 
-The active extraction workflow supports bounded public YouTube videos. Public counts describe observed activity, not retention, audience sentiment, revenue or causal effects. Opening rules identify textual patterns rather than measure overall creativity. The current dictionary policy supports declared English evidence; multilingual generation quality is not claimed from those rules.
+The product covers YouTube, Instagram and Facebook evidence through platform-specific adapters. Provider access and admission policies determine which extraction paths can run. Public counts describe observed activity, not retention, audience sentiment, revenue or causal effects. Opening rules identify textual patterns rather than measure overall creativity. The current dictionary policy supports declared English evidence; multilingual generation quality is not claimed from those rules.
 
 ## CreatorLens AI Logic
 
@@ -182,7 +182,7 @@ Missing inputs remain null; confirmed zero remains zero. There is no universal o
 | Audience efficiency | Higher views per current subscriber when both inputs are eligible; exact equality is a tie |
 | Opening and messaging | Individual supported observations; no overall creative winner |
 
-Rate-tie comparisons use rational arithmetic to avoid floating-point boundary errors. The current comparison policy requires two distinct, owned YouTube content identities. The sample threshold and tolerance are safeguards, not statistical significance tests.
+Rate-tie comparisons use rational arithmetic to avoid floating-point boundary errors. The current metric-leader policy applies to distinct, owned YouTube pairs; other platform evidence retains its own interaction definitions. The sample threshold and tolerance are safeguards, not statistical significance tests.
 
 For example, 485 likes on 34,021 views gives a **1.43% like rate**. That result remains calculable when the comment count is missing.
 
@@ -276,9 +276,9 @@ sequenceDiagram
 
 ### Extraction is deliberately layered
 
-Supadata supplies metadata and native transcript evidence. Optional YouTube Data API enrichment fills supported gaps using bounded `videos` and `channels` requests. Count groups are updated coherently rather than silently combining incompatible snapshots; previous values and field provenance remain inspectable.
+The active YouTube path uses Supadata metadata/native captions and optional YouTube Data API enrichment. Count snapshots and field provenance remain coherent when enrichment fills missing fields.
 
-Extraction artifacts and embeddings are cached. Missing, partial or invalid captions remain explicit, with language and timestamp validation before textual analysis. The active path does not automatically fall back to media downloading, generated transcription, Apify or Deepgram.
+Existing fallback integrations include `youtube-transcript-api` captions, yt-dlp metadata/audio, Supadata transcript recovery, Apify when Supadata is unconfigured, and Deepgram audio transcription. Instagram and Facebook adapters use yt-dlp with Deepgram. These fallback paths remain restricted by production admission; public access, provider credentials and quotas apply. Missing evidence is never fabricated.
 
 ## Retrieval and RAG design
 
@@ -429,7 +429,8 @@ Content hashing and embedding compatibility metadata support artifact reuse whil
 | LLM orchestration | LangChain, langchain-google-genai, Gemini Developer API |
 | Embeddings | FastEmbed, BAAI/bge-small-en-v1.5 |
 | Vector database | Qdrant Cloud, qdrant-client |
-| Data providers | Supadata, YouTube Data API v3 |
+| Data providers | Supadata, YouTube Data API v3, Apify, Deepgram |
+| Extraction libraries | yt-dlp, youtube-transcript-api |
 | Evaluation and testing | RAGAS, DeepEval, Pytest, RapidFuzz |
 | Prompt configuration | YAML, PyYAML |
 | Observability | LangSmith, Azure Log Analytics |
