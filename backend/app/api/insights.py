@@ -19,7 +19,7 @@ router = APIRouter(
     response_model=CreatorInsightSummaryResponse,
     summary="Build the Creator Insight Summary",
     description=(
-        "intelligence is the current observed-intelligence-1.0.0 canonical contract. Historical fields are preserved separately. Returns legacy-1.0.0 comparison fields and creator-insight-2.0.0 evidence-aware scoring objects with nullable scores. goal_comparison preserves historical goal-comparison-1.0.0 decisions for balanced, reach, engagement or creative_quality. "
+        "intelligence is the current observed-intelligence-1.1.0 canonical contract. Historical fields are preserved separately. Returns legacy-1.0.0 comparison fields and creator-insight-2.0.0 evidence-aware scoring objects with nullable scores. goal_comparison preserves historical goal-comparison-1.0.0 decisions for balanced, reach, engagement or creative_quality. "
         "creator_recommendations supplies deterministic creator-recommendations-1.0.0 actions and separate evidence findings. "
         "Run extraction first; verified metrics improve metric completeness."
     ),

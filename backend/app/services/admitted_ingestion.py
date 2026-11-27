@@ -2,6 +2,7 @@
 from uuid import uuid4
 from app.core.access import require_principal,owned_project
 from app.core.config import get_settings
+from app.extraction.policy import input_url, SUPPORTED_PLATFORMS, ExtractionSafetyError
 from app.core.request_limits import enforce_rate
 from app.db.session import database_session
 from app.db.models.account import DispatchOutbox
@@ -17,9 +18,14 @@ def start(project_id,key):
     enforce_rate(settings,principal.user_id,"analysis")
     with database_session() as session:
         project=owned_project(session,project_id,principal)
-        if project.content_1_platform!="youtube" or project.content_2_platform!="youtube":
-            from fastapi import HTTPException
-            raise HTTPException(403,"Only bounded YouTube extraction is approved for production.")
+        from fastapi import HTTPException
+        for slot in ("content_1","content_2"):
+            platform=getattr(project,slot+"_platform")
+            if platform not in SUPPORTED_PLATFORMS:
+                raise HTTPException(422,"Use YouTube, Instagram or Facebook video URLs.")
+            try:input_url(getattr(project,slot+"_url"),platform,settings)
+            except ExtractionSafetyError:
+                raise HTTPException(422,"Use a canonical public video URL. For Facebook, copy the Reel, watch or page video URL instead of a shortened share link.") from None
         reservation,created=reserve(session,principal,project_id,key)
         if created:
             job=JobRepository(session).create(project_id)

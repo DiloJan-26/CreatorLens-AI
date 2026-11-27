@@ -27,7 +27,8 @@ def owned_task(kind):
                 if resource is None:raise Reject("Unknown persisted work.",requeue=False)
                 reservation=latest_reservation(session,resource.project_id)
                 user=session.get(AppUser,reservation.user_id) if reservation else None
-                if not user or user.status!="active" or reservation.state not in {"reserved","processing"}:
+                allowed_states={"reserved","processing","completed"} if kind=="index" else {"reserved","processing"}
+                if not user or user.status!="active" or reservation.state not in allowed_states:
                     raise Reject("Work is no longer authorized; reconcile its reservation.",requeue=False)
                 principal=Principal(user.id,str(uuid4()),0)
                 owned_project(session,resource.project_id,principal)
@@ -42,6 +43,7 @@ def owned_task(kind):
                 else:
                     if reservation.job_id!=identifier:raise Reject("Stale job identity.",requeue=False)
                     if str(resource.status).upper() in {"READY","PARTIAL_READY","FAILED"}:return {"status":resource.status}
+                    if reservation.state=="completed":raise Reject("Completed analysis cannot restart indexing.",requeue=False)
                     if kind=="extraction":
                         outbox=session.scalar(select(DispatchOutbox).where(DispatchOutbox.id==identifier).with_for_update())
                         if not outbox or outbox.reservation_id!=reservation.id or outbox.task_name!="creatorlens.ingest_project" or outbox.argument!=identifier:

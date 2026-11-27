@@ -26,7 +26,7 @@ export function VideoUrlForm({
       !v.trim()
         ? "Enter a public video URL."
         : !isSupportedUrl(v)
-          ? "Use a supported YouTube, Instagram or Facebook video URL."
+          ? "Use a public YouTube, Instagram Reel or Facebook Reel/watch/video URL. Copy the full video link instead of a shortened share link."
           : "",
     );
     setErrors(next);
@@ -98,7 +98,7 @@ export function VideoUrlForm({
             ))}
           </p>
           <p className="muted text-xs mt-1">
-            Public videos. Extraction depends on enabled providers.
+            Compare public videos from the same or different platforms.
           </p>
         </div>
         <button
@@ -113,39 +113,28 @@ export function VideoUrlForm({
     </form>
   );
 }
-function isSupportedUrl(value: string): boolean {
+export function isSupportedUrl(value: string): boolean {
   try {
     const url = new URL(value.trim());
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
     const path = url.pathname.toLowerCase();
 
     if (host === "youtu.be") {
-      return Boolean(path.replace("/", ""));
+      return /^\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
     }
 
-    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
-      return path.startsWith("/shorts/") || path === "/watch";
+    if (["youtube.com", "m.youtube.com"].includes(host)) {
+      return /^\/shorts\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) || path.replace(/\/$/, "") === "/watch" && /^[A-Za-z0-9_-]+$/.test(url.searchParams.get("v") ?? "");
     }
 
-    if (host === "instagram.com" || host.endsWith(".instagram.com")) {
-      return (
-        path.startsWith("/reel/") ||
-        path.startsWith("/p/") ||
-        path.startsWith("/tv/")
-      );
+    if (["instagram.com", "m.instagram.com"].includes(host)) {
+      return /^\/(reel|p|tv)\/[A-Za-z0-9_-]+\/?$/.test(url.pathname);
     }
 
-    if (host === "fb.watch") {
-      return Boolean(path.replace("/", ""));
-    }
-
-    if (host === "facebook.com" || host.endsWith(".facebook.com")) {
-      return (
-        path.startsWith("/reel/") ||
-        path.startsWith("/watch") ||
-        path.includes("/videos/") ||
-        path.startsWith("/share/r/")
-      );
+    if (["facebook.com", "m.facebook.com"].includes(host)) {
+      return path.replace(/\/$/, "") === "/watch" && /^\d+$/.test(url.searchParams.get("v") ?? "") ||
+        /^\/reel\/\d+\/?$/.test(path) || /^\/[^/]+\/videos\/(?:[^/]+\/)?\d+\/?$/.test(path);
     }
   } catch {
     return false;

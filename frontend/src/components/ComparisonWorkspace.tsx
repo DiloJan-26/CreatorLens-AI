@@ -562,7 +562,7 @@ export function ComparisonWorkspace() {
               initialSummary={insightSummary}
               onSummaryLoaded={setInsightSummary}
             />
-            {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail.project_id} showResponseCount={false}/>}
+            {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail.project_id} ready={ingestionStatus?.status==="READY"||ingestionStatus?.status==="PARTIAL_READY"} showResponseCount={false}/>}
           </section>
           {activeTab === "evidence" && projectDetail && <section id="evidence" className="section-panel">
             <EvidenceSystemDetails key={`${projectDetail.project_id}-${indexReady}`} projectId={projectDetail.project_id} indexReady={indexReady} contents={projectDetail.content_items}/>

@@ -36,7 +36,7 @@ def boundary(db_session,monkeypatch):
     monkeypatch.setattr(authenticated_access.verifier,'verify',lambda token,settings:principals[token])
     redis=FakeEngineeringRedis();monkeypatch.setattr(engineering_access,'client',lambda _:redis)
     monkeypatch.setattr(llm_observability_service,'is_database_configured',lambda:True)
-    monkeypatch.setattr(evaluations,'run_regression',lambda *a,**kw:pytest.fail('Read-only Engineering invoked an evaluation'))
+    monkeypatch.setattr(evaluations,'evaluate_and_publish',lambda *a,**kw:pytest.fail('Read-only Engineering invoked an evaluation'))
     app=FastAPI();app.add_middleware(AuthenticationMiddleware)
     for router in (engineering.router,evaluations.router,metrics.cost_router,account.router):app.include_router(router)
     @app.get('/api/projects/{project_id}')
@@ -140,3 +140,25 @@ def test_global_aggregate_path_never_queries_private_run_details(boundary,monkey
     monkeypatch.setattr(LlmRunRepository,'list_recent',lambda *a,**kw:pytest.fail('Global summary queried individual runs'))
     r=client.get('/api/metrics/cost',headers=headers())
     assert r.status_code==200 and r.json()['project_id'] is None and r.json()['runs']==[]
+
+
+def test_only_admin_with_engineering_unlock_can_publish(boundary,monkeypatch):
+    client,settings,redis,a,b,project,session=boundary
+    from app.api import evaluations
+    from app.evaluations.regression_runner import run_regression
+    calls=[]
+    def publish(name,**kwargs):
+        calls.append(name)
+        return run_regression(name,session=kwargs['session'],persist=True)
+    monkeypatch.setattr(evaluations,'evaluate_and_publish',publish)
+    assert client.post('/api/evaluations/runs',headers=headers(),json={'dataset':'creatorlens_ci_smoke_v1'}).status_code==403
+    assert unlock(client).status_code==200
+    assert client.post('/api/evaluations/runs',headers=headers(),json={'dataset':'creatorlens_ci_smoke_v1'}).status_code==403
+    assert calls==[]
+    session.get(AppUser,a.user_id).role='admin';session.flush()
+    response=client.post('/api/evaluations/runs',headers=headers(),json={'dataset':'creatorlens_ci_smoke_v1'})
+    assert response.status_code==200 and response.json()['persisted']
+    assert calls==['creatorlens_ci_smoke_v1']
+    client.get('/api/evaluations/runs',headers=headers())
+    client.get('/api/evaluations/datasets',headers=headers())
+    assert calls==['creatorlens_ci_smoke_v1']

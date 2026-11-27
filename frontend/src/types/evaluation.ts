@@ -9,7 +9,30 @@ export type EvaluationDatasetSummary = {
   answer_types: EvaluationAnswerType[];
 };
 
+export type EvaluationPublication = {
+  policy_version?: string;
+  publication_key?: string;
+  source_commit?: string | null;
+  source_commit_origin?: string;
+  source_state?: string;
+  source_fingerprint?: string;
+  dataset_fingerprint?: string;
+  report_fingerprint?: string;
+  fingerprint_policy?: string;
+  result_fingerprint?: string;
+  non_reproducible_result?: boolean;
+  execution_mode?: string;
+  reference_scope?: string;
+  provider_invocation_count?: number;
+  published_at?: string;
+  python_version?: string;
+  dependency_versions?: Record<string,string>;
+  not_executed_cases?: number;
+};
+
 export type EvaluationRunSummary = {
+  publication?: EvaluationPublication;
+  source_status?: "current" | "different" | "unverified";
   skipped_cases?: number;
   evaluation_details?: IntelligenceEvaluationDetails;
   id: string;
@@ -33,6 +56,8 @@ export type EvaluationCheckResult = {
 };
 
 export type EvaluationResultSummary = {
+  scenario?: string | null;
+  answer_text?: string | null;
   evaluation_details?: {
     category?: string; execution_mode?: string; critical?: boolean; fixture_id?: string;
     actual_output?: Record<string, unknown>; expected_output?: Record<string, unknown>;

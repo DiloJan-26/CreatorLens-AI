@@ -223,7 +223,7 @@ def test_policy_version_and_reproducibility_without_metric_policy_changes():
     item_a=result_a.contents[0]
     assert result_a.model_dump_json()==result_b.model_dump_json()
     assert result_a.text_policy_version==POLICY=='hook-message-2.0.0'
-    assert result_a.policy_version=='observed-intelligence-1.0.0'
+    assert result_a.policy_version=='observed-intelligence-1.1.0'
     assert item_a['values']['like_rate']==pytest.approx(100*485/34021)
     assert item_a['scores']['public_performance'] is not None
     assert not any('creative' in name for name in item_a['scores'])

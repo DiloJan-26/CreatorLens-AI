@@ -67,11 +67,11 @@ def test_worker_pipeline_reaches_ready_without_runtime_services(monkeypatch) -> 
             {"extraction_status": "ready", "transcript_available": True},
         ],
     )
-    monkeypatch.setattr(
-        indexing_tasks,
-        "update_project_status",
-        lambda _project_id, value: project_statuses.append(value),
-    )
+    def complete_indexed(job_id, project_id, target):
+        assert job_id == "job-1" and project_id == "project-1"
+        project_statuses.append(target.value.lower())
+        transitions.append(target)
+    monkeypatch.setattr(indexing_tasks, "complete_indexed_job", complete_indexed)
     monkeypatch.setattr(
         indexing_tasks,
         "transition_job",

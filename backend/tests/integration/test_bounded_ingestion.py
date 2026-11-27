@@ -18,11 +18,12 @@ from app.services import project_service,metric_source_service,account_usage
 from app.extraction import accounting,bounded_provider,policy
 
 
+@pytest.mark.parametrize("platforms",[(a,b) for a in ("youtube","instagram","facebook") for b in ("youtube","instagram","facebook")])
 @pytest.mark.parametrize("captions",[True,False])
-def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_session,monkeypatch,captions):
+def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_session,monkeypatch,captions,platforms):
     principal=Principal(str(uuid4()),str(uuid4()),1);provision(db_session,principal)
     handle=current_principal.set(principal)
-    urls=["https://www.youtube.com/watch?v=bounded_first","https://www.youtube.com/watch?v=bounded_second"]
+    urls=[{"youtube":f"https://www.youtube.com/watch?v=bounded_{index}","instagram":f"https://www.instagram.com/reel/bounded_{index}/","facebook":f"https://www.facebook.com/reel/{7100+index}/"}[platform] for index,platform in enumerate(platforms)]
     s=SimpleNamespace(provider_emergency_stop=False,
         extraction_max_concurrent_operations=1,extraction_max_video_seconds=300,extraction_max_url_bytes=2048,
         extraction_max_response_bytes=16384,extraction_timeout_seconds=5,supadata_billing_tier="pro_monthly_prepaid",
@@ -50,13 +51,14 @@ def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_sessio
                 original_function=getattr(module,name)
                 if callable(original_function) and getattr(original_function,"__module__","").startswith(("app.services.storage_service","app.db.repositories.storage_repository")):
                     monkeypatch.setattr(module,name,getattr(storage,name))
+    canonical_urls=[policy.input_url(url,platform,s) for url,platform in zip(urls,platforms)]
     transport_calls=[]
     def handler(request):
         transport_calls.append(request)
-        url=request.url.params["url"];second=url==urls[1]
+        url=request.url.params["url"];second=url==canonical_urls[1];platform=platforms[int(second)]
         if request.url.path.endswith("metadata"):
-            body={"platform":"youtube","type":"video","url":url,"title":"Synthetic second" if second else "Synthetic first",
-                  "media":{"duration":30},"stats":{"views":2000 if second else 1000,"likes":20,"comments":2}}
+            body={"platform":platform,"type":"video","url":url,"title":"Synthetic second" if second else "Synthetic first",
+                  "media":{"duration":30},"stats":{"views":2000 if second else 1000,"likes":20,"comments":2,"reactions":30 if platform=="facebook" else None},"additionalData":{"followerCount":10000} if platform!="youtube" else {"subscriberCount":10000}}
             return httpx.Response(200,stream=httpx.ByteStream(__import__("json").dumps(body).encode()))
         if not captions:return httpx.Response(404,stream=httpx.ByteStream(b""))
         body={"lang":"en","content":[{"text":"Synthetic evidence for the second item." if second else "Synthetic evidence for the first item.","offset":0,"duration":8000}]}
@@ -65,7 +67,7 @@ def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_sessio
     def client(**kwargs):kwargs["transport"]=httpx.MockTransport(handler);return original_client(**kwargs)
     monkeypatch.setattr(bounded_provider.httpx,"Client",client)
     try:
-        project=ProjectRepository(db_session).create(project_id=str(uuid4()),content_1_url=urls[0],content_2_url=urls[1],content_1_platform="youtube",content_2_platform="youtube",status="created")["project_id"]
+        project=ProjectRepository(db_session).create(project_id=str(uuid4()),content_1_url=urls[0],content_2_url=urls[1],content_1_platform=platforms[0],content_2_platform=platforms[1],status="created")["project_id"]
         reservation,_=account_usage.reserve(db_session,principal,project,"bounded-integration")
         job=JobRepository(db_session).create(project);reservation.job_id=job.id
         db_session.add(DispatchOutbox(id=job.id,reservation_id=reservation.id,task_name="creatorlens.ingest_project",argument=job.id,state="claimed"));db_session.flush()
@@ -76,6 +78,18 @@ def test_two_slot_bounded_ingestion_persistence_and_metrics_completion(db_sessio
         assert [item.transcript_available for item in result.content_items]==[captions,captions]
         items=db_session.scalars(select(ContentItem).where(ContentItem.project_id==project)).all()
         assert len(items)==2 and len({item.id for item in items})==2
+        assert {item.slot:item.platform for item in items}==dict(zip(("content_1","content_2"),platforms))
+        from app.insights.observed_intelligence import build_observed_intelligence
+        from app.rag.observed_context import project_current_context, observed_answer
+        raw=storage.get_project_detail_record(project)
+        intelligence=build_observed_intelligence(project,raw['content_items'],{}).model_dump(mode='json')
+        assert intelligence['decisions']['reach']['winner_slot']=='content_2'
+        assert intelligence['decisions']['like_rate']['winner_slot']=='content_1'
+        assert intelligence['decisions']['reach']['comparison_scope']==('same_platform' if platforms[0]==platforms[1] else 'cross_platform_descriptive')
+        objective,summary,citations=project_current_context({'intelligence':intelligence},'reach','Which video has more views?')
+        answer=observed_answer({'summary':summary,'selected_objective':objective},'Which video has more views?','metrics',citations)
+        assert answer.winner=='content_2'
+        assert all(c.project_id==project and c.platform==platforms[int(c.slot[-1])-1] for c in citations)
         operations=db_session.scalars(select(ProviderOperation).where(ProviderOperation.project_id==project)).all()
         assert len(operations)==4 and sum(op.reserved_quantity for op in operations)==4
         assert db_session.get(BudgetAccount,principal.user_id).reserved_usd==Decimal(".04")

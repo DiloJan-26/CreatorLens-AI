@@ -10,7 +10,8 @@ from app.insights.deterministic_scoring import normalize_metrics
 from app.services.hash_service import hash_payload
 from app.insights.hook_message import analyze_hook_message, POLICY as TEXT_POLICY
 
-POLICY = "observed-intelligence-1.0.0"
+POLICY = "observed-intelligence-1.1.0"
+SUPPORTED_PLATFORMS = frozenset({"youtube", "instagram", "facebook"})
 SLOTS = ("content_1", "content_2")
 MIN_VIEWS = 1000
 LIKE_TOLERANCE = Fraction(1, 10)
@@ -41,7 +42,8 @@ def _content(project, raw, segments):
     c=metrics.counts; v=c['views']; s=metrics.creator_size
     like=100*c['likes']/v if v and c['likes'] is not None else None
     comment=100*c['comments']/v if v and c['comments'] is not None else None
-    values=dict(views=v,likes=c['likes'],comments=c['comments'],subscribers=s,like_rate=like,comment_rate=comment,
+    values=dict(views=v,likes=c['likes'],comments=c['comments'],reactions=c['reactions'],shares=c['shares'],
+        subscribers=c['subscriber_count'],followers=c['follower_count'],audience_size=s,like_rate=like,comment_rate=comment,
         combined_interaction_rate=metrics.rates_percent['combined_engagement'],audience_efficiency=v/s if s and v is not None else None)
     reach=min(10,10*math.log1p(v)/math.log1p(10_000_000)) if v is not None else None
     eligible=bool(v and v>=MIN_VIEWS and c['likes'] is not None and c['likes']<=v)
@@ -51,7 +53,7 @@ def _content(project, raw, segments):
         publication_date=metrics.publication_date,observed_at=metrics.observed_at,duration_seconds=raw.get('duration_seconds'),values=values,
         scores=dict(reach=round(reach,3) if reach is not None else None,like_response=round(response,3) if response is not None else None,
             public_performance=round((reach+response)/2,3) if reach is not None and response is not None else None),
-        formulas=dict(like_rate='100*likes/views',comment_rate='100*comments/views',audience_efficiency='views/current_subscribers',
+        formulas=dict(like_rate='100*likes/views',comment_rate='100*comments/views',audience_efficiency='views/current_audience_size',
             reach='min(10,10*ln(1+views)/ln(10000001))',like_response='min(10,2*like_rate_percent)',public_performance='(reach+like_response)/2'),
         metric_provenance=metrics.provenance,field_provenance=(raw.get('transcript_evidence') or {}).get('provenance',{}).get('field_provenance',{}))
     metric=_reference(project,item,'metadata',__import__('json').dumps(dict(**values,title=item['title'],creator=item['creator'],duration_seconds=item['duration_seconds'],publication_date=item['publication_date']),sort_keys=True),revision)
@@ -66,12 +68,18 @@ def _content(project, raw, segments):
 def _decision(contents, name):
     value_key={'reach':'views','like_rate':'like_rate','comment_rate':'comment_rate','audience_efficiency':'audience_efficiency'}[name]
     by={i['slot']:i for i in contents}; values={s:by[s]['values'][value_key] if s in by else None for s in SLOTS}
-    missing=[]; incompatible=[]; notes=[]
+    missing=[]; incompatible=[]; notes=[]; scope='same_platform'
     if len(by)!=2:missing.append('Both distinct content slots are required.')
     if len(by)==2:
         a,b=(by[s] for s in SLOTS)
         if a['content_id']==b['content_id']:incompatible.append('Distinct content identities are required.')
-        if a['platform']!=b['platform'] or a['platform']!='youtube':incompatible.append('This public-metric policy requires two YouTube videos.')
+        if any(i['platform'] not in SUPPORTED_PLATFORMS for i in (a,b)):
+            incompatible.append('A supported public-video platform is required for each content.')
+        if a['platform']!=b['platform']:
+            scope='cross_platform_descriptive'
+            notes.append('Cross-platform comparison of reported counts only: view definitions, audiences and distribution differ; the leader is not a platform-normalized effectiveness winner.')
+        if name=='like_rate':
+            notes.append('Only explicitly reported likes are used; Facebook reactions are never substituted for likes.')
         if a['publication_date']!=b['publication_date']:notes.append('Publication dates differ or are unknown; lifetime counts are not growth velocity.')
         notes.append('Counts have source observation times; differing snapshots are not simultaneous measurements.')
     if any(v is None for v in values.values()):missing.append('Required inputs for this signal are missing; other signals remain independent.')
@@ -81,7 +89,7 @@ def _decision(contents, name):
             if item['values']['likes'] is not None and item['values']['views'] is not None and item['values']['likes']>item['values']['views']:
                 missing.append(item['slot']+': likes exceed views; inconsistent counts cannot be ranked.')
         notes.append('The 1,000-view threshold and 0.10-point tolerance are heuristic safeguards, not statistical significance.')
-    if name=='audience_efficiency':notes.append('Current subscribers are not historical audience size or conversion.')
+    if name=='audience_efficiency':notes.append('Current followers/subscribers may be rounded and are not historical audience size or conversion.')
     if name=='comment_rate':notes.append('Comment events do not establish audience sentiment. Values are descriptive; no winner policy is applied.')
     status='incomparable' if incompatible else 'insufficient_evidence' if missing else 'descriptive' if name=='comment_rate' else 'eligible'
     diff=None; outcome='incomparable' if incompatible else 'insufficient_evidence';winner=None
@@ -94,11 +102,11 @@ def _decision(contents, name):
         outcome='tie' if abs(diff)<=(LIKE_TOLERANCE if name=='like_rate' else 0) else 'content_1' if diff>0 else 'content_2'
         winner=outcome if outcome in SLOTS else None
     elif status=='descriptive':outcome='descriptive'
-    units='views' if name=='reach' else 'views_per_subscriber' if name=='audience_efficiency' else 'percent'
-    explanation=(f"{name.replace('_',' ').title()}: "+(f"Content {winner[-1]} leads the observed signal." if winner else 'The observed values are equal or within the policy tolerance.' if outcome=='tie' else 'Descriptive values only.' if status=='descriptive' else ' '.join(incompatible+missing)))
+    units='views' if name=='reach' else 'views_per_current_audience' if name=='audience_efficiency' else 'percent'
+    explanation=(("Cross-platform reported " if scope=='cross_platform_descriptive' else "")+f"{name.replace('_',' ').title()}: "+(f"Content {winner[-1]} leads the observed signal." if winner else 'The observed values are equal or within the policy tolerance.' if outcome=='tie' else 'Descriptive values only.' if status=='descriptive' else ' '.join(incompatible+missing)))
     return dict(dimension=name,policy_version=POLICY,status=status,outcome=outcome,winner_slot=winner,
         winner_content_id=by[winner]['content_id'] if winner else None,values=values,difference=float(diff) if diff is not None else None,
-        units=units,tie_tolerance=.10 if name=='like_rate' else 0,explanation=explanation,missing_inputs=missing,limitations=notes)
+        comparison_scope=scope,units=units,tie_tolerance=.10 if name=='like_rate' else 0,explanation=explanation,missing_inputs=missing,limitations=notes)
 
 ACTIONS={
  'generic_intro':('opening','Introduce the topic before background','Test the same explanation with the topic in the first sentence, before the greeting.'),

@@ -63,8 +63,11 @@ def test_small_sample_does_not_win_rate():
     assert value.decisions['like_rate']['winner_slot'] is None
     assert value.decisions['reach']['winner_slot']=='content_2'
 
-def test_cross_platform_is_incomparable():
-    assert pack(item(platform='instagram')).decisions['reach']['status']=='incomparable'
+def test_cross_platform_reported_values_are_compared_with_explicit_scope():
+    decision=pack(item(platform='instagram')).decisions['reach']
+    assert decision['status']=='eligible' and decision['winner_slot']=='content_2'
+    assert decision['comparison_scope']=='cross_platform_descriptive'
+    assert any('view definitions' in note for note in decision['limitations'])
 
 @pytest.mark.parametrize('change',[{'subscriber_count':None},{'subscriber_count':0},{'subscriber_count':-1}])
 def test_invalid_subscriber_size_is_optional(change):

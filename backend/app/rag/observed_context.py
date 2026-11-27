@@ -7,7 +7,7 @@ from app.llm.structured_outputs import ComparisonAnswer, MetricAnswer, MetricIte
 
 def project_current_context(summary, selected, question):
     data=summary['intelligence']
-    objective='comment_rate' if re.search(r'comment rate',question,re.I) else 'audience_efficiency' if re.search(r'efficiency|per subscriber',question,re.I) else selected
+    objective='comment_rate' if re.search(r'comment rate',question,re.I) else 'audience_efficiency' if re.search(r'efficiency|per subscriber|per follower|per audience',question,re.I) else selected
     dimension={'engagement':'like_rate','creative_quality':'structure'}.get(objective,objective)
     decisions={}
     for name,d in data['decisions'].items():
@@ -75,7 +75,7 @@ def observed_answer(context, question, intent, citations):
         return ComparisonAnswer(winner='insufficient_evidence', confidence=0, objective=objective, decision_status='insufficient_evidence',
             evidence_status='source_observations', canonical_decision=decision, key_reasons=(coverage_notes+observations)[:8] or [decision['explanation']],
             recommendations=recommendations,evidence=evidence,limitations=data['limitations'])
-    compare=bool(re.search(r'which|winner|wins|leads|higher|lower|difference|overall|balanced|compare|real winner',text)) or intent=='performance_reasoning'
+    compare=bool(re.search(r'\b(?:which|winner|wins|leads|higher|lower|difference|overall|balanced|compare|real winner)\b',text)) or intent=='performance_reasoning'
     if compare:
         reasons=[decision['explanation']]
         if objective=='balanced':reasons.extend(('observed_reach: ' if name=='reach' else name+': ')+d['explanation'] for name,d in data['decisions'].items())
@@ -84,9 +84,9 @@ def observed_answer(context, question, intent, citations):
             objective=objective,decision_status=decision['outcome'],canonical_decision=decision,evidence_status=decision['eligibility']['status'],
             key_reasons=reasons,evidence=evidence,limitations=data['limitations']+decision['limitations'])
     if intent=='metadata_missing':
-        fields=[i['slot']+': '+', '.join(k for k in ('views','likes','comments','subscribers') if i['values'].get(k) is None) for i in data['contents'] if not target_slot or i['slot']==target_slot]
+        fields=[i['slot']+': '+', '.join(k for k in ('views','likes','comments','audience_size') if i['values'].get(k) is None) for i in data['contents'] if not target_slot or i['slot']==target_slot]
         return MetricAnswer(summary='Unavailable extracted fields: '+'; '.join(fields),objective=objective,evidence_status='source_observations',evidence=evidence,limitations=data['limitations'])
-    names=[n for n in ('views','likes','comments','subscriber_count','follower_count') if n.replace('_',' ') in text or n in text]
+    names=[n for n in ('views','likes','comments','reactions','shares','subscriber_count','follower_count') if n.replace('_',' ') in text or n in text]
     if 'subscriber' in text:names=['subscriber_count']
     if 'follower' in text:names=['follower_count']
     if 'like rate' in text:names=['like_rate']
@@ -97,7 +97,7 @@ def observed_answer(context, question, intent, citations):
     for item in data['contents']:
         if target_slot and target_slot!=item['slot']:continue
         label=next((c.citation_label for c in citations if c.slot==item['slot'] and c.source_type=='metadata'),None)
-        selected={name:item['values'].get('subscribers' if name=='subscriber_count' else name) for name in names}
+        selected={name:item['values'].get('subscribers' if name=='subscriber_count' else 'followers' if name=='follower_count' else name) for name in names}
         if intent=='creator_info':selected.update({k:item.get(k) for k in ('creator','title','publication_date','duration_seconds')})
         for name,value in selected.items():
             metrics.append(MetricItem(name=name,slot=item['slot'],value=value,availability='confirmed' if value is not None else 'unavailable',citation_label=label if value is not None else None))

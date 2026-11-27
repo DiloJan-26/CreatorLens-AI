@@ -160,3 +160,51 @@ assert(workspace.includes('router.replace("/chat")'));
 assert(!workspace.includes('id="chat"')&&!workspace.includes('Open AI Assistant'));
 assert(workspace.includes('showResponseCount={false}'));
 console.log('Assistant entry contracts passed: shared Insights/Evidence bar, direct Ask AI navigation, old chat-hash redirect and hidden Insights response count.');
+
+
+// Supported public platforms and descriptive cross-platform comparisons.
+const {isSupportedUrl,VideoUrlForm}=load(path.join(sourceRoot,"components/VideoUrlForm.tsx"));
+for(const url of ["https://youtu.be/fixture","https://youtube.com/watch?v=fixture","https://instagram.com/reel/fixture/","https://www.facebook.com/reel/12345/","https://m.facebook.com/watch/?v=12345","https://facebook.com/creator/videos/12345/"])assert(isSupportedUrl(url),url);
+for(const url of ["http://youtube.com/watch?v=fixture","https://youtube.com.evil.test/watch?v=fixture","https://evil.youtube.com/watch?v=fixture","https://instagram.com/creator/","https://facebook.com/share/r/opaque/","https://fb.watch/opaque/","https://user:secret@facebook.com/reel/12345/","https://youtube.com/watch"])assert(!isSupportedUrl(url),url);
+const cross=structuredClone(observedSummary);
+cross.intelligence.contents[0].platform="instagram";cross.intelligence.contents[1].platform="facebook";
+cross.intelligence.contents[0].values.audience_efficiency=1;
+cross.intelligence.decisions.reach.comparison_scope="cross_platform_descriptive";
+const crossGoal=render(GoalComparisonPanel,{summary:cross});assert(crossGoal.includes("leads reported reach"));assert(crossGoal.includes("view definitions and audiences differ"));
+const crossInsights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",initialSummary:cross});assert(crossInsights.includes("Views / audience"));assert(!crossInsights.includes("Views / subscriber"));assert(crossInsights.includes("Cross-platform counts"));
+const form=render(VideoUrlForm,{content1Url:"",content2Url:"",setContent1Url:()=>{},setContent2Url:()=>{},onSubmit:()=>{},isSubmitting:false});
+for(const label of ["YouTube","Instagram","Facebook","same or different platforms"])assert(form.includes(label));
+console.log("Multi-platform UI contracts passed: canonical public video URLs, all three platform choices, explicit cross-platform scope and correct audience labels; no client-side winner calculation.");
+
+// Completion is automatic; neither Insights nor chat displays a manual save prompt.
+const allowanceSource=fs.readFileSync(path.join(sourceRoot,"components/AnalysisAllowancePanel.tsx"),"utf8");
+assert(!allowanceSource.includes("Save analysis")&&!allowanceSource.includes("Unlock AI explanations")&&!allowanceSource.includes("<button"));
+assert(allowanceSource.includes('if(ready && ["reserved","processing"].includes(value.analysis_state))'));
+assert(allowanceSource.includes('await completeAnalysis(projectId,false)'));
+assert(workspace.includes('ready={ingestionStatus?.status==="READY"||ingestionStatus?.status==="PARTIAL_READY"}'));
+console.log("Automatic completion UI contracts passed: no manual save step, ready-only compatibility completion and no inference action.");
+
+// Unified read-only evaluation, genuine release provenance and honest denominators.
+const {evaluationFixture}=await import('./evaluation-fixture.mjs');
+const evaluation=evaluationFixture();
+const {EvaluationEmptyState,EvaluationRunView,EvaluationMeasurements,EvaluationHistory,EvaluationCase}=load(path.join(sourceRoot,'components/EvaluationDashboard.tsx'));
+const emptyEvaluation=render(EvaluationEmptyState,{});
+assert(emptyEvaluation.includes('No evaluation published')&&!emptyEvaluation.includes('Unavailable'));
+const evaluationSource=fs.readFileSync(path.join(sourceRoot,'components/EvaluationDashboard.tsx'),'utf8');
+assert(!evaluationSource.includes('Evaluation family')&&!evaluationSource.includes('setFamily'));
+assert(!evaluationSource.includes('createEvaluationRun')&&!evaluationSource.includes('streamChatResponse'));
+const selectedEvaluation=render(EvaluationRunView,{run:evaluation.runs[0]});
+assert(selectedEvaluation.includes('Review required')&&selectedEvaluation.includes('14')&&selectedEvaluation.includes('Skipped'));
+assert(selectedEvaluation.includes('Different backend source')&&selectedEvaluation.includes('aaaaaaaaaaaa'));
+const measuredEvaluation=render(EvaluationMeasurements,{run:evaluation.runs[0]});
+assert(measuredEvaluation.includes('2 / 3')&&measuredEvaluation.includes('Not measured')&&measuredEvaluation.includes('False Reject'));
+assert(!measuredEvaluation.includes('Lexical faithfulness'));
+const legacyEvaluation=render(EvaluationMeasurements,{run:evaluation.runs[1]});assert(legacyEvaluation.includes('Lexical faithfulness (proxy)'));
+const evaluationHistory=render(EvaluationHistory,{runs:evaluation.runs,selectedId:evaluation.runs[0].id,onSelect:()=>{}});
+assert(evaluationHistory.includes('RAG Regression')&&evaluationHistory.includes('Creator Intelligence'));
+const evaluationCase=render(EvaluationCase,{result:evaluation.details[evaluation.runs[0].id].results[0]});
+assert(evaluationCase.includes('Expected contract')&&evaluationCase.includes('Observed output'));
+assert(evaluationCase.includes('&lt;script&gt;')&&!evaluationCase.includes('<script>'));
+assert(render(EvaluationCase,{result:evaluation.details[evaluation.runs[0].id].results[1]}).includes('Independent human annotation is pending.'));
+assert(render(EvaluationRunView,{run:{...evaluation.runs[0],status:'FAILED',error_code:'EVALUATION_TIMEOUT'}}).includes('execution time limit'));
+console.log('Evaluation UI contracts passed: unified history, publication empty state, source provenance, separate pass/fail/skip, indicator denominators, honest reference coverage, safe case evidence and execution failure.');

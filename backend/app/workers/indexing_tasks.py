@@ -5,11 +5,11 @@ from app.rag.indexing_service import index_project
 from app.schemas.ingestion import IngestionJobStatus
 from app.services.storage_compat_service import (
     list_video_records,
-    update_project_status,
 )
 from app.workers.celery_app import celery_app
 from app.workers.job_runtime import (
     job_context,
+    complete_indexed_job,
     retry_or_fail_job,
     start_or_restart_job,
     transition_job,
@@ -93,8 +93,7 @@ def index_project_task(self, job_id: str) -> dict[str, str]:
                 "No usable extracted content remained after indexing."
             )
 
-        update_project_status(project_id, final_status.value.lower())
-        transition_job(job_id, final_status)
+        complete_indexed_job(job_id, project_id, final_status)
         logger.info(
             "Worker indexing completed job_id=%s project_id=%s status=%s "
             "total_chunks=%s",

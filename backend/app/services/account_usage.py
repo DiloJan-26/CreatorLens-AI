@@ -75,6 +75,8 @@ def complete_owned_analysis(session,principal,project_id,metrics_only):
     project=owned_project(session,project_id,principal)
     reservation=latest_reservation(session,project_id)
     if not reservation or reservation.user_id != principal.user_id: raise HTTPException(404,"Reservation not found.")
+    if reservation.state not in {"reserved","processing","completed"}:
+        raise HTTPException(409,"Unresolved or closed analysis cannot be completed.")
     if reservation.job_id:
         from app.db.models.ingestion_job import IngestionJob
         job=session.get(IngestionJob,reservation.job_id)

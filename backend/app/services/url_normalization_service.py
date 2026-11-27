@@ -9,7 +9,7 @@ class UnsupportedContentUrlError(ValueError):
 
 
 def normalize_content_url(url: str) -> str:
-    """Return the canonical URL for a supported YouTube or Instagram item."""
+    """Return the canonical URL for a supported YouTube, Instagram or Facebook video."""
     parsed = _parse_http_url(url)
     host = _normalized_host(parsed.hostname)
 
@@ -19,7 +19,10 @@ def normalize_content_url(url: str) -> str:
     if host == "instagram.com" or host.endswith(".instagram.com"):
         return normalize_instagram_url(url)
 
-    raise UnsupportedContentUrlError("Only YouTube and Instagram URLs are supported.")
+    if host in {"facebook.com", "m.facebook.com"}:
+        return normalize_facebook_url(url)
+
+    raise UnsupportedContentUrlError("Use a YouTube, Instagram or Facebook video URL.")
 
 
 def normalize_youtube_url(url: str) -> str:
@@ -65,6 +68,18 @@ def normalize_instagram_url(url: str) -> str:
     content_type = path_parts[0].lower()
     shortcode = _required_path_identifier(path_parts[1], platform="Instagram")
     return f"https://www.instagram.com/{content_type}/{shortcode}/"
+
+
+def normalize_facebook_url(url: str) -> str:
+    """Canonicalize public video identities without following shortened share redirects."""
+    parsed = _parse_http_url(url)
+    if _normalized_host(parsed.hostname) not in {"facebook.com", "m.facebook.com"}:
+        raise UnsupportedContentUrlError("The URL is not a Facebook video URL.")
+    parts = [p for p in parsed.path.split("/") if p]
+    identifier = parse_qs(parsed.query).get("v", [""])[0] if parsed.path.rstrip("/") == "/watch" else parts[-1] if parts and (parts[0] == "reel" or "videos" in parts) else ""
+    if not re.fullmatch(r"[0-9]+", identifier):
+        raise UnsupportedContentUrlError("Copy the Facebook Reel, watch or page video URL instead of a shortened share link.")
+    return "https://www.facebook.com/watch/?v=" + identifier
 
 
 def _parse_http_url(url: str) -> ParseResult:

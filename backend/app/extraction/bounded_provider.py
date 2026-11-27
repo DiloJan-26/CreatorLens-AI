@@ -9,14 +9,14 @@ import httpx
 from app.core.config import get_settings
 from app.extraction import accounting
 from app.extraction.dispatch_limit import enforce_provider_rate
-from app.extraction.policy import configuration, input_url, checked_duration, POLICY_VERSION, ExtractionSafetyError
+from app.extraction.policy import configuration, input_url, checked_duration, POLICY_VERSION, SUPPORTED_PLATFORMS, ExtractionSafetyError
 from app.extractors.metadata_normalizer import normalize_metadata
 from app.models.video import VideoExtractionResult
 from app.services.evidence_quality import validate_extraction
 from app.services.supadata_transcript_service import _segments_from_payload
 
 BASE_URL = "https://api.supadata.ai/v1/"
-METADATA_MAPPING_VERSION = "supadata-metadata-2"
+METADATA_MAPPING_VERSION = "supadata-metadata-3"
 
 
 def public_count(value):
@@ -94,8 +94,8 @@ def request(project_id, slot, url, platform, operation):
 
 
 def extract(project_id, slot, platform, url):
-    if platform != "youtube":
-        raise ExtractionSafetyError("Only bounded YouTube extraction is approved for production.")
+    if platform not in SUPPORTED_PLATFORMS:
+        raise ExtractionSafetyError("Unsupported extraction platform.")
     settings = get_settings()
     configuration(settings)
     canonical = input_url(url, platform, settings)
@@ -126,10 +126,11 @@ def extract(project_id, slot, platform, url):
             "share_count": count("shares"), "duration": math.ceil(duration),
             "thumbnail": (payload.get("media") or {}).get("thumbnailUrl"), "tags": payload.get("tags"),
             "upload_date": payload.get("createdAt"),
-            "subscriber_count": public_count(extra.get("subscriberCount",author.get("subscriberCount")))}
+            "subscriber_count": public_count(extra.get("subscriberCount",author.get("subscriberCount"))) if platform == "youtube" else None,
+            "follower_count": public_count(extra.get("followerCount",author.get("followerCount"))) if platform != "youtube" else None}
 
     field_provenance = {}
-    if any(info.get(k) is None for k in ("view_count","like_count","comment_count","subscriber_count","upload_date")):
+    if platform == "youtube" and any(info.get(k) is None for k in ("view_count","like_count","comment_count","subscriber_count","upload_date")):
         from app.extraction.youtube_enrichment import enrich
         info, field_provenance = enrich(project_id, canonical, info, settings)
 
@@ -152,4 +153,6 @@ def extract(project_id, slot, platform, url):
 
 def compatible_cache(result, settings):
     checked_duration(result.metadata.duration_seconds, settings)
-    return (result.metadata.transcript_evidence.get("provenance") or {}).get("extraction_policy") == POLICY_VERSION
+    policy=(result.metadata.transcript_evidence.get("provenance") or {}).get("extraction_policy")
+    # Existing bounded YouTube snapshots retain the same native-caption safeguards.
+    return policy == POLICY_VERSION or result.metadata.platform == "youtube" and policy == "bounded-native-1.0.0"

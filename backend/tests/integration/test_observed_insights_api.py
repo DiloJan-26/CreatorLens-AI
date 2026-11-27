@@ -6,7 +6,7 @@ def test_current_response_has_independent_observed_decisions(client):
     response=client.get('/api/projects/p/insights/summary?objective=reach')
     assert response.status_code==200
     data=response.json();current=data['intelligence']
-    assert current['policy_version']=='observed-intelligence-1.0.0'
+    assert current['policy_version']=='observed-intelligence-1.1.0'
     assert current['decisions']['reach']['winner_content_id']=='video-2'
     assert current['decisions']['like_rate']['winner_content_id']=='video-1'
     assert 'balanced' not in current['decisions']
