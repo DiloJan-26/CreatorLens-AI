@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { retrieveProjectChunks } from "@/lib/api";
-import type { ContentItem, ContentPlatform, ContentSlot, RetrievedChunk, RetrieveProjectChunksRequest, RetrieveResponse, StoredEvidenceChunk } from "@/types/project";
+import type { ContentItem, ContentPlatform, ContentSlot, RetrievedChunk, RetrieveProjectChunksRequest, RetrieveResponse } from "@/types/project";
 import { Icon, Notice } from "./ui";
 import { PlatformIcon } from "./PlatformIcon";
 
@@ -19,8 +19,8 @@ export function evidenceTimestamp(start?: number | null, end?: number | null) {
   return `${format(start)} - ${format(end)}`;
 }
 
-export function RetrievalTestPanel({ projectId, indexReady, contents = [], initialChunks = [] }: {
-  projectId: string | null; indexReady: boolean; contents?: ContentItem[]; initialChunks?: StoredEvidenceChunk[];
+export function RetrievalTestPanel({ projectId, indexReady, contents = [] }: {
+  projectId: string | null; indexReady: boolean; contents?: ContentItem[];
 }) {
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState<ContentPlatform | "all">("all");
@@ -53,8 +53,7 @@ export function RetrievalTestPanel({ projectId, indexReady, contents = [], initi
       if (!active.signal.aborted) setError(error instanceof Error ? error.message : "Could not search evidence.");
     } finally { if (!active.signal.aborted) setSearching(false); }
   }
-  const chunks = result ? result.results : initialChunks.filter(chunk => evidenceBelongsToContent(chunk, contents) &&
-    (platform === "all" || chunk.platform === platform) && (slot === "all" || chunk.slot === slot) && (source === "all" || chunk.source_type === source));
+  const chunks = result?.results ?? [];
   return <section className="ui-panel evidence-search">
     <div className="evidence-section-heading"><span className="evidence-icon"><Icon name="target" size={21}/></span><div><h2>Retrieve supporting evidence</h2><p className="muted">Search indexed passages by meaning. Read the original sources.</p></div></div>
     <form onSubmit={search} className="evidence-search-form">
@@ -67,13 +66,16 @@ export function RetrievalTestPanel({ projectId, indexReady, contents = [], initi
       </div>
       <div className="evidence-query-suggestions">{prompts.map(prompt => <button key={prompt} type="button" onClick={() => {clearSearch(); setQuery(prompt);}}>{prompt}</button>)}</div>
     </form>
-    {!indexReady && <Notice>Stored passages remain available. Search will be available when indexing completes.</Notice>}
+    {!indexReady && <Notice>Search will be available when indexing completes.</Notice>}
     {error && <Notice tone="error">{error}</Notice>}
-    <div className="evidence-result-heading" aria-live="polite"><h3>{result ? `Results for \"${result.query}\"` : "Browse stored evidence"}</h3><span className="muted">{chunks.length} {chunks.length === 1 ? "passage" : "passages"}{result ? " retrieved" : " available"}</span>{result && <button className="source-link" onClick={clearSearch}>Browse all sources</button>}</div>
-    {result && <RetrievalSummary response={result}/>}
-    {result?.evidence_limitations?.filter(note => !note.startsWith("Relevance scores rank")).map((note,i) => <Notice key={i}>{note}</Notice>)}
-    {chunks.length ? <ol className="evidence-results">{chunks.slice(0,visible).map((chunk,i) => <EvidencePassage key={`${chunk.citation_label}-${i}`} chunk={chunk}/>)}</ol> : <p className="evidence-empty">{searching ? "Finding matching passages..." : result ? "No eligible indexed passages matched this search. Try another phrase or source type." : "No stored passages match these filters."}</p>}
-    {chunks.length > visible && <button className="button-secondary mt-4" onClick={() => setVisible(n => n + 6)}>Show more passages</button>}
+    {searching && <p className="evidence-empty" role="status">Finding matching passages...</p>}
+    {result && <>
+      <div className="evidence-result-heading" aria-live="polite"><h3>{`Results for "${result.query}"`}</h3><span className="muted">{chunks.length} {chunks.length === 1 ? "passage" : "passages"} retrieved</span><button className="source-link" onClick={clearSearch}>Clear results</button></div>
+      <RetrievalSummary response={result}/>
+      {result.evidence_limitations?.filter(note => !note.startsWith("Relevance scores rank")).map((note,i) => <Notice key={i}>{note}</Notice>)}
+      {chunks.length ? <ol className="evidence-results">{chunks.slice(0,visible).map((chunk,i) => <EvidencePassage key={`${chunk.citation_label}-${i}`} chunk={chunk}/>)}</ol> : <p className="evidence-empty">No eligible indexed passages matched this search. Try another phrase or source type.</p>}
+      {chunks.length > visible && <button className="button-secondary mt-4" onClick={() => setVisible(n => n + 6)}>Show more passages</button>}
+    </>}
   </section>;
 }
 export function EvidencePassage({chunk}: {chunk: Omit<RetrievedChunk, "score"> & {score?: number}}) {

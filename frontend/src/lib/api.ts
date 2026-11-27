@@ -331,6 +331,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    if (typeof window!=="undefined" && [403,503].includes(response.status) &&
+        (path.startsWith("/api/evaluations/") || path.startsWith("/api/metrics/cost"))) {
+      window.dispatchEvent(new Event("creatorlens_engineering_denied"));
+    }
     throw new ApiError(response.status,await getErrorMessage(response),response.headers.get("Retry-After"));
   }
 
@@ -602,3 +606,11 @@ export function listOwnedProjects(){return request<{projects: import("@/types/pr
 export function revokeApplicationSession(){return request("/api/account/logout",{method:"POST"});}
 export function completeAnalysis(projectId:string,metricsOnly:boolean){return request(`/api/projects/${encodeURIComponent(projectId)}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({metrics_only:metricsOnly})});}
 export function getProjectUsage(projectId:string){return request<{analysis_state:string;completion_mode:string|null;assistant_remaining:number;semantic_remaining:Record<string,number>}>(`/api/projects/${encodeURIComponent(projectId)}/usage`);}
+
+
+export type EngineeringAccess = {configured:boolean;unlocked:boolean;expires_in:number;duration_seconds:number};
+export function getEngineeringAccess(){return request<EngineeringAccess>("/api/engineering/access");}
+export function unlockEngineering(accessKey:string){return request<EngineeringAccess>("/api/engineering/unlock",{
+  method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({access_key:accessKey}),
+});}
+export function lockEngineering(){return request<EngineeringAccess>("/api/engineering/lock",{method:"POST"});}

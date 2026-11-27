@@ -86,6 +86,13 @@ def create_evaluation_run(payload: EvaluationRunRequest) -> EvaluationRunReport:
         ) from None
 
 
+def _bundled_run(repository, run):
+    from app.evaluations.intelligence_models import DATASETS
+    dataset = repository.get_dataset_by_id(run.dataset_id)
+    return dataset is not None and dataset.name in set(list_datasets()) | set(DATASETS)
+
+
+
 @router.get(
     "/runs",
     response_model=list[EvaluationRunSummary],
@@ -99,7 +106,7 @@ def get_evaluation_runs(
             repository = EvaluationRepository(session)
             return [
                 _run_summary(repository, run)
-                for run in repository.list_runs(limit=limit)
+                for run in repository.list_runs(limit=limit) if _bundled_run(repository,run)
             ]
     except DatabaseConfigurationError:
         raise HTTPException(
@@ -124,7 +131,7 @@ def get_evaluation_run(run_id: str) -> EvaluationRunDetail:
         with database_session() as session:
             repository = EvaluationRepository(session)
             run = repository.get_run(run_id)
-            if run is None:
+            if run is None or not _bundled_run(repository,run):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Evaluation run not found.",

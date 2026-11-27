@@ -6,7 +6,7 @@ import { ComparisonHighlights } from "./ExecutiveInsightSnapshot";
 import { AnalysisAllowancePanel } from "./AnalysisAllowancePanel";
 import Link from "next/link";
 import { GoalComparisonPanel } from "./GoalComparisonPanel";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -56,14 +56,16 @@ const INITIAL_PROGRESS_STEPS: AnalysisProgressStep[] = [
 export function ComparisonWorkspace() {
   const {account,refresh}=useAccount();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
   useEffect(() => {
     const sync = () => {
       const raw = window.location.hash.slice(1);
+      if (raw === "chat") { router.replace("/chat"); return; }
       const hash = raw === "transcript" ? "overview" : raw;
       if (raw === "transcript") window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#overview`);
       setActiveTab(
-        ["overview", "insights", "evidence", "chat"].includes(
+        ["overview", "insights", "evidence"].includes(
           hash,
         )
           ? hash
@@ -77,7 +79,7 @@ export function ComparisonWorkspace() {
       window.removeEventListener("hashchange", sync);
       window.removeEventListener("popstate", sync);
     };
-  }, []);
+  }, [router]);
   const startNew = searchParams.get("new") === "1";
   const [content1Url, setContent1Url] = useState("");
   const [content2Url, setContent2Url] = useState("");
@@ -510,7 +512,9 @@ export function ComparisonWorkspace() {
               ["insights", "Insights"],
               ["evidence", "Evidence"],
               ["chat", "Ask AI"],
-            ].map(([id, label]) => (
+            ].map(([id, label]) => id === "chat" ? (
+              <Link key={id} href="/chat">{label}</Link>
+            ) : (
               <a
                 key={id}
                 href={`#${id}`}
@@ -558,26 +562,12 @@ export function ComparisonWorkspace() {
               initialSummary={insightSummary}
               onSummaryLoaded={setInsightSummary}
             />
-            {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail?.project_id??null}/>}
+            {projectDetail&&<AnalysisAllowancePanel projectId={projectDetail.project_id} showResponseCount={false}/>}
           </section>
           {activeTab === "evidence" && projectDetail && <section id="evidence" className="section-panel">
             <EvidenceSystemDetails key={`${projectDetail.project_id}-${indexReady}`} projectId={projectDetail.project_id} indexReady={indexReady} contents={projectDetail.content_items}/>
           </section>}
-          <section
-            id="chat"
-            hidden={activeTab !== "chat"}
-            className="section-panel ui-panel"
-          >
-            <h2 className="text-xl">Ask the evidence a question</h2>
-            <p className="muted mt-3 mb-5">
-              Compare opening hooks, explore the metrics, or ask what to
-              improve. The assistant uses this active comparison and returns
-              supporting citations.
-            </p>
-            <Link href="/chat" className="button-primary">
-              Open AI Assistant
-            </Link>
-          </section>
+
         </>
       )}
     </main>

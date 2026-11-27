@@ -90,7 +90,7 @@ export function AccountMenu(){
     <summary className="profile-trigger" aria-label={`Account for ${name}`}><span className="profile-avatar">{photo&&!photoFailed?<Image src={photo} alt="" width={36} height={36} unoptimized referrerPolicy="no-referrer" onError={()=>setPhotoFailed(true)}/>:initials}</span><span className="profile-trigger-name">{name}</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg></summary>
     <div className="profile-dropdown">
       <div className="profile-identity"><strong>{name}</strong>{account.email&&<span>{account.email}</span>}</div>
-      <Link href="/workspace" onClick={()=>{if(menu.current)menu.current.open=false;}}>Workspace</Link>
+      <Link href="/workspace" className="profile-workspace" onClick={()=>{if(menu.current)menu.current.open=false;}}>Workspace</Link>
       <p className="profile-allowance">{account.usage.available} of {account.usage.granted} analyses available</p>
       <button type="button" className="profile-signout" disabled={busy} onClick={()=>void signOut()}>{busy?"Signing out...":"Sign out"}</button>
     </div>

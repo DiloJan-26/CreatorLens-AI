@@ -14,6 +14,7 @@ if(!process.env.ACCEPTANCE_PLAYWRIGHT_PACKAGE) throw Error("Set ACCEPTANCE_PLAYW
 const {chromium}=require(process.env.ACCEPTANCE_PLAYWRIGHT_PACKAGE);
 const webpack=require("next/dist/compiled/webpack/webpack").webpack;
 const write=(name,text)=>{const file=path.join(temp,name);fs.writeFileSync(file,text);return file;};
+const link=write("link.cjs",`const React=require(${JSON.stringify(require.resolve("react"))});module.exports=({children,...props})=>React.createElement("a",props,children);`);
 const api=write("api.cjs",`module.exports=new Proxy({},{get:(_,name)=>(...args)=>window.fixture.api(name,...args)});`);
 const loader=write("loader.cjs",`const ts=require(${JSON.stringify(require.resolve("typescript"))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;`);
 const components=path.join(root,"src/components").replaceAll("\\","/");
@@ -49,7 +50,7 @@ const calls=[];window.fixture={calls,mode:'normal',async api(name,...args){calls
 }};
 createRoot(document.getElementById('root')).render(location.pathname==='/transcript-fixture'?<TranscriptPreviewPanel projectId="fixture-project" item={contents[0]} label="Content 1"/>:<EvidenceSystemDetails projectId="fixture-project" indexReady={!location.search.includes('pending')} contents={contents}/>);
 `);
-await new Promise((resolve,reject)=>webpack({mode:"development",devtool:false,entry,output:{path:temp,filename:"bundle.js"},resolve:{extensions:[".tsx",".ts",".js"],modules:[path.join(root,"node_modules"),"node_modules"],alias:{"@/lib/api":api,"react$":require.resolve("react"),"react-dom/client":require.resolve("react-dom/client"),"react/jsx-runtime":require.resolve("react/jsx-runtime")}},module:{rules:[{test:/\.tsx?$/,use:loader}]}},(error,stats)=>error||stats.hasErrors()?reject(error??Error(stats.toString())):resolve()));
+await new Promise((resolve,reject)=>webpack({mode:"development",devtool:false,entry,output:{path:temp,filename:"bundle.js"},resolve:{extensions:[".tsx",".ts",".js"],modules:[path.join(root,"node_modules"),"node_modules"],alias:{"next/link":link,"@/lib/api":api,"react$":require.resolve("react"),"react-dom/client":require.resolve("react-dom/client"),"react/jsx-runtime":require.resolve("react/jsx-runtime")}},module:{rules:[{test:/\.tsx?$/,use:loader}]}},(error,stats)=>error||stats.hasErrors()?reject(error??Error(stats.toString())):resolve()));
 function cssFiles(dir){if(!fs.existsSync(dir))return [];return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?cssFiles(path.join(dir,e.name)):e.name.endsWith('.css')?[path.join(dir,e.name)]:[]);}
 const css=cssFiles(path.join(root,'.next/static')).map(file=>fs.readFileSync(file,'utf8')).join('\n');
 const server=http.createServer((req,res)=>{if(req.url==='/bundle.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(path.join(temp,'bundle.js')));}else{res.setHeader('Content-Type','text/html');res.end('<html><head><meta name="viewport" content="width=device-width, initial-scale=1"/><style>'+css+'</style></head><body><main class="page-container"><div id="root"></div></main><script src="/bundle.js"></script></body></html>');}});
@@ -61,17 +62,20 @@ try {
  await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
  const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')errors.push(message.text())});
  await page.goto(origin);await page.getByText('3 stored passages',{exact:true}).waitFor();
- assert.equal(await page.locator('.evidence-passage').count(),3);
+ assert.equal(await page.locator('.evidence-passage').count(),0);
  assert.equal(await page.getByText('Partial coverage',{exact:true}).count(),1);
- assert.equal(await page.locator('.evidence-time').count(),1);
+ assert.equal(await page.locator('.evidence-time').count(),0);
+ assert.equal(await page.getByRole('link',{name:'Ask the Assistant',exact:false}).getAttribute('href'),'/chat');
+ assert.equal(await page.getByRole('heading',{name:'Browse stored evidence',exact:true}).count(),0);
+ assert.equal(await page.evaluate(()=>window.fixture.calls.filter(c=>c.name==='retrieveProjectChunks').length),0);
  await page.screenshot({path:path.join(temp,'evidence-desktop.png'),fullPage:true});
- await page.getByLabel('Content',{exact:true}).selectOption('content_2');assert.equal(await page.locator('.evidence-passage').count(),1);
+ await page.getByLabel('Content',{exact:true}).selectOption('content_2');assert.equal(await page.locator('.evidence-passage').count(),0);
  await page.getByLabel('Evidence query').fill('confirmed views');await page.getByRole('button',{name:'Search evidence',exact:true}).click();
  await page.getByRole('heading',{name:'Results for "confirmed views"',exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),1);
  await page.getByText('fixture-bge',{exact:false}).waitFor();await page.getByText('12 ms',{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.fixture.calls.find(c=>c.name==='retrieveProjectChunks').args[1].purpose),'evidence_search');
  await page.screenshot({path:path.join(temp,'retrieval-desktop.png'),fullPage:true});
- await page.getByRole('button',{name:'Browse all sources'}).click();await page.getByLabel('Content',{exact:true}).selectOption('all');
+ await page.getByRole('button',{name:'Clear results'}).click();assert.equal(await page.locator('.evidence-passage').count(),0);await page.getByLabel('Content',{exact:true}).selectOption('all');
  await page.evaluate(()=>window.fixture.mode='empty');await page.getByRole('button',{name:'Search evidence',exact:true}).click();await page.getByText('No eligible indexed passages matched this search. Try another phrase or source type.',{exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),0);
  await page.evaluate(()=>window.fixture.mode='wrong-content');await page.getByRole('button',{name:'Search evidence',exact:true}).click();
  await page.getByText('Returned evidence does not match the selected sources.',{exact:true}).waitFor();
@@ -79,7 +83,7 @@ try {
  await page.evaluate(()=>window.fixture.mode='deferred');await page.getByRole('button',{name:'Search evidence',exact:true}).click();
  await page.getByRole('button',{name:'Searching...',exact:true}).waitFor();await page.getByLabel('Content',{exact:true}).selectOption('content_2');await page.evaluate(()=>window.fixture.resolve());
  assert.equal(await page.locator('.evidence-passage[data-content-slot="content_1"]').count(),0);
- await page.goto(origin+'?pending');await page.getByText('Search not ready',{exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),3);assert(await page.getByRole('button',{name:'Search evidence',exact:true}).isDisabled());
+ await page.goto(origin+'?pending');await page.getByText('Search not ready',{exact:true}).waitFor();assert.equal(await page.locator('.evidence-passage').count(),0);assert(await page.getByRole('button',{name:'Search evidence',exact:true}).isDisabled());
  await page.goto(origin);await page.getByText('3 stored passages',{exact:true}).waitFor();await page.setViewportSize({width:390,height:844});
  await page.getByLabel('Evidence query').fill('How is dopamine introduced?');await page.getByRole('button',{name:'Search evidence',exact:true}).click();await page.getByText('fixture-bge',{exact:false}).waitFor();assert(await page.locator('mark').count()>0);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.screenshot({path:path.join(temp,'evidence-mobile.png'),fullPage:true});
  await page.goto(origin+'/transcript-fixture');await page.getByRole('button',{name:'Read transcript'}).click();await page.getByText('Source text remains source text.',{exact:true}).waitFor();await page.getByText('Showing 1 of 125 segments.',{exact:true}).waitFor();assert.equal(await page.locator('li > span').count(),0);

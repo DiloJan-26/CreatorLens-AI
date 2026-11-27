@@ -20,8 +20,12 @@ class AuthenticationMiddleware:
         try:
             principal=await run_in_threadpool(authenticate_request,scope,get_settings())
         except HTTPException as exc:
-            return await JSONResponse({"detail":exc.detail},status_code=exc.status_code,headers=exc.headers)(scope,receive,send)
+            return await JSONResponse({"detail":exc.detail},status_code=exc.status_code,headers={**(exc.headers or {}),"Cache-Control":"private, no-store"})(scope,receive,send)
         scope["state"]={**scope.get("state",{}),"principal":principal}
         token=current_principal.set(principal)
-        try:return await self.app(scope,receive,send)
+        async def private_send(message):
+            if message['type']=='http.response.start' and (scope['path'].startswith(('/api/engineering/','/api/evaluations')) or scope['path']=='/api/metrics/cost'):
+                message={**message,'headers':[(k,v) for k,v in message.get('headers',[]) if k.lower()!=b'cache-control']+[(b'cache-control',b'private, no-store')]}
+            await send(message)
+        try:return await self.app(scope,receive,private_send)
         finally:current_principal.reset(token)

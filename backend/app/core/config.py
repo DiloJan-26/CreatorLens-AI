@@ -3,7 +3,7 @@ from decimal import Decimal
 from functools import lru_cache
 from app.core.model_policy import DEFAULT_GEMINI_MODEL
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     youtube_enrichment_daily_units: int = Field(default=100, alias="YOUTUBE_ENRICHMENT_DAILY_UNITS", ge=1, le=10000)
     service_role: Literal["web", "worker"] = Field(default="web", alias="SERVICE_ROLE")
     environment: str = Field(default="local", alias="ENVIRONMENT")
+    engineering_access_key: SecretStr | None = Field(default=None, alias="ENGINEERING_ACCESS_KEY", repr=False)
+    engineering_unlock_seconds: int = Field(default=1800, alias="ENGINEERING_UNLOCK_SECONDS", ge=60, le=3600)
+
+    @field_validator("engineering_access_key", mode="before")
+    @classmethod
+    def validate_engineering_key(cls, value):
+        if value is None or value == "": return None
+        text = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if not isinstance(text, str) or not 32 <= len(text) <= 256 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in text):
+            raise ValueError("Engineering access requires a 32-256 character random URL-safe key.")
+        return value
+
     provider_emergency_stop: bool = Field(default=True, alias="PROVIDER_EMERGENCY_STOP")
     supabase_url: str | None = Field(default=None, alias="SUPABASE_URL")
     supabase_jwt_issuer: str | None = Field(default=None, alias="SUPABASE_JWT_ISSUER")

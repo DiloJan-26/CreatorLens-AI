@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import {AssistantLinkBar} from "./AssistantLinkBar";
 import {HookMessageInsights} from "./HookMessageInsights";
 import {useEffect,useState} from "react";
 import {Icon} from "./ui";
@@ -24,6 +24,6 @@ export function CreatorInsightSummaryPanel({projectId,initialSummary,onSummaryLo
  <div className="comparison-highlights"><div className="highlight-grid">{Object.values(data.decisions).filter(d=>d.status==="eligible"||d.status==="descriptive").map(d=><article className="highlight-card" key={d.dimension}><Icon name={d.dimension==="reach"?"trend":"target"} size={20}/><div><h3>{d.dimension.replaceAll("_"," ")}</h3><p>{d.outcome==="tie"?"Within the comparison threshold":d.winner_slot?`Content ${d.winner_slot.slice(-1)} leads`:"Descriptive comparison"}</p></div></article>)}</div></div>
  <p className="insight-footnote">Lifetime counts reflect different audiences and publishing periods. Likes and comments do not establish audience sentiment.</p></section>
  <HookMessageInsights contents={data.contents} recommendations={data.recommendations}/>
- <div className="insight-assistant-link"><span><Icon name="chat" size={20}/> Discuss your findings and explore alternative wording.</span><Link href="/chat" className="button-primary">Ask the Assistant <Icon name="arrow" size={16}/></Link></div>
+ <AssistantLinkBar/>
  </div>;
 }

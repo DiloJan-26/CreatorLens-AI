@@ -180,6 +180,8 @@ app.add_middleware(
 )
 
 from app.api.account import router as account_router
+from app.api.engineering import router as engineering_router
+app.include_router(engineering_router)
 app.include_router(account_router)
 app.include_router(health_router)
 app.include_router(projects_router)

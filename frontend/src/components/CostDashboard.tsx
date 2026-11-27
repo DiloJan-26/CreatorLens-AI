@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount } from "./AccountProvider";
+import { EngineeringLockButton } from "./EngineeringAccess";
 import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
@@ -16,7 +16,6 @@ import type {
 } from "@/types/cost";
 
 export function CostDashboard() {
-  const {account}=useAccount();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [scopeReady, setScopeReady] = useState(false);
   const requestVersion = useRef(0);
@@ -31,7 +30,6 @@ export function CostDashboard() {
     setError(null);
 
     try {
-      if(!projectId && account?.role!=="admin") throw new Error("Select one of your analyses to view its usage. Global analytics are administrator-only.");
       const response = await getCostMetrics(projectId);
       if (version !== requestVersion.current) return;
       setMetrics(response);
@@ -45,7 +43,7 @@ export function CostDashboard() {
     } finally {
       if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [projectId,account]);
+  }, [projectId]);
 
   useEffect(() => {
     const invalidateRequests = () => {
@@ -100,6 +98,7 @@ export function CostDashboard() {
           icon="chart"
           description="Trace generation cost, latency and evidence usage."
           action={
+            <div className="engineering-header-actions"><EngineeringLockButton/>
             <button
               className="button-secondary"
               onClick={() => void loadMetrics()}
@@ -107,14 +106,14 @@ export function CostDashboard() {
             >
               <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh telemetry"}
-            </button>
+            </button></div>
           }
         />
         <div className="engineering-meta flex flex-wrap gap-3 justify-between items-center">
           <p className="muted text-sm">
             {projectId
               ? `Active project ${shortId(projectId)}`
-              : "All projects"}{" "}
+              : "Global summary"}{" "}
             / Stored observations only
           </p>
           {isLoading ? (
@@ -127,6 +126,7 @@ export function CostDashboard() {
             <CoverageBadge run={metrics?.runs[0] ?? null} />
           )}
         </div>
+        {!projectId&&<p className="muted text-sm">Global totals only. Open an analysis to inspect its individual runs.</p>}
         <details className="notice text-sm observations-note">
           <summary>About these observations</summary>
           <p>
