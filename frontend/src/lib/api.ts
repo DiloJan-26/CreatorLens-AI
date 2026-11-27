@@ -614,3 +614,21 @@ export function unlockEngineering(accessKey:string){return request<EngineeringAc
   method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({access_key:accessKey}),
 });}
 export function lockEngineering(){return request<EngineeringAccess>("/api/engineering/lock",{method:"POST"});}
+
+
+export type LlmAvailability = {
+  status: "reachable" | "blocked" | "failed";
+  reason: string;
+  message: string;
+  provider: string;
+  model: string;
+  checked_at: string;
+  provider_invocation_count: number;
+  retry_after_seconds: number;
+};
+export function checkEngineeringLlm(projectId: string) {
+  return request<LlmAvailability>("/api/engineering/llm-check", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({project_id: projectId}),
+  });
+}

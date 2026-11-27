@@ -1,95 +1,64 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { checkEngineeringLlm } from "@/lib/api";
+import { ApiError } from "@/lib/auth-transport";
+import { useEngineering } from "./EngineeringAccess";
 
-import { getProviderStatus, checkLlmHealth, testLlmGeneration } from "@/lib/api";
+type CheckState = "untested" | "checking" | "reachable" | "failed";
 
-type ReasoningState = "untested" | "active" | "unavailable";
-
-export function AiReasoningStatus() {
-  const [state, setState] = useState<ReasoningState>("untested");
-  const [checking, setChecking] = useState(false);
-  const [providerAllowed, setProviderAllowed] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const initialized = useRef(false);
-
-  // On mount: config check only (no generation call).
+export function LlmAvailabilityCheck({projectId}: {projectId: string | null}) {
+  const {refresh} = useEngineering();
+  const [state, setState] = useState<CheckState>("untested");
+  const [message, setMessage] = useState("Not checked. A manual check may incur provider charges.");
+  const [cooldown, setCooldown] = useState(false);
+  const pending = useRef(false);
+  const mounted = useRef(true);
+  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    getProviderStatus().then(value => setProviderAllowed(value.provider_calls_enabled)).catch(() => {});
-
-    checkLlmHealth()
-      .then((res) => {
-        if (res.status === "ok" && res.configured) {
-          setState("untested");
-        } else {
-          setState("unavailable");
-          setMessage(res.message ?? "AI Reasoning not configured.");
-        }
-      })
-      .catch(() => {
-        setState("unavailable");
-        setMessage("Backend unreachable.");
-      });
+    mounted.current = true;
+    return () => {mounted.current = false; if (cooldownTimer.current) clearTimeout(cooldownTimer.current);};
   }, []);
 
-  const handleCheck = useCallback(async () => {
-    if (checking || !providerAllowed) return;
-    setChecking(true);
-    setMessage(null);
-
+  async function check() {
+    if (!projectId || pending.current || cooldown) return;
+    pending.current = true;
+    setState("checking");
+    setMessage("Checking the configured LLM...");
     try {
-      const res = await testLlmGeneration();
-
-      if (res.status === "ok") {
-        setState("active");
-        setMessage(null);
-      } else {
-        setState("unavailable");
-        setMessage("AI Reasoning check failed. Verify API key and model access.");
+      const result = await checkEngineeringLlm(projectId);
+      if (!mounted.current) return;
+      if (!["reachable", "blocked", "failed"].includes(result.status) || !Number.isFinite(Date.parse(result.checked_at))) {
+        throw new Error("Invalid diagnostic response.");
       }
-    } catch {
-      setState("unavailable");
-      setMessage("Could not reach AI Reasoning service.");
+      setState(result.status === "reachable" && result.provider_invocation_count === 1 ? "reachable" : "failed");
+      setMessage(`${result.message} (${result.model}; ${new Date(result.checked_at).toLocaleTimeString()})`);
+      const seconds = result.retry_after_seconds || (result.provider_invocation_count ? 60 : 0);
+      if (seconds > 0) {
+        setCooldown(true);
+        cooldownTimer.current = setTimeout(() => {if (mounted.current) setCooldown(false);}, seconds * 1000);
+      }
+    } catch (error) {
+      if (!mounted.current) return;
+      setState("failed");
+      setMessage(error instanceof ApiError ? error.message : "The check could not be completed. Gemini availability is unknown.");
+      if (error instanceof ApiError && error.status === 403) void refresh();
     } finally {
-      setChecking(false);
+      pending.current = false;
     }
-  }, [checking, providerAllowed]);
+  }
 
-  const dot =
-    state === "active"
-      ? "bg-emerald-500"
-      : state === "unavailable"
-        ? "bg-red-500"
-        : "bg-amber-400";
-
-  const label =
-    state === "active"
-      ? "AI Reasoning Active"
-      : state === "unavailable"
-        ? "AI Reasoning Unavailable"
-        : "AI Reasoning Not Tested";
-
+  const status = projectId ? message : "Open a completed analysis to check the LLM.";
   return (
-    <div className="flex items-center gap-1.5">
-      <span
-        title={message ?? label}
-        className={`h-2 w-2 shrink-0 rounded-full ${dot}`}
-        aria-label={label}
-      />
-      <span className="hidden text-xs font-medium text-slate-500 lg:inline">
-        {label}
-      </span>
-      <button
-        type="button"
-        onClick={handleCheck}
-        disabled={checking || !providerAllowed}
-        aria-label="Check AI Reasoning"
-        className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
-      >
-        {checking ? "…" : "Check"}
+    <span className="llm-check-control">
+      <button type="button" className="llm-check-button" onClick={() => void check()}
+        disabled={!projectId || state === "checking" || cooldown}
+        aria-label="Check LLM availability" aria-busy={state === "checking"}
+        title={`${status}${cooldown ? " Check cooldown active." : ""}`}>
+        {state === "checking" ? "Checking..." : "Check LLM"}
+        <span className={`llm-check-dot llm-check-${state}`} aria-hidden="true"/>
       </button>
-    </div>
+      <span className="sr-only" role="status" aria-live="polite">{status}</span>
+    </span>
   );
 }

@@ -177,13 +177,13 @@ def _message_text(message: object) -> str:
     return ""
 
 
-async def _tracked_diagnostic_invoke(llm, prompt, model):
+async def _tracked_diagnostic_invoke(llm, prompt, model, *, project_id=None, timeout=None):
     """Instrument the existing explicit diagnostic, without any fabricated project."""
     from time import perf_counter
     from datetime import datetime, UTC
     from app.llm.token_usage import TokenUsage,parse_token_usage
     from app.services.llm_observability_service import start_llm_run,complete_llm_run,fail_llm_run,record_cost_event,annotate_operation
-    run=start_llm_run(project_id=None,llm_provider='gemini',llm_model=model,prompt_name='diagnostic_generation',prompt_version='1.0.0',
+    run=start_llm_run(project_id=project_id,llm_provider='gemini',llm_model=model,prompt_name='diagnostic_generation',prompt_version='1.0.0',
         operation_type='diagnostic_generation',execution_mode='runtime',provider_invocation_count=0)
     from app.llm.tracing import trace_span
     usage=TokenUsage();started=perf_counter();latency=None;span=None;inference_at=None
@@ -195,7 +195,11 @@ async def _tracked_diagnostic_invoke(llm, prompt, model):
             try:
                 from langsmith import tracing_context
                 with tracing_context(enabled=False):
-                    response=await llm.ainvoke(prompt)
+                    if timeout is None:
+                        response=await llm.ainvoke(prompt)
+                    else:
+                        import asyncio
+                        response=await asyncio.wait_for(llm.ainvoke(prompt),timeout=timeout)
             finally:
                 latency=round((perf_counter()-invocation_started)*1000)
         usage=parse_token_usage(response)
@@ -207,5 +211,5 @@ async def _tracked_diagnostic_invoke(llm, prompt, model):
         fail_llm_run(run,error_code='DIAGNOSTIC_GENERATION_FAILED',usage=usage,llm_latency_ms=latency,provider_invocation_count=1,langsmith_trace_id=getattr(span,'trace_id',None))
         raise
     finally:
-        record_cost_event(llm_run_id=run,project_id=None,llm_provider='gemini',llm_model=model,usage=usage,provider_invocation_count=1,inference_at=inference_at)
+        record_cost_event(llm_run_id=run,project_id=project_id,llm_provider='gemini',llm_model=model,usage=usage,provider_invocation_count=1,inference_at=inference_at)
         annotate_operation(run,usage=usage,end_to_end_latency_ms=round((perf_counter()-started)*1000),provider_invocation_count=1)

@@ -119,7 +119,7 @@ export function EvaluationDashboard() {
           icon="shield"
           description="Inspect regression quality, source coverage and evidence compliance."
           action={
-            <div className="engineering-header-actions"><EngineeringLockButton/>
+            <div className="engineering-header-actions">
             <button
               className="button-secondary"
               onClick={() => void loadOverview()}
@@ -127,7 +127,7 @@ export function EvaluationDashboard() {
             >
               <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh results"}
-            </button></div>
+            </button><EngineeringLockButton/></div>
           }
         />
         <div className="engineering-meta flex flex-wrap items-center justify-between gap-3">

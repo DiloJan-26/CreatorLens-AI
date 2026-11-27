@@ -46,6 +46,9 @@ def authenticate_request(scope, settings):
         elif path.startswith("/api/evaluations"):
             require_engineering(settings,principal)
             if request.method != "GET": require_admin(session,principal)
+        elif path == "/api/engineering/llm-check":
+            if request.method != "POST":raise HTTPException(405,"Method not allowed.")
+            require_engineering(settings,principal)
         elif path in {"/api/engineering/access","/api/engineering/unlock","/api/engineering/lock"}:
             if request.method != ("GET" if path.endswith("/access") else "POST"):
                 raise HTTPException(405,"Method not allowed.")

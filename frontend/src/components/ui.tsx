@@ -107,26 +107,28 @@ export function PageHeading({
   title,
   description,
   action,
+  titleAction,
   icon,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
   action?: ReactNode;
+  titleAction?: ReactNode;
   icon?: string;
 }) {
   return (
     <header className="page-heading">
       <div>
         <p className="eyebrow">{eyebrow}</p>
-        <h1>
+        <div className="page-title-row"><h1>
           {icon && (
             <span className="page-title-icon">
               <Icon name={icon} size={25} />
             </span>
           )}
           {title}
-        </h1>
+        </h1>{titleAction}</div>
         {description && <p className="muted mt-2 max-w-2xl">{description}</p>}
       </div>
       {action && <div className="heading-action">{action}</div>}
