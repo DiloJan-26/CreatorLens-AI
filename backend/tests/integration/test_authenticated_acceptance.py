@@ -25,8 +25,9 @@ from app.workers import owned_execution,dispatch_outbox
 from tests.unit.test_bounded_extraction import settings as bounded_settings
 
 
+@pytest.mark.parametrize("platforms",[("youtube","youtube"),("instagram","facebook"),("facebook","youtube")])
 @pytest.mark.parametrize("captions",[True,False])
-def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
+def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions,platforms):
     import app.core.authenticated_access as boundary
     import app.core.authentication_middleware as gate
     import app.insights.insight_service as insight_service
@@ -65,12 +66,14 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
     app=FastAPI();app.add_middleware(AuthenticationMiddleware)
     for module in (projects,account,ingestion,insights,chat):app.include_router(module.router)
     client=TestClient(app)
+    urls=[{"youtube":f"https://www.youtube.com/watch?v=accept_{index}","instagram":f"https://www.instagram.com/reel/accept_{index}/","facebook":f"https://www.facebook.com/reel/{8100+index}/"}[platform] for index,platform in enumerate(platforms)]
+    canonical_urls=[policy.input_url(url,platform,settings) for url,platform in zip(urls,platforms)]
     provider_calls=[]
     def handler(request):
         provider_calls.append(request)
-        source=request.url.params["url"];second=source.endswith("accept_second")
+        source=request.url.params["url"];second=source==canonical_urls[1];platform=platforms[int(second)]
         if request.url.path.endswith("metadata"):
-            body={"platform":"youtube","type":"video","url":source,"title":"Synthetic second" if second else "Synthetic first","media":{"duration":30},"stats":{"views":1527222 if second else 34021,"likes":18876 if second else 485,"comments":308 if second else 8}}
+            body={"platform":platform,"type":"video","url":source,"title":"Synthetic second" if second else "Synthetic first","media":{"duration":30},"stats":{"views":1527222 if second else 34021,"likes":18876 if second else 485,"comments":308 if second else 8}}
             return httpx.Response(200,stream=httpx.ByteStream(json.dumps(body).encode()))
         if not captions:return httpx.Response(404,stream=httpx.ByteStream(b""))
         return httpx.Response(200,stream=httpx.ByteStream(json.dumps({"lang":"en","content":[{"text":"Synthetic topic explanation for this content.","offset":0,"duration":8000}]}).encode()))
@@ -84,7 +87,7 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
         assert client.get("/api/account",headers=headers[i]).json()["usage"]["granted"]==5
     assert client.get("/api/account",headers={"Authorization":"Bearer "+token(0,True)}).status_code==401
     assert client.get("/api/projects").status_code==401
-    created=client.post("/api/projects",headers=headers[0],json={"content_1_url":"https://www.youtube.com/watch?v=accept_first","content_2_url":"https://www.youtube.com/watch?v=accept_second","owner_user_id":ids[1]})
+    created=client.post("/api/projects",headers=headers[0],json={"content_1_url":urls[0],"content_2_url":urls[1],"owner_user_id":ids[1]})
     assert created.status_code==201,created.text
     project=created.json()["project_id"]
     path="/api/projects/"+project
@@ -114,7 +117,13 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions):
     for objective,winner in (("reach","content_2"),("engagement","content_1"),("balanced",None),("creative_quality",None)):
         summary=client.get(path+"/insights/summary?objective="+objective,headers=headers[0])
         assert summary.status_code==200,summary.text
-        assert summary.json()["goal_comparison"]["winner_slot"]==winner
+        # Historical goal_comparison remains available under its original comparability rules.
+        assert summary.json()["goal_comparison"]["winner_slot"]==(winner if platforms==("youtube","youtube") else None)
+        current=summary.json()["intelligence"]
+        assert current["policy_version"]=="observed-intelligence-1.1.0"
+        assert current["decisions"]["reach"]["winner_slot"]=="content_2"
+        assert current["decisions"]["like_rate"]["winner_slot"]=="content_1"
+        assert current["decisions"]["reach"]["comparison_scope"]==("same_platform" if platforms[0]==platforms[1] else "cross_platform_descriptive")
     from app.rag import chat_service
     monkeypatch.setattr(chat_service,"get_llm",lambda **kwargs:pytest.fail("Deterministic metric answer must not invoke Gemini."))
     stream=client.post(path+"/chat/stream",headers=headers[0],json={"message":"Which video has more views?","objective":"reach"})

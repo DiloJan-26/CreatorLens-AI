@@ -12,12 +12,12 @@ from app.core.request_limits import enforce_rate
 from app.db.session import database_session
 from app.db.models.account import AppUser, UserEntitlement, BudgetAccount, ProviderOperation, AnalysisReservation, DispatchOutbox
 from app.services.account_usage import latest_reservation, event
-from app.extraction.policy import configuration, input_url, source_key, SLOTS, POLICY_VERSION, ExtractionSafetyError
+from app.extraction.policy import configuration, input_url, source_key, SLOTS, POLICY_VERSION, SUPPORTED_PLATFORMS, ExtractionSafetyError
 
 
 def admit(session, principal, project_id, slot, url, platform, operation, *, settings=None, rate=True):
-    if platform != "youtube":
-        raise HTTPException(403,"Only bounded YouTube extraction is approved for production.")
+    if platform not in SUPPORTED_PLATFORMS:
+        raise HTTPException(403,"Unsupported extraction platform.")
     settings = settings or get_settings()
     configuration(settings)
     if slot not in SLOTS or operation not in {"metadata", "native_transcript"}:

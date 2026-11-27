@@ -38,11 +38,13 @@ def test_releasing_stop_does_not_skip_identity_or_admission(monkeypatch,user,ope
 
 
 @pytest.mark.parametrize("platform",["instagram","facebook"])
-def test_stop_release_never_enables_unapproved_extraction(monkeypatch,platform):
+def test_supported_platforms_still_require_safe_urls_before_provider_request(monkeypatch,platform):
     from app.extraction import bounded_provider
     from app.extraction.policy import ExtractionSafetyError
     monkeypatch.setattr(bounded_provider,"request",lambda *args:pytest.fail("Unsupported provider request"))
-    with pytest.raises(ExtractionSafetyError,match="YouTube"):bounded_provider.extract("project","content_1",platform,"https://example.invalid")
+    from tests.unit.test_bounded_extraction import settings
+    monkeypatch.setattr(bounded_provider,"get_settings",lambda:settings())
+    with pytest.raises(ExtractionSafetyError,match="HTTPS public video hosts"):bounded_provider.extract("project","content_1",platform,"https://example.invalid")
 
 
 def test_minimal_api_and_worker_profiles_share_actual_execution_policy():

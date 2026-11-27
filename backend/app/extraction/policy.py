@@ -5,11 +5,11 @@ from decimal import Decimal, ROUND_UP
 from hashlib import sha256
 import json
 from pathlib import Path
-import re
 from fastapi import HTTPException
 from app.services.url_normalization_service import normalize_content_url
 
-POLICY_VERSION = "bounded-native-1.0.0"
+POLICY_VERSION = "bounded-native-1.1.0"
+SUPPORTED_PLATFORMS = frozenset({"youtube", "instagram", "facebook"})
 SLOTS = {"content_1", "content_2"}
 
 
@@ -86,19 +86,12 @@ def observed_price(settings, operation):
 def input_url(url, platform, settings):
     if not isinstance(url, str) or len(url.encode("utf-8")) > settings.extraction_max_url_bytes:
         raise ExtractionSafetyError("Video URL exceeds the approved input bound.")
-    from urllib.parse import urlsplit, parse_qs
+    from urllib.parse import urlsplit
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port or parsed.hostname not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "instagram.com", "www.instagram.com", "facebook.com", "www.facebook.com", "m.facebook.com"}:
+    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port or parsed.hostname not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "instagram.com", "www.instagram.com", "m.instagram.com", "facebook.com", "www.facebook.com", "m.facebook.com"}:
         raise ExtractionSafetyError("Only HTTPS public video hosts without credentials or ports are permitted.")
     try:
-        if platform == "facebook":
-            parts = [part for part in parsed.path.split("/") if part]
-            identifier = parse_qs(parsed.query).get("v", [""])[0] if parsed.path.rstrip("/") == "/watch" else parts[-1] if parts and (parts[0] == "reel" or "videos" in parts) else ""
-            if not re.fullmatch(r"[0-9]+", identifier):
-                raise ValueError("Not a Facebook video.")
-            normalized = "https://www.facebook.com/watch/?v=" + identifier
-        else:
-            normalized = normalize_content_url(url)
+        normalized = normalize_content_url(url)
     except ValueError:
         raise ExtractionSafetyError("Only canonical supported public video URLs are permitted.") from None
     # Normalization verifies exact hosts and video identifiers, never downloads media.

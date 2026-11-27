@@ -76,7 +76,7 @@ def get_creator_insight_summary(project_id: str, objective: ComparisonObjective 
         comparison=comparison,
         goal_comparison=goal_comparison,
         creator_recommendations=creator_recommendations,
-        notes=_summary_notes(content_1_insight, content_2_insight) + ["Current Insights and Assistant decisions use intelligence / observed-intelligence-1.0.0. scores, scoring, comparison, goal_comparison and creator_recommendations preserve historical policy contracts; they do not override current decisions."],
+        notes=_summary_notes(content_1_insight, content_2_insight) + ["Current Insights and Assistant decisions use intelligence / observed-intelligence-1.1.0. scores, scoring, comparison, goal_comparison and creator_recommendations preserve historical policy contracts; they do not override current decisions."],
     )
 
 
