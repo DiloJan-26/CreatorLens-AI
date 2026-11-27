@@ -84,6 +84,7 @@ def test_disposable_account_migration_and_last_credit_race(monkeypatch):
                 assert len(session.scalars(select(UsageEvent).where(UsageEvent.user_id==principal.user_id,UsageEvent.kind=="lifetime_grant")).all())==1
             _verify_extraction_admission_race(scoped,principal,project,monkeypatch)
             _verify_configured_grants_and_parallel_admission(scoped,monkeypatch)
+            _verify_automatic_completion_race(scoped,monkeypatch)
         finally:scoped.dispose()
     finally:
         # The generated schema is verified before removing only isolated test resources.
@@ -193,3 +194,53 @@ def _verify_configured_grants_and_parallel_admission(engine,monkeypatch):
         with Operations.context(MigrationContext.configure(connection)):
             with pytest.raises(RuntimeError,match="Configured allowances"):
                 revision.downgrade()
+
+
+def _verify_automatic_completion_race(engine,monkeypatch):
+    """Duplicate worker completions settle one credit using real row locks."""
+    from contextlib import contextmanager
+    from app.core.identity import Principal
+    from app.core.access import provision,current_principal
+    from app.db.models.account import UserEntitlement,AnalysisReservation,UsageEvent
+    from app.db.models.project import Project
+    from app.db.repositories.project_repository import ProjectRepository
+    from app.db.repositories.job_repository import JobRepository
+    from app.db.repositories.content_item_repository import ContentItemRepository
+    from app.db.repositories.metadata_repository import MetadataRepository
+    from app.models.video import VideoMetadata
+    from app.schemas.ingestion import IngestionJobStatus
+    from app.services.account_usage import reserve,complete_owned_analysis
+    from app.workers import job_runtime
+    principal=Principal(str(uuid4()),str(uuid4()),1)
+    handle=current_principal.set(principal)
+    try:
+        with Session(engine) as session,session.begin():
+            provision(session,principal)
+            pid=ProjectRepository(session).create(project_id=str(uuid4()),content_1_url="one",content_2_url="two",content_1_platform="youtube",content_2_platform="youtube",status="indexing")["project_id"]
+            reservation,_=reserve(session,principal,pid,"auto-completion-race")
+            job=JobRepository(session).create(pid);reservation.job_id=job.id;job.status="INDEXING"
+            job_id=job.id;reservation_id=reservation.id
+            for slot in ("content_1","content_2"):
+                item=ContentItemRepository(session).upsert(project_id=pid,slot=slot,platform="youtube",url=slot,extraction_status="partial",transcript_available=False,transcript_segment_count=0)
+                MetadataRepository(session).create_snapshot(content_item=item,metadata=VideoMetadata(platform="youtube",slot=slot,url=slot,views=1000,extraction_status="partial"))
+    finally:current_principal.reset(handle)
+    @contextmanager
+    def database():
+        with Session(engine) as session,session.begin():yield session
+    monkeypatch.setattr(job_runtime,"database_session",database)
+    barrier=Barrier(2)
+    def complete(_):
+        token=current_principal.set(principal)
+        try:
+            barrier.wait(timeout=10)
+            job_runtime.complete_indexed_job(job_id,pid,IngestionJobStatus.PARTIAL_READY)
+        finally:current_principal.reset(token)
+    with ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(complete,[1,2]))
+    # A subsequent compatibility request is also an idempotent no-op.
+    with Session(engine) as session,session.begin():complete_owned_analysis(session,principal,pid,False)
+    with Session(engine) as session:
+        entitlement=session.get(UserEntitlement,principal.user_id)
+        assert entitlement.consumed==1 and entitlement.reserved==0
+        assert session.get(AnalysisReservation,reservation_id).state=="completed"
+        assert session.get(Project,pid).status=="partial_ready"
+        assert len(session.scalars(select(UsageEvent).where(UsageEvent.reference_id==reservation_id,UsageEvent.kind=="analysis_completed")).all())==1

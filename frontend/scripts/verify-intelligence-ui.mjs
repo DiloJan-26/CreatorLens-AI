@@ -175,3 +175,11 @@ const crossInsights=render(CreatorInsightSummaryPanel,{projectId:"synthetic-ui",
 const form=render(VideoUrlForm,{content1Url:"",content2Url:"",setContent1Url:()=>{},setContent2Url:()=>{},onSubmit:()=>{},isSubmitting:false});
 for(const label of ["YouTube","Instagram","Facebook","same or different platforms"])assert(form.includes(label));
 console.log("Multi-platform UI contracts passed: canonical public video URLs, all three platform choices, explicit cross-platform scope and correct audience labels; no client-side winner calculation.");
+
+// Completion is automatic; neither Insights nor chat displays a manual save prompt.
+const allowanceSource=fs.readFileSync(path.join(sourceRoot,"components/AnalysisAllowancePanel.tsx"),"utf8");
+assert(!allowanceSource.includes("Save analysis")&&!allowanceSource.includes("Unlock AI explanations")&&!allowanceSource.includes("<button"));
+assert(allowanceSource.includes('if(ready && ["reserved","processing"].includes(value.analysis_state))'));
+assert(allowanceSource.includes('await completeAnalysis(projectId,false)'));
+assert(workspace.includes('ready={ingestionStatus?.status==="READY"||ingestionStatus?.status==="PARTIAL_READY"}'));
+console.log("Automatic completion UI contracts passed: no manual save step, ready-only compatibility completion and no inference action.");

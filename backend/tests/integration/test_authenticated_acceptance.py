@@ -21,7 +21,7 @@ from app.db.repositories.job_repository import JobRepository
 from app.api import projects,account,ingestion,insights,chat
 from app.services import project_service,metric_source_service,admitted_ingestion,semantic_service
 from app.extraction import accounting,bounded_provider,policy
-from app.workers import owned_execution,dispatch_outbox
+from app.workers import owned_execution,dispatch_outbox,indexing_tasks
 from tests.unit.test_bounded_extraction import settings as bounded_settings
 
 
@@ -105,15 +105,21 @@ def test_signed_two_user_analysis_acceptance(db_session,monkeypatch,captions,pla
         observed.append(current_principal.get().user_id)
         result=project_service.extract_project_videos(project)
         assert len(result.content_items)==2
-        # Vector/index execution is separately covered with fake-store tests.
-        JobRepository(db_session).get(job_id).status="PARTIAL_READY";db_session.flush()
-        return {"status":"PARTIAL_READY"}
-    assert work(job_id)["status"]=="PARTIAL_READY"
-    assert work(job_id)["status"]=="PARTIAL_READY" and observed==[ids[0]]
+        # Exercise the real owned index worker and automatic SQL settlement below.
+        JobRepository(db_session).get(job_id).status="CHUNKING";db_session.flush()
+        return {"status":"CHUNKING"}
+    assert work(job_id)["status"]=="CHUNKING"
+    from types import SimpleNamespace
+    monkeypatch.setattr(indexing_tasks,"index_project",lambda *a,**k:SimpleNamespace(status="indexed",total_chunks=4,message=None))
+    assert indexing_tasks.index_project_task.run(job_id)["status"]=="PARTIAL_READY"
+    assert indexing_tasks.index_project_task.run(job_id)["status"]=="PARTIAL_READY" and observed==[ids[0]]
+    usage_after_index=client.get("/api/account",headers=headers[0]).json()["usage"]
+    assert usage_after_index=={"granted":5,"completed":1,"reserved":0,"available":4}
+    assert client.get(path+"/usage",headers=headers[0]).json()["analysis_state"]=="completed"
     assert len(provider_calls)==4
     completed=client.post(path+"/complete",headers=headers[0],json={"metrics_only":True})
     assert completed.status_code==200,completed.text
-    assert completed.json()["usage"]["available"]==4
+    assert completed.json()["usage"]==usage_after_index  # Older clients remain idempotent.
     for objective,winner in (("reach","content_2"),("engagement","content_1"),("balanced",None),("creative_quality",None)):
         summary=client.get(path+"/insights/summary?objective="+objective,headers=headers[0])
         assert summary.status_code==200,summary.text

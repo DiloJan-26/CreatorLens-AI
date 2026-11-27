@@ -58,6 +58,35 @@ def set_job_task_id(job_id: str, task_id: str) -> None:
         JobRepository(session).set_task_id(job_id, task_id)
 
 
+def complete_indexed_job(job_id: str, project_id: str, target: IngestionJobStatus) -> None:
+    """Publish indexed readiness and settle its analysis credit in one transaction."""
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from app.core.access import require_principal, owned_project
+    from app.db.models.account import UserEntitlement
+    from app.services.account_usage import latest_reservation, complete_owned_analysis
+
+    if target not in {IngestionJobStatus.READY, IngestionJobStatus.PARTIAL_READY}:
+        raise ValueError("Only successful indexing can complete an analysis.")
+    principal = require_principal()
+    with database_session() as session:
+        owned_project(session, project_id, principal)
+        # Same user lock as API completion; duplicate deliveries cannot consume twice.
+        entitlement = session.scalar(select(UserEntitlement).where(
+            UserEntitlement.user_id == principal.user_id).with_for_update())
+        reservation = latest_reservation(session, project_id)
+        job = JobRepository(session).get_for_project(project_id=project_id, job_id=job_id)
+        if (not entitlement or not reservation or reservation.user_id != principal.user_id
+                or reservation.job_id != job_id or not job):
+            raise HTTPException(409, "Indexing does not match the current owned analysis.")
+        if reservation.state not in {"reserved", "processing", "completed"}:
+            raise HTTPException(409, "Unresolved analysis cannot complete automatically.")
+        if job.status != target.value:
+            JobRepository(session).transition(job_id, target)
+        ProjectRepository(session).update_status(project_id, target.value.lower())
+        complete_owned_analysis(session, principal, project_id, False)
+
+
 def retry_or_fail_job(
     task: Task,
     *,
