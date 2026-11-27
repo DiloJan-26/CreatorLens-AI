@@ -41,7 +41,7 @@ def get_cost_metrics_endpoint(
     project_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CostMetricsResponse:
-    return get_cost_metrics(project_id=project_id, limit=limit)
+    return get_cost_metrics(project_id=project_id, limit=limit, include_runs=project_id is not None)
 
 
 @router.get(

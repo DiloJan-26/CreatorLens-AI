@@ -33,6 +33,10 @@ def logout():
     principal=require_principal()
     with database_session() as session:
         insert_once(session,RevokedSession,{"id":principal.session_id,"user_id":principal.user_id,"created_at":utc_now()},"id")
+    # Revocation above remains authoritative even if Redis is unavailable.
+    from app.core.engineering_access import lock
+    try: lock(get_settings(), principal)
+    except HTTPException: pass
     return {"status":"signed_out"}
 
 

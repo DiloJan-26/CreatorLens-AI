@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount } from "./AccountProvider";
+import { EngineeringLockButton } from "./EngineeringAccess";
 import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -29,7 +29,6 @@ const QUALITY_METRICS = [
 ] as const;
 
 export function EvaluationDashboard() {
-  const {account}=useAccount();
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [datasets, setDatasets] = useState<EvaluationDatasetSummary[]>([]);
   const [runs, setRuns] = useState<EvaluationRunSummary[]>([]);
@@ -47,10 +46,9 @@ export function EvaluationDashboard() {
     try {
       const [datasetResponse, runResponse] = await Promise.all([
         getEvaluationDatasets(),
-        account?.role==="admin" ? getEvaluationRuns() : Promise.resolve([]),
+        getEvaluationRuns(),
       ]);
       setDatasets(datasetResponse);
-      if(account?.role!=="admin")setError("Bundled benchmark descriptions are available. System evaluation run history is administrator-only; no private project evaluations have been created.");
       setRuns(runResponse);
       setSelectedRunId((current) =>
         runResponse.some((r) => r.id === current)
@@ -63,7 +61,7 @@ export function EvaluationDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [account]);
+  }, []);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -121,6 +119,7 @@ export function EvaluationDashboard() {
           icon="shield"
           description="Inspect regression quality, source coverage and evidence compliance."
           action={
+            <div className="engineering-header-actions"><EngineeringLockButton/>
             <button
               className="button-secondary"
               onClick={() => void loadOverview()}
@@ -128,7 +127,7 @@ export function EvaluationDashboard() {
             >
               <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh results"}
-            </button>
+            </button></div>
           }
         />
         <div className="engineering-meta flex flex-wrap items-center justify-between gap-3">

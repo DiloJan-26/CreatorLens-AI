@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AccountProvider } from "@/components/AccountProvider";
+import { EngineeringProvider } from "@/components/EngineeringAccess";
 import { AppNavbar } from "@/components/AppNavbar";
 import "./globals.css";
 const geist = localFont({
@@ -22,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className={`${geist.variable} min-h-full`}>
-        <AccountProvider><AppNavbar>{children}</AppNavbar></AccountProvider>
+        <AccountProvider><EngineeringProvider><AppNavbar>{children}</AppNavbar></EngineeringProvider></AccountProvider>
       </body>
     </html>
   );

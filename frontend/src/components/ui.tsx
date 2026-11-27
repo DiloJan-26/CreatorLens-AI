@@ -73,6 +73,8 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="m8 12 3 3 5-6" />
       </>
     ),
+    lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></>,
+    unlock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-2M12 14v3"/></>,
     home: <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" />,
   };
   return (

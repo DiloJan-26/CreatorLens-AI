@@ -1,5 +1,6 @@
 "use client";
 import { AccountMenu,useAccount } from "./AccountProvider";
+import { EngineeringIndicator } from "./EngineeringAccess";
 import { WorkspaceEntry } from "./WorkspaceEntry";
 import Link from "next/link";
 import Image from "next/image";
@@ -100,7 +101,7 @@ export function AppNavbar({ children }: { children: ReactNode }) {
           {l.label}
         </Link>
       ))}
-      <p className="nav-group-label engineering-label">Engineering</p>
+      <div className="engineering-nav-heading"><p className="nav-group-label engineering-label">Engineering</p><EngineeringIndicator/></div>
       {engineerLinks.map((l) => (
         <Link
           key={l.href}

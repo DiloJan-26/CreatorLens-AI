@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from app.core.access import provision, owned_project, require_admin, authorize_resource
 from app.core.identity import verifier
 from app.core.request_limits import enforce_rate
+from app.core.engineering_access import require_engineering
 from app.db.session import database_session
 from app.db.models.chat import ChatSession
 from app.db.models.metric_source import MetricSource
@@ -41,9 +42,13 @@ def authenticate_request(scope, settings):
         elif path == "/api/metrics/cost":
             project_id=request.query_params.get("project_id")
             if project_id: owned_project(session,project_id,principal)
-            else: require_admin(session,principal)
+            require_engineering(settings,principal)
         elif path.startswith("/api/evaluations"):
-            if path != "/api/evaluations/datasets": require_admin(session,principal)
+            require_engineering(settings,principal)
+            if request.method != "GET": require_admin(session,principal)
+        elif path in {"/api/engineering/access","/api/engineering/unlock","/api/engineering/lock"}:
+            if request.method != ("GET" if path.endswith("/access") else "POST"):
+                raise HTTPException(405,"Method not allowed.")
         elif path.startswith("/health/") or path in {"/docs","/redoc","/openapi.json"}:
             require_admin(session,principal)
             if request.method != "GET" or settings.environment not in {"local","test"} and path in {"/docs","/redoc","/openapi.json"}:

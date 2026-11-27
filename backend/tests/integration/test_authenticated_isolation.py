@@ -50,7 +50,7 @@ def test_anonymous_global_analytics_diagnostics_and_ownerless(boundary):
     assert client.get("/api/metrics/cost?project_id="+p,headers={"Authorization":"Bearer user-a"}).status_code==404
     assert client.get("/api/projects/"+p,headers={"Authorization":"Bearer user-b"}).status_code==200
     session.get(AppUser,b.user_id).role="admin";session.flush()
-    assert client.get("/api/evaluations/runs",headers={"Authorization":"Bearer user-b"}).status_code==200
+    assert client.get("/api/evaluations/runs",headers={"Authorization":"Bearer user-b"}).status_code==403  # Administrator role alone does not unlock Engineering.
     assert client.post("/health/llm/test",headers={"Authorization":"Bearer user-b"}).status_code==403
     assert client.get("/health").json()=={"status":"ok","service":"creatorlens-api"}
 

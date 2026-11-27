@@ -176,6 +176,7 @@ def get_cost_metrics(
     *,
     project_id: str | None = None,
     limit: int = 50,
+    include_runs: bool = True,
 ) -> CostMetricsResponse:
     if not is_database_configured():
         return CostMetricsResponse(
@@ -187,10 +188,8 @@ def get_cost_metrics(
         totals = CostRepository(session).summary(project_id=project_id)
         from app.llm.operation_analytics import operation_analytics
         analytics=operation_analytics(session,project_id)
-        runs = LlmRunRepository(session).list_recent(
-            project_id=project_id,
-            limit=limit,
-        )
+        # Global Engineering summaries expose no per-user/project/session/trace IDs.
+        runs = LlmRunRepository(session).list_recent(project_id=project_id, limit=limit) if include_runs else []
         # One scoped query for the displayed run cost breakdowns; no inference.
         from sqlalchemy import select
         from app.db.models.llm_observability import CostEvent
