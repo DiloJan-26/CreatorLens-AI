@@ -22,7 +22,7 @@ active_operation=ContextVar("active_provider_operation",default=None)
 def paid_configuration(settings,kind):
     if getattr(settings,"provider_emergency_stop",True):
         raise HTTPException(403,"External provider execution is suspended.")
-    allowance={"assistant":"assistant_admissions_per_analysis","semantic":"semantic_attempts_per_slot"}.get(kind)
+    allowance={"assistant":"assistant_admissions_per_analysis","semantic":"semantic_attempts_per_slot","diagnostic":"diagnostic_attempts_per_analysis"}.get(kind)
     if allowance and setting_value(settings,allowance) <= 0:
         raise HTTPException(403,"This provider operation has no approved attempt allowance.")
     ceiling=Decimal(settings.provider_operation_ceiling_usd)
@@ -64,10 +64,22 @@ def admit(session,principal,project_id,kind,*,slot="",snapshot_id=None,settings=
     reservation=latest_reservation(session,project_id)
     if not reservation or reservation.user_id!=principal.user_id or reservation.state not in {"reserved","processing","completed"}:
         raise HTTPException(409,"A valid analysis admission is required.")
-    if kind=="assistant" and reservation.state!="completed": raise HTTPException(409,"Complete this comparison before paid Assistant generation.")
+    if kind in {"assistant","diagnostic"} and reservation.state!="completed": raise HTTPException(409,"Complete this comparison before paid Assistant generation.")
     if kind in {"semantic","extraction"} and reservation.state=="completed": raise HTTPException(409,"Full re-analysis requires a new analysis credit.")
+    if kind=="diagnostic":
+        # The user budget lock serializes admissions across projects and API replicas.
+        previous=session.scalar(select(ProviderOperation).where(ProviderOperation.user_id==principal.user_id,ProviderOperation.kind==kind).order_by(ProviderOperation.created_at.desc()).limit(1))
+        if previous:
+            if previous.state!="completed":
+                raise HTTPException(409,"The previous diagnostic outcome requires reconciliation before another check.")
+            created=previous.created_at
+            if created.tzinfo is None:created=created.replace(tzinfo=UTC)
+            remaining=setting_value(settings,'diagnostic_cooldown_seconds')-(datetime.now(UTC)-created).total_seconds()
+            if remaining>0:
+                from math import ceil
+                raise HTTPException(429,"Wait before checking the LLM again.",headers={"Retry-After":str(ceil(remaining))})
     operations=session.scalars(select(ProviderOperation).where(ProviderOperation.reservation_id==reservation.id,ProviderOperation.kind==kind,ProviderOperation.slot==slot).order_by(ProviderOperation.attempt)).all()
-    maximum={"assistant":setting_value(settings,'assistant_admissions_per_analysis'),"semantic":setting_value(settings,'semantic_attempts_per_slot')}.get(kind,0)
+    maximum={"assistant":setting_value(settings,'assistant_admissions_per_analysis'),"semantic":setting_value(settings,'semantic_attempts_per_slot'),"diagnostic":setting_value(settings,'diagnostic_attempts_per_analysis')}.get(kind,0)
     if len(operations)>=maximum: raise HTTPException(403,"Provider attempt allowance exhausted.")
     if kind=="semantic" and operations and operations[-1].state!="completed":
         raise HTTPException(409,"The prior provider outcome must be reconciled before a safe retry.")
@@ -75,7 +87,7 @@ def admit(session,principal,project_id,kind,*,slot="",snapshot_id=None,settings=
         raise HTTPException(403,"Configured estimated spending allowance is exhausted.")
     global_budget.reserved_usd+=ceiling;user_budget.reserved_usd+=ceiling
     operation=ProviderOperation(id=str(uuid4()),reservation_id=reservation.id,project_id=project_id,user_id=principal.user_id,kind=kind,slot=slot,attempt=len(operations)+1,state="admitted",ceiling_usd=ceiling,snapshot_id=snapshot_id)
-    if kind in {"assistant","semantic"}:
+    if kind in {"assistant","semantic","diagnostic"}:
         registry = active_registry(settings.llm_active_pricing_json,"llm") if getattr(settings,"llm_active_pricing_json",None) is not None else load_pricing_registry()
         operation.provider_details={"pricing":resolve_price(registry,settings.llm_provider,settings.llm_model,settings.llm_estimate_service_tier,datetime.now(UTC).date()),"model":settings.llm_model}
     session.add(operation);session.flush()

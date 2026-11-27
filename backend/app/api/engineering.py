@@ -1,4 +1,4 @@
-"""Authenticated unlock/status/lock endpoints. Never run inference or evaluations."""
+"""Authenticated Engineering access and an explicit, bounded provider diagnostic."""
 import json
 from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
@@ -36,3 +36,19 @@ async def unlock_access(request: Request, response: Response):
 def lock_access(response: Response):
     response.headers['Cache-Control'] = 'private, no-store'
     return lock(get_settings(), require_principal())
+
+
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict
+
+
+class LlmCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: UUID
+
+
+@router.post('/llm-check')
+async def llm_check(payload: LlmCheckRequest, response: Response):
+    from app.services.llm_diagnostic_service import check_availability
+    response.headers['Cache-Control'] = 'private, no-store'
+    return await check_availability(str(payload.project_id))

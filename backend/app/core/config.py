@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     semantic_max_output_tokens: int = Field(default=4096, alias="SEMANTIC_MAX_OUTPUT_TOKENS", ge=1, le=8192)
     semantic_timeout_seconds: int = Field(default=60, alias="SEMANTIC_TIMEOUT_SECONDS", ge=1, le=65)
     inference_deadline_grace_seconds: int = Field(default=5, alias="INFERENCE_DEADLINE_GRACE_SECONDS", ge=1, le=30)
+    diagnostic_attempts_per_analysis: int = Field(default=3, alias="DIAGNOSTIC_ATTEMPTS_PER_ANALYSIS", ge=0, le=10)
+    diagnostic_cooldown_seconds: int = Field(default=60, alias="DIAGNOSTIC_COOLDOWN_SECONDS", ge=60, le=3600)
     diagnostic_max_output_tokens: int = Field(default=80, alias="DIAGNOSTIC_MAX_OUTPUT_TOKENS", ge=1, le=8192)
     llm_active_pricing_json: str | None = Field(default=None, alias="LLM_ACTIVE_PRICING_JSON", repr=False)
     extraction_active_pricing_json: str | None = Field(default=None, alias="EXTRACTION_ACTIVE_PRICING_JSON", repr=False)

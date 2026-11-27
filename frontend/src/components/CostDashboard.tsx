@@ -1,5 +1,6 @@
 "use client";
 
+import { LlmAvailabilityCheck } from "./AiReasoningStatus";
 import { EngineeringLockButton } from "./EngineeringAccess";
 import { PageHeading, Icon } from "./ui";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -93,12 +94,13 @@ export function CostDashboard() {
     <main className="page-container engineering-view">
       <div className="mx-auto max-w-7xl space-y-8">
         <PageHeading
-          eyebrow="Engineering / Read-only"
+          eyebrow="Engineering"
           title="LLM Observability"
+          titleAction={<LlmAvailabilityCheck key={projectId ?? "global"} projectId={projectId}/>}
           icon="chart"
           description="Trace generation cost, latency and evidence usage."
           action={
-            <div className="engineering-header-actions"><EngineeringLockButton/>
+            <div className="engineering-header-actions">
             <button
               className="button-secondary"
               onClick={() => void loadMetrics()}
@@ -106,7 +108,7 @@ export function CostDashboard() {
             >
               <Icon name="refresh" size={15} />
               {isLoading ? "Refreshing..." : "Refresh telemetry"}
-            </button></div>
+            </button><EngineeringLockButton/></div>
           }
         />
         <div className="engineering-meta flex flex-wrap gap-3 justify-between items-center">
