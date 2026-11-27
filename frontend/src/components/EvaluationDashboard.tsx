@@ -1,732 +1,152 @@
 "use client";
+import {useCallback,useEffect,useRef,useState} from "react";
+import {EngineeringLockButton} from "./EngineeringAccess";
+import {PageHeading,Icon} from "./ui";
+import {getEvaluationDatasets,getEvaluationRun,getEvaluationRuns} from "@/lib/api";
+import type {EvaluationDatasetSummary,EvaluationRunSummary,EvaluationRunDetail,EvaluationResultSummary} from "@/types/evaluation";
 
-import { EngineeringLockButton } from "./EngineeringAccess";
-import { PageHeading, Icon } from "./ui";
-import { useCallback, useEffect, useMemo, useState } from "react";
+const METRICS:Record<string,string>={faithfulness_lexical:"Lexical faithfulness (proxy)",response_relevance_lexical:"Response relevance (lexical)",context_relevance_lexical:"Context relevance (lexical)",context_precision_ragas:"Context precision (RAGAS non-LLM)",context_recall_ragas:"Context recall (RAGAS non-LLM)",citation_presence:"Citation presence",missing_evidence_compliance:"Missing-evidence compliance"};
+const NAMES:Record<string,string>={creatorlens_ci_smoke_v1:"RAG smoke",creatorlens_core_v1:"RAG core",creatorlens_intelligence_ci_v2:"Intelligence critical",creatorlens_intelligence_v2:"Intelligence full"};
 
-import {
-  getEvaluationDatasets,
-  getEvaluationRun,
-  getEvaluationRuns,
-} from "@/lib/api";
-import type {
-  EvaluationCheckResult,
-  EvaluationDatasetSummary,
-  EvaluationResultSummary,
-  EvaluationRunDetail,
-  EvaluationRunSummary,
-} from "@/types/evaluation";
-
-const QUALITY_METRICS = [
-  "pass_rate",
-  "faithfulness_lexical",
-  "response_relevance_lexical",
-  "context_relevance_lexical",
-  "context_precision_ragas",
-  "context_recall_ragas",
-  "citation_presence",
-  "missing_evidence_compliance",
-] as const;
-
-export function EvaluationDashboard() {
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const [datasets, setDatasets] = useState<EvaluationDatasetSummary[]>([]);
-  const [runs, setRuns] = useState<EvaluationRunSummary[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedRun, setSelectedRun] = useState<EvaluationRunDetail | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadOverview = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [datasetResponse, runResponse] = await Promise.all([
-        getEvaluationDatasets(),
-        getEvaluationRuns(),
-      ]);
-      setDatasets(datasetResponse);
-      setRuns(runResponse);
-      setSelectedRunId((current) =>
-        runResponse.some((r) => r.id === current)
-          ? current
-          : (runResponse[0]?.id ?? null),
-      );
-      setRefreshVersion((v) => v + 1);
-    } catch (loadError) {
-      setError(errorMessage(loadError));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const loadTimer = window.setTimeout(() => {
-      void loadOverview();
-    }, 0);
-
-    return () => window.clearTimeout(loadTimer);
-  }, [loadOverview]);
-
-  useEffect(() => {
-    if (!selectedRunId) {
-      return;
-    }
-
-    let active = true;
-    const loadTimer = window.setTimeout(() => {
-      setIsDetailLoading(true);
-      setSelectedRun(null);
-      setError(null);
-      getEvaluationRun(selectedRunId)
-        .then((detail) => {
-          if (active) {
-            setSelectedRun(detail);
-          }
-        })
-        .catch((loadError) => {
-          if (active) {
-            setError(errorMessage(loadError));
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setIsDetailLoading(false);
-          }
-        });
-    }, 0);
-
-    return () => {
-      active = false;
-      window.clearTimeout(loadTimer);
-    };
-  }, [selectedRunId, refreshVersion]);
-
-  const [family, setFamily] = useState("all");
-  const visibleRuns = runs.filter((run) => family === "all" || (family === "intelligence") === Boolean(run.evaluation_details?.critical_gate));
-  const latestRun = runs.find((r) => r.id === selectedRunId) ?? null;
-  const accepted = latestRun ? isAcceptedRun(latestRun) : false;
-
-  return (
-    <main className="page-container engineering-view">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <PageHeading
-          eyebrow="Engineering / Read-only"
-          title="RAG Evaluation"
-          icon="shield"
-          description="Inspect regression quality, source coverage and evidence compliance."
-          action={
-            <div className="engineering-header-actions">
-            <button
-              className="button-secondary"
-              onClick={() => void loadOverview()}
-              disabled={isLoading}
-            >
-              <Icon name="refresh" size={15} />
-              {isLoading ? "Refreshing..." : "Refresh results"}
-            </button><EngineeringLockButton/></div>
-          }
-        />
-        <div className="engineering-meta flex flex-wrap items-center justify-between gap-3">
-          <p className="muted text-sm">
-            Selected run /{" "}
-            {latestRun
-              ? friendlyDatasetName(latestRun.dataset_name)
-              : "No persisted run"}
-          </p>
-          {isLoading ? (
-            <span role="status" className="muted text-sm">
-              Loading observations...
-            </span>
-          ) : error ? (
-            <span className="muted text-sm">Refresh incomplete</span>
-          ) : (
-            <StatusBadge accepted={accepted} run={latestRun} />
-          )}
-        </div>
-        <div className="objective-tabs" role="group" aria-label="Evaluation family">{([['all','All runs'],['legacy','RAG regression'],['intelligence','Creator intelligence']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={family===id} onClick={()=>{setFamily(id);const matches=runs.filter(run=>id==='all'||(id==='intelligence')===Boolean(run.evaluation_details?.critical_gate));setSelectedRunId(matches[0]?.id??null);}}>{label}</button>)}</div>
-        <p className="muted text-xs">Offline regression and mocked-response checks. Live model accuracy is not measured.</p>
-        {error ? <ErrorBanner message={error} onRetry={loadOverview} /> : null}
-
-        {isLoading && runs.length === 0 ? (
-          <DashboardSkeleton />
-        ) : error && runs.length === 0 ? null : (
-          <>
-            {error && (
-              <p className="notice">
-                Showing previously loaded observations. They may be out of date.
-              </p>
-            )}
-            <OverviewCards run={latestRun} />
-            <div className="engineering-grid">
-              <MetricPanel run={latestRun} />
-              <RunHistory
-                runs={visibleRuns}
-                selectedRunId={selectedRunId}
-                onSelect={setSelectedRunId}
-              />
-            </div>
-            <CaseResults
-              detail={
-                selectedRun?.run.id === selectedRunId ? selectedRun : null
-              }
-              loading={isDetailLoading}
-            />
-            <DatasetStrip datasets={datasets} />
-          </>
-        )}
-      </div>
-    </main>
-  );
+export function EvaluationDashboard(){
+ const [datasets,setDatasets]=useState<EvaluationDatasetSummary[]>([]),[runs,setRuns]=useState<EvaluationRunSummary[]>([]);
+ const [selectedId,setSelectedId]=useState<string|null>(null),[detail,setDetail]=useState<EvaluationRunDetail|null>(null);
+ const [loading,setLoading]=useState(true),[detailLoading,setDetailLoading]=useState(false);
+ const [error,setError]=useState<string|null>(null),[detailError,setDetailError]=useState<string|null>(null),[refreshVersion,setRefreshVersion]=useState(0);
+ const request=useRef(0);
+ const refresh=useCallback(async()=>{
+  const version=++request.current;setLoading(true);setError(null);
+  try{
+   const [nextDatasets,nextRuns]=await Promise.all([getEvaluationDatasets(),getEvaluationRuns()]);
+   if(version!==request.current)return;
+   setDatasets(nextDatasets);setRuns(nextRuns);setSelectedId(current=>nextRuns.some(r=>r.id===current)?current:nextRuns[0]?.id??null);
+   if(!nextRuns.length){setDetail(null);setDetailLoading(false);}
+   setRefreshVersion(v=>v+1);
+  }catch(e){if(version===request.current)setError(message(e));}
+  finally{if(version===request.current)setLoading(false);}
+ },[]);
+ useEffect(()=>{const timer=setTimeout(()=>void refresh(),0);return()=>{clearTimeout(timer);};},[refresh]);
+ useEffect(()=>{
+  if(!selectedId)return;let active=true;
+  const timer=setTimeout(()=>{
+   setDetailLoading(true);setDetailError(null);setDetail(null);
+   getEvaluationRun(selectedId).then(value=>{if(active)setDetail(value);}).catch(e=>{if(active)setDetailError(message(e));}).finally(()=>{if(active)setDetailLoading(false);});
+  },0);
+  return()=>{active=false;clearTimeout(timer);};
+ },[selectedId,refreshVersion]);
+ const selected=runs.find(r=>r.id===selectedId)??null;
+ const activeDetail=detail?.run.id===selectedId?detail:null;
+ return <main className="page-container engineering-view evaluation-dashboard"><div className="mx-auto max-w-7xl space-y-6">
+  <PageHeading eyebrow="Engineering / Read-only" title="RAG Evaluation" icon="shield" description="Release checks, evidence grounding and regression history." action={<div className="engineering-header-actions"><button className="button-secondary" onClick={()=>void refresh()} disabled={loading}><Icon name="refresh" size={15}/>{loading?"Refreshing...":"Refresh results"}</button><EngineeringLockButton/></div>}/>
+  {error&&<p role="alert" className="notice notice-error">{error}{runs.length>0?" Showing previously loaded results.":""}</p>}
+  {loading&&!runs.length?<p role="status" className="ui-panel">Loading evaluation results...</p>:!selected&&!error?<EvaluationEmptyState/>:null}
+  {selected&&<>
+   <EvaluationRunView run={activeDetail?.run??selected}/>
+   <div className="engineering-grid"><EvaluationMeasurements run={activeDetail?.run??selected}/><EvaluationHistory runs={runs} selectedId={selectedId} onSelect={setSelectedId}/></div>
+   {detailError?<p role="alert" className="notice notice-error">Case results could not be loaded: {detailError}</p>:detailLoading?<p role="status" className="ui-panel">Loading case results...</p>:activeDetail?<EvaluationCaseResults key={activeDetail.run.id} detail={activeDetail}/>:null}
+  </>}
+  <EvaluationDatasets datasets={datasets}/>
+ </div></main>;
 }
 
-function DatasetStrip({ datasets }: { datasets: EvaluationDatasetSummary[] }) {
-  return (
-    <section aria-labelledby="datasets-title">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-            Regression assets
-          </p>
-          <h2 id="datasets-title" className="mt-2 text-xl font-semibold">
-            Deployed datasets
-          </h2>
-        </div>
-        <p className="text-sm text-slate-500">{datasets.length} available</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {datasets.map((dataset) => (
-          <article
-            key={`${dataset.name}-${dataset.version}`}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="font-semibold text-slate-950">
-                {friendlyDatasetName(dataset.name)}
-              </h3>
-              <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
-                v{dataset.version}
-              </span>
-            </div>
-            <p className="mt-3 text-sm text-slate-600">
-              {dataset.case_count} curated cases
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {dataset.answer_types.map((answerType) => (
-                <span
-                  key={answerType}
-                  className="rounded-full border border-slate-200 px-2.5 py-1 text-xs capitalize text-slate-600"
-                >
-                  {answerType}
-                </span>
-              ))}
-            </div>
-          </article>
-        ))}
-        {datasets.length === 0 ? (
-          <EmptyState text="No evaluation datasets were returned." />
-        ) : null}
-      </div>
-    </section>
-  );
+export function EvaluationEmptyState(){
+ return <section className="ui-panel evaluation-empty" aria-label="Evaluation publication status"><span className="stat-icon"><Icon name="shield" size={24}/></span><div><h2>No evaluation published</h2><p className="muted mt-2">Published release checks will appear here. Completing a video comparison does not run an evaluation.</p><p className="muted text-sm mt-2">Offline regression results are separate from live model quality.</p></div></section>;
 }
 
-function OverviewCards({ run }: { run: EvaluationRunSummary | null }) {
-  const passRate = metricValue(run?.aggregate_metrics, "pass_rate");
-  const gate = run?.evaluation_details?.critical_gate;
-  const cards = [
-    {
-      label: gate ? "Critical contracts" : "Pass rate",
-      value: gate ? `${gate.passed_cases}/${gate.total_cases}` : passRate === null ? "Unavailable" : formatPercent(passRate),
-      note: gate ? "Curated contracts; not model accuracy" : "Hardened quality gates",
-    },
-    {
-      label: gate ? "Passed / failed / skipped" : "Cases passed",
-      value: run ? gate ? `${run.passed_cases} / ${run.failed_cases} / ${run.skipped_cases ?? 0}` : `${run.passed_cases}/${run.total_cases}` : "Unavailable",
-      note: !run
-        ? "No persisted run"
-        : run.failed_cases
-          ? `${run.failed_cases} require review`
-          : "No failed cases",
-    },
-    {
-      label: "Dataset",
-      value: run ? `v${run.dataset_version}` : "Unavailable",
-      note: run ? friendlyDatasetName(run.dataset_name) : "No persisted run",
-    },
-    {
-      label: "Evaluator",
-      value: run ? evaluatorVersion(run.evaluator) : "Unavailable",
-      note: gate ? "Offline contracts and mocked probes" : "RAGAS + DeepEval deterministic",
-    },
-  ];
-
-  return (
-    <section
-      className="engineering-stats"
-      aria-label="Selected evaluation summary"
-    >
-      {cards.map((card, index) => (
-        <article key={card.label} className="engineering-stat">
-          <span className="stat-icon">
-            <Icon
-              name={["shield", "check", "evidence", "target"][index]}
-              size={21}
-            />
-          </span>
-          <p className="stat-label">{card.label}</p>
-          <p className="stat-value">{card.value}</p>
-          <p className="stat-note">{card.note}</p>
-        </article>
-      ))}
-    </section>
-  );
+export function EvaluationRunView({run}:{run:EvaluationRunSummary}){
+ const gate=run.evaluation_details?.critical_gate,publication=run.publication,executed=run.passed_cases+run.failed_cases;
+ const failedExecution=run.status==="FAILED";
+ const cards=[
+  {label:gate?"Critical contracts":"Regression cases",value:failedExecution?"Not completed":gate?`${gate.passed_cases}/${gate.total_cases}`:`${run.passed_cases}/${executed}`,note:gate?"Required deterministic checks":"Passed / executed"},
+  {label:"Passed",value:String(run.passed_cases),note:`${executed} executed / ${run.total_cases} planned`},
+  {label:"Failed",value:String(run.failed_cases),note:failedExecution?"Execution interrupted":"Cases requiring review"},
+  {label:"Skipped",value:String(run.skipped_cases??0),note:publication?.not_executed_cases?`${publication.not_executed_cases} not executed`:"Excluded from executed-case totals"},
+ ];
+ return <section className="evaluation-selected" aria-label="Selected evaluation run">
+  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="signal-label">{family(run)}</p><h2 className="text-xl font-semibold mt-1">{datasetName(run.dataset_name)} <span className="muted text-sm">v{run.dataset_version}</span></h2></div><RunBadge run={run}/></div>
+  <p className="muted text-sm mt-2">Offline checks on curated fixtures. These results do not measure live Gemini accuracy.</p>
+  {failedExecution&&<p role="alert" className="notice notice-error mt-3">{executionError(run.error_code)} No successful evaluation is claimed.</p>}
+  <div className="engineering-stats mt-4">{cards.map((card,i)=><article className="engineering-stat" key={card.label}><span className="stat-icon"><Icon name={["shield","check","close","clock"][i]} size={20}/></span><p className="stat-label">{card.label}</p><p className="stat-value">{card.value}</p><p className="stat-note">{card.note}</p></article>)}</div>
+  <dl className="evaluation-audit mt-4">
+   <Audit label="Evaluated commit" value={publication?.source_commit?short(publication.source_commit):"Not recorded"} full={publication?.source_commit??undefined}/>
+   <Audit label="Source identity" value={run.source_status==="current"?"Matches current backend":run.source_status==="different"?"Different backend source":"Historical / unverified"}/>
+   <Audit label="Executed" value={date(run.completed_at??run.created_at)}/>
+   <Audit label="Evaluator" value={run.evaluator}/><Audit label="Execution" value={publication?.execution_mode==="offline_regression"?"Offline / no provider inference":"Not recorded"}/><Audit label="Runtime" value={publication?.python_version?`Python ${publication.python_version}`:"Not recorded"}/>
+   <Audit label="Source fingerprint" value={publication?.source_fingerprint?short(publication.source_fingerprint):"Not recorded"} full={publication?.source_fingerprint}/>
+   <Audit label="Dataset fingerprint" value={publication?.dataset_fingerprint?short(publication.dataset_fingerprint):run.evaluation_details?.dataset_fingerprint?short(run.evaluation_details.dataset_fingerprint):"Not recorded"} full={publication?.dataset_fingerprint??run.evaluation_details?.dataset_fingerprint}/>
+  </dl>
+  {run.source_status==="different"&&<p className="notice mt-3">This run evaluates different backend source. Publish checks for the current release before treating it as verified.</p>}
+  {publication?.non_reproducible_result&&<p className="notice mt-3">The same release and dataset produced different results. Both runs are retained for review.</p>}
+  {publication?.source_state==="modified"&&<p className="notice mt-3">Evaluated with local source changes; the fingerprint identifies the tested code.</p>}
+ </section>;
 }
 
-function MetricPanel({ run }: { run: EvaluationRunSummary | null }) {
-  if (run?.evaluation_details?.critical_gate) return <IntelligenceMeasurements run={run} />;
-  return (
-    <section className="quality-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-            Selected run
-          </p>
-          <h2 className="mt-2 text-xl font-semibold">Quality signals</h2>
-        </div>
-        <p className="text-xs text-slate-500">
-          {run
-            ? formatDate(run.completed_at ?? run.created_at)
-            : "No run available"}
-        </p>
-      </div>
-      <div className="mt-6 grid gap-x-8 gap-y-5 md:grid-cols-2">
-        {QUALITY_METRICS.map((metric) => (
-          <MetricBar
-            key={metric}
-            label={friendlyMetricName(metric)}
-            value={metricValue(run?.aggregate_metrics, metric)}
-          />
-        ))}
-      </div>
-    </section>
-  );
+function Audit({label,value,full}:{label:string;value:string;full?:string}){return <div><dt>{label}</dt><dd title={full}>{value}</dd></div>;}
+
+export function EvaluationMeasurements({run}:{run:EvaluationRunSummary}){
+ const details=run.evaluation_details;
+ if(run.status!=="COMPLETED")return <section className="ui-panel"><h2>Evaluation not completed</h2><p className="muted mt-2">Quality indicators are not available for this execution.</p></section>;
+ return <section className="ui-panel quality-panel"><h2 className="text-lg font-semibold">Measured quality</h2>
+  {details?.critical_gate?<>
+   <p className="muted text-sm mt-2">Contract checks, synthetic retrieval and mocked Assistant responses. Each indicator retains its own denominator.</p>
+   <div className="evaluation-indicators mt-4">{Object.entries(details.indicators??{}).map(([name,m])=><article key={name}><h3>{words(name)}</h3><strong>{m.denominator>0?`${m.numerator} / ${m.denominator}`:"Not measured"}</strong><p className="muted text-xs">{words(m.mode)}</p></article>)}</div>
+   {details.grounding_confusion&&<section className="mt-5"><h3 className="font-semibold">Grounding decisions</h3><div className="evaluation-confusion mt-3">{Object.entries(details.grounding_confusion).map(([name,value])=><p key={name}><span>{words(name)}</span><strong>{value}</strong></p>)}</div><p className="muted text-xs mt-2">Labeled mocked responses; false accepts and false rejections are reported separately.</p></section>}
+   {details.categories&&<section className="mt-5"><h3 className="font-semibold">Coverage by category</h3><div className="evaluation-table-wrap mt-3"><table className="evaluation-table"><thead><tr><th>Category</th><th>Passed</th><th>Failed</th><th>Skipped</th></tr></thead><tbody>{Object.entries(details.categories).map(([name,r])=><tr key={name}><td>{words(name)}</td><td>{r.passed}</td><td>{r.failed}</td><td>{r.skipped}</td></tr>)}</tbody></table></div></section>}
+   <p className="muted text-xs mt-4">{details.limitations?.join(" ")}</p>
+  </>:<><p className="muted text-sm mt-2">RAGAS non-LLM metrics and lexical proxies. Lexical similarity and citation presence do not prove semantic faithfulness.</p><div className="evaluation-indicators mt-4">{Object.entries(METRICS).filter(([key])=>number(run.aggregate_metrics[key])!==null).map(([key,label])=><article key={key}><h3>{label}</h3><strong>{number(run.aggregate_metrics[key])?.toFixed(3)}</strong></article>)}</div></>}
+ </section>;
 }
 
-function MetricBar({ label, value }: { label: string; value: number | null }) {
-  const bounded = value === null ? 0 : Math.min(Math.max(value, 0), 1);
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-slate-700">{label}</span>
-        <span className="font-mono text-xs text-slate-500">
-          {value === null ? "N/A" : value.toFixed(3)}
-        </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-teal-500"
-          style={{ width: `${bounded * 100}%` }}
-        />
-      </div>
-    </div>
-  );
+export function EvaluationHistory({runs,selectedId,onSelect}:{runs:EvaluationRunSummary[];selectedId:string|null;onSelect:(id:string)=>void}){
+ return <section className="ui-panel"><h2 className="text-lg font-semibold">Run history</h2><p className="muted text-sm mt-2">Versioned results across all evaluation suites.</p><div className="evaluation-history mt-4">{runs.map(run=><button key={run.id} type="button" aria-pressed={run.id===selectedId} onClick={()=>onSelect(run.id)}><div className="flex flex-wrap items-start justify-between gap-2"><div><span className="signal-label">{family(run)}</span><h3>{datasetName(run.dataset_name)}</h3></div><RunBadge run={run}/></div><p className="muted text-xs mt-2">v{run.dataset_version} / {date(run.completed_at??run.created_at)}</p><p className="text-sm mt-2">{run.passed_cases} passed / {run.failed_cases} failed / {run.skipped_cases??0} skipped</p></button>)}</div></section>;
 }
 
-function RunHistory({
-  runs,
-  selectedRunId,
-  onSelect,
-}: {
-  runs: EvaluationRunSummary[];
-  selectedRunId: string | null;
-  onSelect: (runId: string) => void;
-}) {
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-        History
-      </p>
-      <h2 className="mt-2 text-xl font-semibold">Persisted runs</h2>
-      <div className="mt-5 space-y-3">
-        {runs.map((run) => {
-          const active = run.id === selectedRunId;
-          return (
-            <button
-              type="button"
-              key={run.id}
-              onClick={() => onSelect(run.id)}
-              aria-pressed={active}
-              className={`w-full rounded-2xl border p-4 text-left transition ${
-                active
-                  ? "border-teal-400 bg-teal-50"
-                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {friendlyDatasetName(run.dataset_name)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {formatDate(run.completed_at ?? run.created_at)}
-                  </p>
-                </div>
-                <RunState run={run} />
-              </div>
-              <div className="mt-4 flex items-center justify-between text-xs text-slate-600">
-                <span>v{run.dataset_version}</span>
-                <span>
-                  {run.evaluation_details?.critical_gate ? `${run.passed_cases} passed / ${run.failed_cases} failed / ${run.skipped_cases ?? 0} skipped` : `${run.passed_cases}/${run.total_cases} passed`}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-        {runs.length === 0 ? (
-          <EmptyState text="No persisted runs are available." />
-        ) : null}
-      </div>
-    </section>
-  );
+export function EvaluationCaseResults({detail}:{detail:EvaluationRunDetail}){
+ const [query,setQuery]=useState(""),[page,setPage]=useState(0),[inspectedId,setInspectedId]=useState<string|null>(null);
+ const rank:Record<string,number>={FAILED:0,SKIPPED:1,PASSED:2};
+ const results=[...detail.results].filter(r=>(r.case_id+" "+(r.scenario??"")+" "+(r.evaluation_details?.category??"")+" "+r.status).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>(rank[a.status]??3)-(rank[b.status]??3)||a.case_id.localeCompare(b.case_id));
+ const pages=Math.max(1,Math.ceil(results.length/12)),current=Math.min(page,pages-1),visible=results.slice(current*12,current*12+12);
+ const inspected=visible.find(r=>r.case_id===inspectedId)??visible[0];
+ return <section className="ui-panel"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Case results</h2><p className="muted text-sm mt-1">Failures and skipped references appear first.</p></div><label className="evaluation-search">Find a case<input type="search" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}} placeholder="Scenario, category or status"/></label></div>
+  <div className="evaluation-cases mt-4">{visible.map(result=><button type="button" className="evaluation-case-row" key={result.case_id} aria-pressed={inspected?.case_id===result.case_id} onClick={()=>setInspectedId(result.case_id)}><div><strong>{result.scenario??words(result.case_id)}</strong><span className="muted text-xs">{result.case_id} / {words(result.evaluation_details?.execution_mode??"deterministic_fixture")}</span></div><span className={`evaluation-badge ${result.status==="PASSED"?"evaluation-pass":result.status==="FAILED"?"evaluation-fail":"evaluation-pending"}`}>{result.status}</span><Icon name="chevron" size={16}/></button>)}</div>
+  {!results.length&&<p className="muted mt-3">{detail.results.length?"No matching cases.":"No case results were recorded for this execution."}</p>}
+  {inspected&&<section className="mt-4" aria-label="Selected case details"><EvaluationCase result={inspected}/></section>}
+  {results.length>12&&<nav aria-label="Case pages" className="flex flex-wrap items-center justify-between gap-3 mt-4"><button className="button-secondary" disabled={!current} onClick={()=>setPage(current-1)}>Previous</button><span className="muted text-sm">Page {current+1} of {pages} / {results.length} cases</span><button className="button-secondary" disabled={current+1===pages} onClick={()=>setPage(current+1)}>Next</button></nav>}
+ </section>;
 }
 
-function CaseResults({
-  detail,
-  loading,
-}: {
-  detail: EvaluationRunDetail | null;
-  loading: boolean;
-}) {
-  const grouped = useMemo(() => {
-    if (!detail) return [];
-    return [...detail.results].sort((left, right) => {
-      if (left.status === right.status)
-        return left.case_id.localeCompare(right.case_id);
-      return left.status === "FAILED" ? -1 : 1;
-    });
-  }, [detail]);
-
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-            Inspection
-          </p>
-          <h2 className="mt-2 text-xl font-semibold">Case-level results</h2>
-        </div>
-        {detail ? (
-          <span className="font-mono text-[14px] text-slate-500">
-            {shortId(detail.run.id)}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-5 max-h-[900px] space-y-3 overflow-y-auto pr-1">
-        {loading ? <EmptyState text="Loading case details..." /> : null}
-        {!loading &&
-          grouped.map((result) => (
-            <CaseResult key={result.case_id} result={result} />
-          ))}
-        {!loading && !detail ? (
-          <EmptyState text="Select a run to inspect its cases." />
-        ) : null}
-        {!loading && detail && grouped.length === 0 ? (
-          <EmptyState text="This run has no case-level results." />
-        ) : null}
-      </div>
-    </section>
-  );
+export function EvaluationCase({result}:{result:EvaluationResultSummary}){
+ const detail=result.evaluation_details,checks=Object.entries(result.rubric_results);
+ const reasons=detail?.failure_reasons?.length?detail.failure_reasons:checks.filter(([,check])=>!check.passed).map(([,check])=>check.message);
+ const expected=detail?.expected_output,actual=detail?.actual_output;
+ return <article className="evaluation-case"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h3>{result.scenario??words(result.case_id)}</h3><p className="muted text-xs mt-1">{result.case_id}</p></div><span className={`evaluation-badge ${result.status==="PASSED"?"evaluation-pass":result.status==="FAILED"?"evaluation-fail":"evaluation-pending"}`}>{result.status}</span></div>
+  <p className="muted text-xs mt-2">{words(detail?.category??result.answer_type??"Contract")} / {words(detail?.execution_mode??"deterministic_fixture")}{detail?.critical?" / Critical contract":""}{result.duration_ms==null?"":` / ${result.duration_ms} ms`}</p>
+  {detail?.skip_reason&&<p className="evaluation-skip mt-3">{detail.skip_reason}</p>}
+  {reasons.map(reason=><p className="evaluation-failure mt-2" key={reason}>{reason}</p>)}
+  {checks.length>0&&<ul className="evaluation-checks mt-3">{checks.map(([name,check])=><li key={name}><Icon name={check.passed?"check":"close"} size={15}/><span><strong>{words(name)}</strong> / {check.message}</span></li>)}</ul>}
+  {((expected&&Object.keys(expected).length>0)||(actual&&Object.keys(actual).length>0))&&<div className="evaluation-contract mt-3">{expected&&Object.keys(expected).length>0&&<div><h4>Expected contract</h4><pre>{JSON.stringify(expected,null,2)}</pre></div>}{actual&&Object.keys(actual).length>0&&<div><h4>Observed output</h4><pre>{JSON.stringify(actual,null,2)}</pre></div>}</div>}
+  {(!actual||!Object.keys(actual).length)&&result.answer_text&&<p className="evaluation-answer mt-3">{result.answer_text}</p>}
+  {result.citation_labels.length>0&&<p className="muted text-xs mt-3">Sources: {result.citation_labels.join(" / ")}</p>}
+  {detail?.references?.length? <p className="muted text-xs mt-2">Contract references: {detail.references.join(" / ")}</p>:null}
+ </article>;
 }
 
-function CaseResult({ result }: { result: EvaluationResultSummary }) {
-  const checks = Object.entries(result.rubric_results);
-  const details = result.evaluation_details;
-  const failedChecks = checks.filter(([, check]) => !check.passed).length;
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex items-center justify-between gap-4 p-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">
-            {friendlyCaseName(result.case_id)}
-          </p>
-          <p className="mt-1 text-xs capitalize text-slate-500">
-            {result.evaluation_details?.category ?? result.answer_type ?? "Unknown answer type"} ·{" "}
-            {result.duration_ms == null
-              ? "Duration unavailable"
-              : `${result.duration_ms} ms`}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {failedChecks > 0 ? (
-            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">
-              {failedChecks} failed
-            </span>
-          ) : null}
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${result.status === "PASSED" ? "bg-emerald-100 text-emerald-700" : result.status === "SKIPPED" ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-700"}`}
-          >
-            {result.status}
-          </span>
-        </div>
-      </div>
-      <div className="border-t border-slate-200 p-4">
-        {details?.category && <div className="mb-4 space-y-2 text-sm">
-          <p><strong>{details.category.replaceAll("_", " ")}</strong> / {details.execution_mode?.replaceAll("_", " ")} / {details.critical ? "Critical contract" : "Exploratory indicator"}</p>
-          {details.skip_reason && <p className="text-amber-800">Skipped: {details.skip_reason}</p>}
-          {details.failure_reasons?.map((reason) => <p className="text-rose-800" key={reason}>{reason}</p>)}
-
-        </div>}
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Quality gates
-        </h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {checks.map(([name, check]) => (
-            <CheckRow key={name} name={name} check={check} />
-          ))}
-        </div>
-        <h3 className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Scores
-        </h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {Object.entries(result.metric_scores).map(([name, value]) => (
-            <span
-              key={name}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600"
-            >
-              {friendlyMetricName(name)}: {formatMetric(value)}
-            </span>
-          ))}
-        </div>
-        <h3 className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Citations
-        </h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {result.citation_labels.map((label) => (
-            <span
-              key={label}
-              className="rounded-full bg-sky-50 px-2.5 py-1 text-xs text-sky-700"
-            >
-              {normalizeCitation(label)}
-            </span>
-          ))}
-          {result.citation_labels.length === 0 ? (
-            <span className="text-xs text-slate-500">
-              No citations recorded.
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </section>
-  );
+export function EvaluationDatasets({datasets}:{datasets:EvaluationDatasetSummary[]}){
+ if(!datasets.length)return null;
+ return <section className="ui-panel"><h2 className="text-lg font-semibold">Available evaluation suites</h2><p className="muted text-sm mt-2">Bundled test definitions; availability does not indicate a completed run.</p><div className="evaluation-suite-grid mt-4">{datasets.map(dataset=><article key={dataset.name+dataset.version}><span className="stat-icon"><Icon name="evidence" size={18}/></span><div><h3>{datasetName(dataset.name)}</h3><p className="muted text-sm">{dataset.case_count} cases / v{dataset.version}</p></div></article>)}</div></section>;
 }
 
-function CheckRow({
-  name,
-  check,
-}: {
-  name: string;
-  check: EvaluationCheckResult;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-slate-700">
-          {friendlyMetricName(name)}
-        </span>
-        <span
-          className={check.passed ? "text-emerald-600" : "text-rose-600"}
-          aria-label={check.passed ? "Passed" : "Failed"}
-        >
-          {check.passed ? "✓" : "×"}
-        </span>
-      </div>
-      <p className="mt-2 text-[14px] leading-5 text-slate-500">
-        {check.message}
-      </p>
-    </div>
-  );
+function RunBadge({run}:{run:EvaluationRunSummary}){
+ const gate=run.evaluation_details?.critical_gate;
+ const pass=run.status==="COMPLETED"&&run.failed_cases===0&&(gate?gate.passed:run.passed_cases>0&&number(run.aggregate_metrics.pass_rate)===1);
+ const label=run.status==="RUNNING"?"Running":run.status==="FAILED"?"Execution failed":run.failed_cases>0?"Review required":gate&&!gate.passed?"Critical checks failed":gate?"Critical checks passed":pass?"Regression passed":"Review required";
+ return <span className={`evaluation-badge ${pass?"evaluation-pass":run.status==="FAILED"||run.failed_cases>0||gate&&!gate.passed?"evaluation-fail":"evaluation-pending"}`}>{label}</span>;
 }
-
-function StatusBadge({
-  accepted,
-  run,
-}: {
-  accepted: boolean;
-  run: EvaluationRunSummary | null;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${accepted ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}
-    >
-      <span
-        className={`h-2 w-2 rounded-full ${accepted ? "bg-emerald-500" : "bg-amber-500"}`}
-      />
-      {run
-        ? accepted
-          ? run.evaluation_details?.critical_gate ? "Critical contracts passed / inspect findings" : "Quality gate passed"
-          : "Review required"
-        : "No run available"}
-    </span>
-  );
-}
-
-function RunState({ run }: { run: EvaluationRunSummary }) {
-  const passed = isAcceptedRun(run);
-  return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${passed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-    >
-      {run.status === "COMPLETED" ? (passed ? run.evaluation_details?.critical_gate ? "Critical pass" : "Passed" : "Review") : run.status}
-    </span>
-  );
-}
-
-function ErrorBanner({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => Promise<void>;
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
-      <p>{message}</p>
-      <button
-        type="button"
-        onClick={() => void onRetry()}
-        className="font-semibold underline underline-offset-4"
-      >
-        Retry
-      </button>
-    </section>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <section
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      aria-label="Loading evaluation dashboard"
-    >
-      {Array.from({ length: 4 }, (_, index) => (
-        <div
-          key={index}
-          className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white"
-        />
-      ))}
-    </section>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
-      {text}
-    </div>
-  );
-}
-
-function isAcceptedRun(run: EvaluationRunSummary): boolean {
-  if (run.evaluation_details?.critical_gate) return run.status === "COMPLETED" && run.evaluation_details.critical_gate.passed;
-  return (
-    run.status === "COMPLETED" &&
-    run.failed_cases === 0 &&
-    metricValue(run.aggregate_metrics, "pass_rate") === 1
-  );
-}
-
-function metricValue(
-  metrics: Record<string, unknown> | undefined,
-  key: string,
-): number | null {
-  const value = metrics?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function formatMetric(value: unknown): string {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value.toFixed(3)
-    : "N/A";
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Unknown time"
-    : new Intl.DateTimeFormat("en", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(date);
-}
-
-function friendlyDatasetName(value: string): string {
-  if (value === "creatorlens_intelligence_v2") return "Creator Intelligence v2 / full offline";
-  if (value === "creatorlens_intelligence_ci_v2") return "Creator Intelligence v2 / critical CI";
-  if (value === "creatorlens_core_v1") return "CreatorLens core";
-  if (value === "creatorlens_ci_smoke_v1") return "CI smoke subset";
-  return friendlyMetricName(value);
-}
-
-function friendlyCaseName(value: string): string {
-  return value.replace(/_\d+$/, "").split("_").map(capitalize).join(" ");
-}
-
-function friendlyMetricName(value: string): string {
-  const method = value.endsWith("_lexical")
-    ? " / Lexical"
-    : value.endsWith("_ragas")
-      ? " / RAGAS"
-      : "";
-  return (
-    value
-      .replace(/_ragas$|_lexical$/g, "")
-      .split("_")
-      .map(capitalize)
-      .join(" ") + method
-  );
-}
-
-function capitalize(value: string): string {
-  return value ? value[0].toUpperCase() + value.slice(1) : value;
-}
-
-function evaluatorVersion(value: string): string {
-  const match = value.match(/v(\d+(?:\.\d+)*)$/);
-  return match ? `v${match[1]}` : "Current";
-}
-
-function shortId(value: string): string {
-  return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
-}
-
-function normalizeCitation(value: string): string {
-  return value.replace(/Â·/g, "·");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message
-    ? error.message
-    : "Could not load evaluation results.";
-}
-
-
-function IntelligenceMeasurements({ run }: { run: EvaluationRunSummary }) {
-  const details = run.evaluation_details!;
-  return <section className="quality-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 className="text-xl font-semibold">Methodology and measured indicators</h2>
-    <p className="mt-2 text-sm text-slate-600">Offline contracts, synthetic retrieval and mocked responses. Human-reviewed semantic agreement and real model quality are not inferred from these checks.</p>
-    <div className="mt-4 space-y-3">{Object.entries(details.indicators ?? {}).map(([name, metric]) => <div className="rounded-md border p-3 text-sm" key={name}>
-      <p className="font-medium">{friendlyMetricName(name)}</p><p>{metric.numerator} / {metric.denominator} / {metric.value == null ? "Not measured" : metric.value.toFixed(3)}</p><p className="text-slate-600">{metric.mode.replaceAll("_", " ")}</p>
-    </div>)}</div>
-    <section className="mt-4 text-sm"><h3>Category results</h3><div className="mt-3 space-y-2">{Object.entries(details.categories ?? {}).map(([name, result]) => <p key={name}>{friendlyMetricName(name)}: {result.passed} passed / {result.failed} failed / {result.skipped} skipped</p>)}</div></section>
-    <p className="mt-4 text-sm text-slate-600">{details.limitations?.join(" ")}</p>
-  </section>;
-}
+function family(run:EvaluationRunSummary){return run.dataset_name.startsWith("creatorlens_intelligence_")||run.evaluation_details?.critical_gate?"Creator Intelligence":"RAG Regression";}
+function datasetName(value:string){return NAMES[value]??words(value);}
+function words(value:string){return value.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase());}
+function short(value:string){return value.length>16?value.slice(0,12)+"...":value;}
+function number(value:unknown){return typeof value==="number"&&Number.isFinite(value)?value:null;}
+function date(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?"Time not recorded":new Intl.DateTimeFormat("en",{dateStyle:"medium",timeStyle:"short"}).format(d);}
+function message(error:unknown){return error instanceof Error?error.message:"Evaluation results could not be loaded.";}
+function executionError(code:string|null){return code==="EVALUATION_TIMEOUT"?"Evaluation exceeded its execution time limit.":code==="EVALUATION_PROCESS_UNAVAILABLE"?"The evaluation process could not start.":"Evaluation execution failed.";}

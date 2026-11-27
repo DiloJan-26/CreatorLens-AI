@@ -3222,3 +3222,30 @@ details > summary::marker {
 .llm-check-checking {animation:llm-check-pulse 1s ease-in-out infinite;}
 @keyframes llm-check-pulse {50% {opacity:.35;}}
 @media(prefers-reduced-motion:reduce){.llm-check-checking {animation:none;}}
+
+/* Release evaluation uses existing Engineering surfaces and colors. */
+.evaluation-dashboard h2,.evaluation-dashboard h3,.evaluation-dashboard h4{font-weight:600;overflow-wrap:anywhere}
+.evaluation-empty{display:flex;gap:18px;align-items:flex-start;padding:26px}
+.evaluation-empty h2{font-size:20px}
+.evaluation-audit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--panel-top)}
+.evaluation-audit dt{font-size:12px;color:var(--muted)}
+.evaluation-audit dd{font-size:13px;margin-top:5px;overflow-wrap:anywhere}
+.evaluation-indicators{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.evaluation-indicators article{border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--wash)}
+.evaluation-indicators h3{font-size:13px}.evaluation-indicators strong{display:block;font-size:19px;margin:6px 0}
+.evaluation-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;max-width:100%;white-space:normal}
+.evaluation-pass{background:#def5eb;color:#176346}.evaluation-fail{background:#fce8e6;color:#a02a27}.evaluation-pending{background:#fff2c8;color:#8b5900}
+.evaluation-history{display:grid;gap:12px;max-height:720px;overflow-y:auto}
+.evaluation-history button{width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;padding:15px;background:var(--panel-top)}
+.evaluation-confusion{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.evaluation-confusion p{display:flex;gap:8px;justify-content:space-between;padding:8px;border-bottom:1px solid var(--line);font-size:13px}
+.evaluation-table-wrap{overflow-x:auto}.evaluation-table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}.evaluation-table th,.evaluation-table td{padding:9px 7px;border-bottom:1px solid var(--line)}
+.evaluation-search{display:grid;gap:5px;font-size:12px;max-width:100%}.evaluation-search input{border:1px solid var(--line);border-radius:8px;padding:9px 12px;max-width:100%;font-size:14px;background:white}
+.evaluation-cases{display:grid;gap:14px}.evaluation-case{border:1px solid var(--line);border-radius:12px;padding:18px;overflow-wrap:anywhere}.evaluation-case h3{font-size:15px}
+.evaluation-checks{display:grid;gap:8px;list-style:none;font-size:12px;padding:0}.evaluation-checks li{display:flex;align-items:flex-start;gap:8px}.evaluation-checks svg{flex-shrink:0;color:var(--accent)}
+.evaluation-failure{color:#a02a27;font-size:13px}.evaluation-skip{color:#8b5900;font-size:13px}.evaluation-answer{font-size:13px;white-space:pre-wrap}
+.evaluation-contract{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evaluation-contract>div{min-width:0}.evaluation-contract h4{font-size:12px;margin-bottom:6px}.evaluation-contract pre{max-height:240px;overflow:auto;border-radius:8px;padding:12px;background:var(--wash);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.evaluation-suite-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evaluation-suite-grid article{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px}.evaluation-suite-grid h3{font-size:14px}
+@media(max-width:640px){.evaluation-audit{grid-template-columns:1fr 1fr}.evaluation-indicators,.evaluation-contract,.evaluation-suite-grid{grid-template-columns:1fr}.evaluation-empty{padding:18px;gap:12px}.evaluation-confusion{grid-template-columns:1fr}.evaluation-case{padding:14px}}
+
+.evaluation-case-row{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--panel-top)}.evaluation-case-row>div{min-width:0;flex:1}.evaluation-case-row strong{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}.evaluation-case-row>div>span{display:block;margin-top:4px;overflow-wrap:anywhere}.evaluation-case-row>svg{flex-shrink:0}.evaluation-case-row .evaluation-badge{flex-shrink:0}

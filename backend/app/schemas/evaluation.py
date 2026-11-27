@@ -135,6 +135,7 @@ class EvaluationCaseReport(BaseModel):
 
 
 class EvaluationRunReport(BaseModel):
+    error_code: str | None = None
     dataset_version: str | None = None
     skipped_cases: int = 0
     evaluation_details: dict[str, Any] = Field(default_factory=dict)
@@ -169,6 +170,8 @@ class EvaluationDatasetSummary(BaseModel):
 
 
 class EvaluationRunSummary(BaseModel):
+    publication: dict[str, Any] = Field(default_factory=dict)
+    source_status: Literal["current", "different", "unverified"] = "unverified"
     skipped_cases: int = 0
     evaluation_details: dict[str, Any] = Field(default_factory=dict)
     id: str
@@ -186,6 +189,8 @@ class EvaluationRunSummary(BaseModel):
 
 
 class EvaluationResultSummary(BaseModel):
+    scenario: str | None = None
+    answer_text: str | None = None
     evaluation_details: dict[str, Any] = Field(default_factory=dict)
     case_id: str
     status: str

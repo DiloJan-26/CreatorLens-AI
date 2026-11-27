@@ -1,0 +1,68 @@
+/* Offline browser acceptance of the real Evaluation dashboard with synthetic published reports. */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import http from 'node:http';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+const require=createRequire(import.meta.url);
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'creatorlens-evaluations-'));
+if(!process.env.ACCEPTANCE_PLAYWRIGHT_PACKAGE)throw Error('Set ACCEPTANCE_PLAYWRIGHT_PACKAGE to an existing local Playwright installation.');
+const {chromium}=require(process.env.ACCEPTANCE_PLAYWRIGHT_PACKAGE);
+const webpack=require('next/dist/compiled/webpack/webpack').webpack;
+const write=(name,text)=>{const file=path.join(temp,name);fs.writeFileSync(file,text);return file;};
+const loader=write('loader.cjs',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;`);
+const link=write('link.cjs',`const React=require(${JSON.stringify(require.resolve('react'))});module.exports=({children,...props})=>React.createElement('a',props,children);`);
+const engineering=write('engineering.cjs',`const React=require(${JSON.stringify(require.resolve('react'))});exports.EngineeringLockButton=()=>React.createElement('button',null,'Lock Engineering');`);
+const api=write('api.cjs',`exports.getEvaluationDatasets=async()=>window.fixture.datasets;exports.getEvaluationRuns=async()=>{window.fixture.reads++;if(window.fixture.mode==='error')throw Error('Stored evaluation results could not be loaded.');return window.fixture.mode==='empty'?[]:window.fixture.runs;};exports.getEvaluationRun=async id=>window.fixture.details[id];`);
+const components=path.join(root,'src/components').replaceAll('\\','/');
+const entry=write('entry.tsx',`
+import React from 'react';import {createRoot} from 'react-dom/client';
+import {EvaluationDashboard} from '${components}/EvaluationDashboard';
+import {evaluationFixture} from '${path.join(root,'scripts/evaluation-fixture.mjs').replaceAll('\\','/')}';
+window.fixture={...evaluationFixture(),reads:0,mode:new URLSearchParams(location.search).get('mode')??'populated'};
+createRoot(document.getElementById('root')).render(<EvaluationDashboard/>);
+`);
+await new Promise((resolve,reject)=>webpack({mode:'development',devtool:false,entry,output:{path:temp,filename:'bundle.js'},resolve:{extensions:['.tsx','.ts','.js','.mjs'],modules:[path.join(root,'node_modules'),'node_modules'],alias:{'next/link':link,'@/lib/api':api,'@':path.join(root,'src'),'react$':require.resolve('react'),'react-dom/client':require.resolve('react-dom/client'),'react/jsx-runtime':require.resolve('react/jsx-runtime')}},plugins:[new webpack.NormalModuleReplacementPlugin(/^\.\/EngineeringAccess$/,engineering)],module:{rules:[{test:/\.tsx?$/,use:loader}]}},(error,stats)=>error||stats.hasErrors()?reject(error??Error(stats.toString())):resolve()));
+function cssFiles(dir){if(!fs.existsSync(dir))return [];return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?cssFiles(path.join(dir,e.name)):e.name.endsWith('.css')?[path.join(dir,e.name)]:[]);}
+const css=cssFiles(path.join(root,'.next/static')).map(file=>fs.readFileSync(file,'utf8')).join('\n');
+assert(css.includes('evaluation-audit'),'Build the frontend before browser acceptance.');
+const server=http.createServer((req,res)=>{if(req.url==='/bundle.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(path.join(temp,'bundle.js')));}else{res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>'+css+'</style></head><body><main class="page-container"><div id="root"></div></main><script src="/bundle.js"></script></body></html>');}});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const origin='http://127.0.0.1:'+server.address().port;
+let browser;
+try {
+ browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1440,height:1100}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
+ await page.goto(origin);await page.getByRole('heading',{name:'RAG Evaluation',exact:true}).waitFor();
+ await page.getByText('Different backend source',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('group',{name:'Evaluation family'}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'All runs',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:/Run evaluation|Publish evaluation/}).count(),0);
+ await page.getByRole('button').filter({hasText:'Semantic annotation awaiting review'}).click();
+ await page.getByText('Independent human annotation is pending.',{exact:true}).waitFor();
+ await page.getByRole('button').filter({hasText:'Reject unsupported causal claim'}).click();
+ await page.getByText('2 / 3',{exact:true}).waitFor();await page.getByText('Not measured',{exact:true}).waitFor();
+ await page.getByText('<script>untrusted source</script>',{exact:false}).first().waitFor();
+ assert.equal(await page.locator('.evaluation-case-row').count(),12);
+ await page.getByRole('button',{name:'Next',exact:true}).click();assert.equal(await page.locator('.evaluation-case-row').count(),4);
+ await page.getByRole('searchbox').fill('SKIPPED');assert.equal(await page.locator('.evaluation-case-row').count(),1);
+ await page.getByRole('button').filter({hasText:'RAG core'}).click();await page.getByText('Lexical faithfulness (proxy)',{exact:true}).waitFor();
+ await page.getByRole('button').filter({hasText:'Intelligence full'}).click();await page.getByText('Different backend source',{exact:true}).waitFor();
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(temp,'evaluations-desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(temp,'evaluations-mobile.png'),fullPage:true});
+ await page.evaluate(()=>window.fixture.mode='error');await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('alert').waitFor();
+ assert((await page.getByRole('alert').textContent()).includes('Showing previously loaded results'));
+ await page.evaluate(()=>window.fixture.mode='empty');await page.getByRole('button',{name:'Refresh results',exact:true}).click();await page.getByRole('heading',{name:'No evaluation published',exact:true}).waitFor();
+ assert.equal(await page.getByText('Different backend source',{exact:true}).count(),0);assert.equal(await page.getByRole('heading',{name:'Case results',exact:true}).count(),0);
+ assert.equal(await page.getByRole('heading',{name:'Available evaluation suites',exact:true}).count(),1);
+ await page.screenshot({path:path.join(temp,'evaluations-empty-mobile.png'),fullPage:true});
+ assert.deepEqual(errors,[]);
+ console.log('PASS: unified read-only history, release provenance, case pagination/search, skipped references, honest metrics, escaped evidence, stale-source warning, refresh error recovery, empty-state clearing and desktop/mobile layout.');
+ console.log('Screenshots: '+temp);
+} finally {await browser?.close();await new Promise(resolve=>server.close(resolve));}

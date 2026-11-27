@@ -85,6 +85,7 @@ def test_disposable_account_migration_and_last_credit_race(monkeypatch):
             _verify_extraction_admission_race(scoped,principal,project,monkeypatch)
             _verify_configured_grants_and_parallel_admission(scoped,monkeypatch)
             _verify_automatic_completion_race(scoped,monkeypatch)
+            _verify_evaluation_publication_race(scoped,monkeypatch)
         finally:scoped.dispose()
     finally:
         # The generated schema is verified before removing only isolated test resources.
@@ -244,3 +245,26 @@ def _verify_automatic_completion_race(engine,monkeypatch):
         assert session.get(AnalysisReservation,reservation_id).state=="completed"
         assert session.get(Project,pid).status=="partial_ready"
         assert len(session.scalars(select(UsageEvent).where(UsageEvent.reference_id==reservation_id,UsageEvent.kind=="analysis_completed")).all())==1
+
+
+def _verify_evaluation_publication_race(engine,monkeypatch):
+    """Real PostgreSQL advisory locking prevents duplicate release publications."""
+    from copy import deepcopy
+    from app.evaluations import publication
+    from app.evaluations.regression_runner import run_regression
+    from app.db.models.evaluation import EvaluationRun,EvaluationResult
+    report=run_regression('creatorlens_ci_smoke_v1',persist=False)
+    identity=dict(source_fingerprint='f'*64,source_commit='e'*40,source_state='clean',source_commit_origin='offline_fixture')
+    monkeypatch.setattr(publication,'source_identity',lambda *args:dict(identity))
+    monkeypatch.setattr(publication,'execute_offline',lambda *args:deepcopy(report))
+    barrier=Barrier(2)
+    def publish(_):
+        barrier.wait(timeout=10)
+        with Session(engine) as session,session.begin():
+            return publication.evaluate_and_publish(report.dataset,session=session).run_id
+    with ThreadPoolExecutor(max_workers=2) as pool:ids=list(pool.map(publish,[1,2]))
+    assert len(set(ids))==1
+    with Session(engine) as session:
+        runs=session.scalars(select(EvaluationRun)).all()
+        assert len(runs)==1 and runs[0].passed_cases==5 and runs[0].status=='COMPLETED'
+        assert len(session.scalars(select(EvaluationResult).where(EvaluationResult.run_id==ids[0])).all())==5

@@ -12,7 +12,7 @@ from app.evaluations.fixture_loader import (
     list_datasets,
     load_dataset,
 )
-from app.evaluations.regression_runner import run_regression
+from app.evaluations.publication import evaluate_and_publish, source_fingerprint, supported_datasets
 from app.schemas.evaluation import (
     EvaluationDatasetSummary,
     EvaluationResultSummary,
@@ -65,13 +65,15 @@ def get_evaluation_datasets() -> list[EvaluationDatasetSummary]:
     ),
 )
 def create_evaluation_run(payload: EvaluationRunRequest) -> EvaluationRunReport:
+    if payload.dataset not in supported_datasets():
+        raise HTTPException(404,"Unknown bundled evaluation dataset.")
     try:
         with database_session() as session:
-            return run_regression(payload.dataset, session=session, persist=True)
-    except EvaluationFixtureError as exc:
+            return evaluate_and_publish(payload.dataset, session=session)
+    except EvaluationFixtureError:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Source, dataset or report changed; publication was rejected.",
         ) from None
     except DatabaseConfigurationError:
         raise HTTPException(
@@ -104,9 +106,10 @@ def get_evaluation_runs(
     try:
         with database_session() as session:
             repository = EvaluationRepository(session)
+            current_source=source_fingerprint()
             return [
-                _run_summary(repository, run)
-                for run in repository.list_runs(limit=limit) if _bundled_run(repository,run)
+                _run_summary(repository, run,current_source)
+                for run in repository.list_runs(limit=limit,dataset_names=supported_datasets())
             ]
     except DatabaseConfigurationError:
         raise HTTPException(
@@ -136,11 +139,15 @@ def get_evaluation_run(run_id: str) -> EvaluationRunDetail:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Evaluation run not found.",
                 )
+            # Fetch definitions once; remote PostgreSQL must not perform one query per case.
+            cases_by_id={case.id:case for case in repository.list_cases(run.dataset_id)}
             results = []
             for result in repository.list_results(run.id):
-                evaluation_case = repository.get_case_by_id(result.evaluation_case_id)
+                evaluation_case = cases_by_id.get(result.evaluation_case_id)
                 results.append(
                     EvaluationResultSummary(
+                        scenario=evaluation_case.question if evaluation_case else None,
+                        answer_text=result.answer_text,
                         case_id=evaluation_case.case_key if evaluation_case else result.evaluation_case_id,
                         status=result.status,
                         answer_type=result.answer_type,
@@ -168,9 +175,13 @@ def get_evaluation_run(run_id: str) -> EvaluationRunDetail:
         ) from None
 
 
-def _run_summary(repository: EvaluationRepository, run) -> EvaluationRunSummary:
+def _run_summary(repository: EvaluationRepository, run, current_source=None) -> EvaluationRunSummary:
     dataset = repository.get_dataset_by_id(run.dataset_id)
+    publication=run.aggregate_metrics.get("_publication",{})
+    fingerprint=publication.get("source_fingerprint")
+    source_status="unverified" if not fingerprint else "current" if fingerprint==(current_source or source_fingerprint()) else "different"
     return EvaluationRunSummary(
+        publication=publication,source_status=source_status,
         skipped_cases=run.aggregate_metrics.get('_evaluation',{}).get('skipped_cases',0),
         evaluation_details=run.aggregate_metrics.get('_evaluation',{}),
         id=run.id,

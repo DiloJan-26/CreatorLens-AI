@@ -248,11 +248,8 @@ class EvaluationRepository:
             ).all()
         )
 
-    def list_runs(self, *, limit: int = 20) -> list[EvaluationRun]:
-        return list(
-            self.session.scalars(
-                select(EvaluationRun)
-                .order_by(EvaluationRun.created_at.desc())
-                .limit(max(1, min(limit, 100)))
-            ).all()
-        )
+    def list_runs(self, *, limit: int = 20, dataset_names=None) -> list[EvaluationRun]:
+        query=select(EvaluationRun)
+        if dataset_names is not None:
+            query=query.join(EvaluationDataset).where(EvaluationDataset.name.in_(dataset_names))
+        return list(self.session.scalars(query.order_by(EvaluationRun.created_at.desc()).limit(max(1,min(limit,100)))).all())

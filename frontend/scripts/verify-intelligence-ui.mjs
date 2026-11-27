@@ -183,3 +183,28 @@ assert(allowanceSource.includes('if(ready && ["reserved","processing"].includes(
 assert(allowanceSource.includes('await completeAnalysis(projectId,false)'));
 assert(workspace.includes('ready={ingestionStatus?.status==="READY"||ingestionStatus?.status==="PARTIAL_READY"}'));
 console.log("Automatic completion UI contracts passed: no manual save step, ready-only compatibility completion and no inference action.");
+
+// Unified read-only evaluation, genuine release provenance and honest denominators.
+const {evaluationFixture}=await import('./evaluation-fixture.mjs');
+const evaluation=evaluationFixture();
+const {EvaluationEmptyState,EvaluationRunView,EvaluationMeasurements,EvaluationHistory,EvaluationCase}=load(path.join(sourceRoot,'components/EvaluationDashboard.tsx'));
+const emptyEvaluation=render(EvaluationEmptyState,{});
+assert(emptyEvaluation.includes('No evaluation published')&&!emptyEvaluation.includes('Unavailable'));
+const evaluationSource=fs.readFileSync(path.join(sourceRoot,'components/EvaluationDashboard.tsx'),'utf8');
+assert(!evaluationSource.includes('Evaluation family')&&!evaluationSource.includes('setFamily'));
+assert(!evaluationSource.includes('createEvaluationRun')&&!evaluationSource.includes('streamChatResponse'));
+const selectedEvaluation=render(EvaluationRunView,{run:evaluation.runs[0]});
+assert(selectedEvaluation.includes('Review required')&&selectedEvaluation.includes('14')&&selectedEvaluation.includes('Skipped'));
+assert(selectedEvaluation.includes('Different backend source')&&selectedEvaluation.includes('aaaaaaaaaaaa'));
+const measuredEvaluation=render(EvaluationMeasurements,{run:evaluation.runs[0]});
+assert(measuredEvaluation.includes('2 / 3')&&measuredEvaluation.includes('Not measured')&&measuredEvaluation.includes('False Reject'));
+assert(!measuredEvaluation.includes('Lexical faithfulness'));
+const legacyEvaluation=render(EvaluationMeasurements,{run:evaluation.runs[1]});assert(legacyEvaluation.includes('Lexical faithfulness (proxy)'));
+const evaluationHistory=render(EvaluationHistory,{runs:evaluation.runs,selectedId:evaluation.runs[0].id,onSelect:()=>{}});
+assert(evaluationHistory.includes('RAG Regression')&&evaluationHistory.includes('Creator Intelligence'));
+const evaluationCase=render(EvaluationCase,{result:evaluation.details[evaluation.runs[0].id].results[0]});
+assert(evaluationCase.includes('Expected contract')&&evaluationCase.includes('Observed output'));
+assert(evaluationCase.includes('&lt;script&gt;')&&!evaluationCase.includes('<script>'));
+assert(render(EvaluationCase,{result:evaluation.details[evaluation.runs[0].id].results[1]}).includes('Independent human annotation is pending.'));
+assert(render(EvaluationRunView,{run:{...evaluation.runs[0],status:'FAILED',error_code:'EVALUATION_TIMEOUT'}}).includes('execution time limit'));
+console.log('Evaluation UI contracts passed: unified history, publication empty state, source provenance, separate pass/fail/skip, indicator denominators, honest reference coverage, safe case evidence and execution failure.');
